@@ -57,7 +57,7 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #endif
 #endif
 
-#define VERSION "1.0.0"
+#define VERSION "1.2.0"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -2492,6 +2492,10 @@ code_reach_t generate_thunking_action_code(
             fprintf(gen->stream, "thunk->data.leaf.capts.buf[%d] = &(chunk->capts.buf[%d]);\n",
                 capts->buf[i]->data.capture.index, capts->buf[i]->data.capture.index);
         }
+        write_characters(gen->stream, ' ', indent);
+        fputs("thunk->data.leaf.capt0.range.start = chunk->pos;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs("thunk->data.leaf.capt0.range.end = ctx->pos;\n", gen->stream);
     }
     if (error) {
         write_characters(gen->stream, ' ', indent);
@@ -2689,6 +2693,7 @@ static bool_t generate(context_t *ctx) {
             "typedef struct pcc_thunk_leaf_tag {\n"
             "    pcc_value_refer_table_t values;\n"
             "    pcc_capture_const_table_t capts;\n"
+            "    pcc_capture_t capt0;\n"
             "    pcc_action_t action;\n"
             "} pcc_thunk_leaf_t;\n"
             "\n"
@@ -2717,6 +2722,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_value_table_t values;\n"
             "    pcc_capture_table_t capts;\n"
             "    pcc_thunk_array_t thunks;\n"
+            "    int pos;\n"
             "} pcc_thunk_chunk_t;\n"
             "\n"
             "typedef struct pcc_lr_entry_tag pcc_lr_entry_t;\n"
@@ -2986,6 +2992,9 @@ static bool_t generate(context_t *ctx) {
             "    pcc_value_refer_table__resize(auxil, &thunk->data.leaf.values, valuec);\n"
             "    pcc_capture_const_table__init(auxil, &thunk->data.leaf.capts, captc);\n"
             "    pcc_capture_const_table__resize(auxil, &thunk->data.leaf.capts, captc);\n"
+            "    thunk->data.leaf.capt0.range.start = 0;\n"
+            "    thunk->data.leaf.capt0.range.end = 0;\n"
+            "    thunk->data.leaf.capt0.string = NULL;\n"
             "    thunk->data.leaf.action = action;\n"
             "    return thunk;\n"
             "}\n"
@@ -3002,6 +3011,7 @@ static bool_t generate(context_t *ctx) {
             "    if (thunk == NULL) return;\n"
             "    switch (thunk->type) {\n"
             "    case PCC_THUNK_LEAF:\n"
+            "        PCC_FREE(auxil, thunk->data.leaf.capt0.string);\n"
             "        pcc_capture_const_table__term(auxil, &thunk->data.leaf.capts);\n"
             "        pcc_value_refer_table__term(auxil, &thunk->data.leaf.values);\n"
             "        break;\n"
@@ -3045,6 +3055,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_value_table__init(auxil, &chunk->values, PCC_ARRAYSIZE);\n"
             "    pcc_capture_table__init(auxil, &chunk->capts, PCC_ARRAYSIZE);\n"
             "    pcc_thunk_array__init(auxil, &chunk->thunks, PCC_ARRAYSIZE);\n"
+            "    chunk->pos = 0;\n"
             "    return chunk;\n"
             "}\n"
             "\n"
@@ -3378,7 +3389,7 @@ static bool_t generate(context_t *ctx) {
             "    n = ctx->buffer.len - ctx->pos;\n"
             "    if (n >= num) return n;\n"
             "    while (ctx->buffer.len < ctx->pos + num) {\n"
-            "        c = PCC_GETCHAR(ctx);\n"
+            "        c = PCC_GETCHAR(ctx->auxil);\n"
             "        if (c == EOF) break;\n"
             "        pcc_char_array__add(ctx->auxil, &ctx->buffer, (char)c);\n"
             "    }\n"
@@ -3588,11 +3599,29 @@ static bool_t generate(context_t *ctx) {
                             v->buf[k]->data.reference.index
                         );
                     }
+                    fputs(
+                        "#define _0 pcc_get_capture_string(__pcc_ctx, &__pcc_in->data.leaf.capt0)\n"
+                        "#define _0s ((const)__pcc_in->data.leaf.capt0.range.start)\n"
+                        "#define _0e ((const)__pcc_in->data.leaf.capt0.range.end)\n",
+                        stream
+                    );
                     for (k = 0; k < c->len; k++) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf(
                             stream,
                             "#define _%d pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.buf[%d])\n",
+                            c->buf[k]->data.capture.index + 1,
+                            c->buf[k]->data.capture.index
+                        );
+                        fprintf(
+                            stream,
+                            "#define _%ds __pcc_in->data.leaf.capts.buf[%d]->range.start\n",
+                            c->buf[k]->data.capture.index + 1,
+                            c->buf[k]->data.capture.index
+                        );
+                        fprintf(
+                            stream,
+                            "#define _%de __pcc_in->data.leaf.capts.buf[%d]->range.end\n",
                             c->buf[k]->data.capture.index + 1,
                             c->buf[k]->data.capture.index
                         );
@@ -3602,10 +3631,26 @@ static bool_t generate(context_t *ctx) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf(
                             stream,
+                            "#undef _%de\n",
+                            c->buf[k]->data.capture.index + 1
+                        );
+                        fprintf(
+                            stream,
+                            "#undef _%ds\n",
+                            c->buf[k]->data.capture.index + 1
+                        );
+                        fprintf(
+                            stream,
                             "#undef _%d\n",
                             c->buf[k]->data.capture.index + 1
                         );
                     }
+                    fputs(
+                        "#undef _0e\n"
+                        "#undef _0s\n"
+                        "#undef _0\n",
+                        stream
+                    );
                     for (k = v->len - 1; k >= 0; k--) {
                         assert(v->buf[k]->type == NODE_REFERENCE);
                         fprintf(
@@ -3652,7 +3697,8 @@ static bool_t generate(context_t *ctx) {
                     ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
                 );
                 fputs(
-                    "    pcc_thunk_chunk_t *chunk = pcc_thunk_chunk__create(ctx->auxil);\n",
+                    "    pcc_thunk_chunk_t *chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
+                    "    chunk->pos = ctx->pos;\n",
                     stream
                 );
                 fprintf(
