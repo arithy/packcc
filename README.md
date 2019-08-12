@@ -28,7 +28,7 @@ PackCC itself is under MIT license, but you can distribute your generated code u
 
 ## Installation ##
 
-PackCC consists of just a single compact source file [`packcc.c`](/projects/packcc/files/). So, you can obtain the executable `packcc` just by a simple compile command.
+PackCC consists of just a single compact source file [`packcc.c`](packcc.c). So, you can obtain the executable `packcc` just by a simple compile command.
 
 ```
 cc -o packcc packcc.c
