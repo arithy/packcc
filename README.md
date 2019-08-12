@@ -37,6 +37,8 @@ cc -o packcc packcc.c
 It can also be compiled using Microsoft Visual C++. To do this, project setup is somewhat bothersome, though.
 <small>(I use a useful debugging functionality of Microsoft Visual C++ to detect memory leaks of PackCC itself and generated parsers.)</small>
 
+The binary packages containing the executables are available on [SourceForge](https://sourceforge.net/projects/packcc/).
+
 ## Usage ##
 
 ### Command ###
