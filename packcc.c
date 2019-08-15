@@ -31,8 +31,6 @@
 
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
-#define snprintf _snprintf
-#define unlink _unlink
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
@@ -43,6 +41,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <limits.h>
 #include <assert.h>
 
 #ifndef _MSC_VER
@@ -57,6 +56,11 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #endif
 #endif
 
+#ifdef _MSC_VER
+#define snprintf _snprintf
+#define unlink _unlink
+#endif
+
 #define VERSION "1.2.1"
 
 #ifndef BUFFER_INIT_SIZE
@@ -65,6 +69,11 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #ifndef ARRAY_INIT_SIZE
 #define ARRAY_INIT_SIZE 2
 #endif
+
+#define INT_TO_SIZE_T(a) (assert((a) >= 0), (size_t)max_int((a), 0)) /* Safer type casting from int to size_t */
+#define SIZE_T_TO_INT(a) (assert((a) <= INT_MAX), (int)min_size_t((a), INT_MAX)) /* Safer type casting from size_t to int */
+
+typedef unsigned long long ullong_t; /* Mainly used to print size_t values safely (ex. printf("%llu", (ullong_t)value);) */
 
 typedef enum bool_tag {
     FALSE = 0,
@@ -246,6 +255,14 @@ typedef enum code_reach_tag {
 } code_reach_t;
 
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
+
+static int max_int(int a, int b) {
+    return (a >= b) ? a : b;
+}
+
+static size_t min_size_t(size_t a, size_t b) {
+    return (a <= b) ? a : b;
+}
 
 static int print_error(const char *format, ...) {
     int n;
@@ -484,7 +501,7 @@ static void write_text(FILE *stream, const char *ptr, size_t len) {
     }
 }
 
-static void write_code_block(FILE *stream, const char *ptr, size_t len, int indent) {
+static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t indent) {
     size_t i;
     for (i = 0; i < len; i++) {
         if (ptr[i] == '\n') break;
@@ -560,7 +577,8 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, int inde
                 break;
             default:
                 if (s) {
-                    write_characters(stream, ' ', l - m + indent);
+                    assert(m >= 0); /* m must not be the inital value -1 */
+                    write_characters(stream, ' ', INT_TO_SIZE_T(l - m) + indent);
                     s = FALSE;
                 }
                 fputc(ptr[i], stream);
@@ -586,16 +604,17 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, int inde
 }
 
 static const char *extract_filename(const char *path) {
-    int i, n = strlen(path);
-    for (i = n - 1; i >= 0; i--) {
+    size_t i = strlen(path);
+    while (i-- > 0) {
         if (path[i] == '/' || path[i] == '\\' || path[i] == ':') break;
     }
     return path + i + 1;
 }
 
 static const char *extract_fileext(const char *path) {
-    int i, n = strlen(path);
-    for (i = n - 1; i >= 0; i--) {
+    const size_t n = strlen(path);
+    size_t i = n;
+    while (i-- > 0) {
         if (path[i] == '/' || path[i] == '\\' || path[i] == ':') break;
         if (path[i] == '.') return path + i;
     }
@@ -604,8 +623,8 @@ static const char *extract_fileext(const char *path) {
 
 static char *replace_fileext(const char *path, const char *ext) {
     const char *const p = extract_fileext(path);
-    const int m = p - path;
-    const int n = strlen(ext);
+    const size_t m = p - path;
+    const size_t n = strlen(ext);
     char *const s = (char *)malloc_e(m + n + 2);
     memcpy(s, path, m);
     s[m] = '.';
@@ -614,8 +633,8 @@ static char *replace_fileext(const char *path, const char *ext) {
 }
 
 static char *add_fileext(const char *path, const char *ext) {
-    const int m = strlen(path);
-    const int n = strlen(ext);
+    const size_t m = strlen(path);
+    const size_t n = strlen(ext);
     char *const s = (char *)malloc_e(m + n + 2);
     memcpy(s, path, m);
     s[m] = '.';
@@ -1227,11 +1246,10 @@ static void dump_node(context_t *ctx, const node_t *node) {
 }
 
 static int refill_buffer(context_t *ctx, int num) {
-    int n, c;
-    n = ctx->buffer.len - ctx->bufpos;
+    const int n = ctx->buffer.len - ctx->bufpos;
     if (n >= num) return n;
     while (ctx->buffer.len < ctx->bufpos + num) {
-        c = fgetc(ctx->ifile);
+        const int c = fgetc(ctx->ifile);
         if (c == EOF) break;
         char_array__add(&ctx->buffer, (char)c);
     }
@@ -1240,7 +1258,7 @@ static int refill_buffer(context_t *ctx, int num) {
 
 static void commit_buffer(context_t *ctx) {
     ctx->linepos -= ctx->bufpos;
-    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufpos, ctx->buffer.len - ctx->bufpos);
+    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufpos, INT_TO_SIZE_T(ctx->buffer.len - ctx->bufpos));
     ctx->buffer.len -= ctx->bufpos;
     ctx->bufpos = 0;
 }
@@ -1314,7 +1332,7 @@ static bool_t match_character_any(context_t *ctx) {
 }
 
 static bool_t match_string(context_t *ctx, const char *str) {
-    const int n = strlen(str);
+    const int n = SIZE_T_TO_INT(strlen(str));
     if (refill_buffer(ctx, n) >= n) {
         if (strncmp(ctx->buffer.buf + ctx->bufpos, str, n) == 0) {
             ctx->bufpos += n;
@@ -1523,10 +1541,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         if (r < 0) {
             n_p->data.reference.var = NULL;
             n_p->data.reference.index = -1;
-            n_p->data.reference.name = strndup_e(ctx->buffer.buf + p, q - p);
+            n_p->data.reference.name = strndup_e(ctx->buffer.buf + p, INT_TO_SIZE_T(q - p));
         }
         else {
-            n_p->data.reference.var = strndup_e(ctx->buffer.buf + p, q - p);
+            assert(s >= 0); /* s should be non-negative when r is non-negative */
+            n_p->data.reference.var = strndup_e(ctx->buffer.buf + p, INT_TO_SIZE_T(q - p));
             {
                 int i;
                 for (i = 0; i < rule->data.rule.vars.len; i++) {
@@ -1536,7 +1555,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
                 if (i == rule->data.rule.vars.len) node_const_array__add(&rule->data.rule.vars, n_p);
                 n_p->data.reference.index = i;
             }
-            n_p->data.reference.name = strndup_e(ctx->buffer.buf + r, s - r);
+            n_p->data.reference.name = strndup_e(ctx->buffer.buf + r, INT_TO_SIZE_T(s - r));
         }
         n_p->data.reference.line = l;
         n_p->data.reference.col = m;
@@ -1569,7 +1588,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             char *s;
             match_spaces(ctx);
             n_p = create_node(NODE_EXPAND);
-            s = strndup_e(ctx->buffer.buf + p, q - p);
+            s = strndup_e(ctx->buffer.buf + p, INT_TO_SIZE_T(q - p));
             n_p->data.expand.index = atoi(s);
             if (n_p->data.expand.index == 0) {
                 print_error("%s:%d:%d: 0 not allowed\n", ctx->iname, l + 1, m + 1);
@@ -1597,7 +1616,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         const int q = ctx->bufpos;
         match_spaces(ctx);
         n_p = create_node(NODE_CHARCLASS);
-        n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2));
         if (!unescape_string(n_p->data.charclass.value)) {
             print_error("%s:%d:%d: Illegal escape sequence\n", ctx->iname, l + 1, m + 1);
             ctx->errnum++;
@@ -1607,7 +1626,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         const int q = ctx->bufpos;
         match_spaces(ctx);
         n_p = create_node(NODE_STRING);
-        n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2));
         if (!unescape_string(n_p->data.string.value)) {
             print_error("%s:%d:%d: Illegal escape sequence\n", ctx->iname, l + 1, m + 1);
             ctx->errnum++;
@@ -1617,7 +1636,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         const int q = ctx->bufpos;
         match_spaces(ctx);
         n_p = create_node(NODE_ACTION);
-        n_p->data.action.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.action.value = strndup_e(ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2));
         n_p->data.action.index = rule->data.rule.codes.len;
         node_const_array__add(&rule->data.rule.codes, n_p);
     }
@@ -1693,7 +1712,7 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             match_spaces(ctx);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
-            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, q - p -2);
+            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p -2));
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -1796,7 +1815,7 @@ static node_t *parse_rule(context_t *ctx) {
     n_r = create_node(NODE_RULE);
     n_r->data.rule.expr = parse_expression(ctx, n_r);
     if (n_r->data.rule.expr == NULL) goto EXCEPTION;
-    n_r->data.rule.name = strndup_e(ctx->buffer.buf + p, q - p);
+    n_r->data.rule.name = strndup_e(ctx->buffer.buf + p, INT_TO_SIZE_T(q - p));
     n_r->data.rule.line = l;
     n_r->data.rule.col = m;
     return n_r;
@@ -1838,11 +1857,11 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *o
             const int q = ctx->bufpos;
             match_spaces(ctx);
             if (output1 != NULL) {
-                write_code_block(output1, ctx->buffer.buf + p + 1, q - p - 2, 0);
+                write_code_block(output1, ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2), 0);
                 fputc('\n', output1);
             }
             if (output2 != NULL) {
-                write_code_block(output2, ctx->buffer.buf + p + 1, q - p - 2, 0);
+                write_code_block(output2, ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2), 0);
                 fputc('\n', output2);
             }
         }
@@ -1868,7 +1887,7 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
         if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
             q = ctx->bufpos;
             match_spaces(ctx);
-            s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+            s = strndup_e(ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2));
             if (!unescape_string(s)) {
                 print_error("%s:%d:%d: Illegal escape sequence\n", ctx->iname, lv + 1, mv + 1);
                 ctx->errnum++;
@@ -2041,7 +2060,7 @@ static bool_t parse(context_t *ctx) {
     return (ctx->errnum == 0) ? TRUE : FALSE;
 }
 
-static code_reach_t generate_matching_string_code(generate_t *gen, const char *value, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_matching_string_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
     const size_t n = (value != NULL) ? strlen(value) : 0;
     if (n > 0) {
         char s[5];
@@ -2057,17 +2076,17 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             write_characters(gen->stream, ' ', indent);
             fputs("if (\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "pcc_refill_buffer(ctx, %lu) < %lu ||\n", n, n);
+            fprintf(gen->stream, "pcc_refill_buffer(ctx, %llu) < %llu ||\n", (ullong_t)n, (ullong_t)n);
             for (i = 0; i < n - 1; i++) {
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf(gen->stream, "s[%lu] != '%s' ||\n", i, escape_character(value[i], &s));
+                fprintf(gen->stream, "s[%llu] != '%s' ||\n", (ullong_t)i, escape_character(value[i], &s));
             }
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "s[%lu] != '%s'\n", i, escape_character(value[i], &s));
+            fprintf(gen->stream, "s[%llu] != '%s'\n", (ullong_t)i, escape_character(value[i], &s));
             write_characters(gen->stream, ' ', indent);
             fprintf(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "ctx->pos += %lu;\n", n);
+            fprintf(gen->stream, "ctx->pos += %llu;\n", (ullong_t)n);
             if (!bare) {
                 indent -= 4;
                 write_characters(gen->stream, ' ', indent);
@@ -2095,7 +2114,7 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
     }
 }
 
-static code_reach_t generate_matching_charclass_code(generate_t *gen, const char *value, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_matching_charclass_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
     if (value != NULL) {
         const size_t n = strlen(value);
         if (n > 0) {
@@ -2192,9 +2211,9 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
     }
 }
 
-static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, int indent, bool_t bare);
+static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, size_t indent, bool_t bare);
 
-static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *expr, int min, int max, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *expr, int min, int max, int onfail, size_t indent, bool_t bare) {
     if (max > 1 || max < 0) {
         code_reach_t r;
         if (!bare) {
@@ -2262,7 +2281,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
     }
 }
 
-static code_reach_t generate_predicating_code(generate_t *gen, const node_t *expr, bool_t neg, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_predicating_code(generate_t *gen, const node_t *expr, bool_t neg, int onfail, size_t indent, bool_t bare) {
     code_reach_t r;
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
@@ -2325,7 +2344,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
     return r;
 }
 
-static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t *nodes, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t *nodes, int onfail, size_t indent, bool_t bare) {
     bool_t b = FALSE;
     int i;
     for (i = 0; i < nodes->len; i++) {
@@ -2345,7 +2364,7 @@ static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t
     return b ? CODE_REACH__BOTH : CODE_REACH__ALWAYS_SUCCEED;
 }
 
-static code_reach_t generate_alternative_code(generate_t *gen, const node_array_t *nodes, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_alternative_code(generate_t *gen, const node_array_t *nodes, int onfail, size_t indent, bool_t bare) {
     bool_t b = FALSE;
     int i, m = ++gen->label;
     if (!bare) {
@@ -2406,7 +2425,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
     return b ? CODE_REACH__BOTH : CODE_REACH__ALWAYS_FAIL;
 }
 
-static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr, int index, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr, int index, int onfail, size_t indent, bool_t bare) {
     code_reach_t r;
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
@@ -2431,7 +2450,7 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     return r;
 }
 
-static code_reach_t generate_expanding_code(generate_t *gen, int index, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_expanding_code(generate_t *gen, int index, int onfail, size_t indent, bool_t bare) {
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
         fputs("{\n", gen->stream);
@@ -2468,7 +2487,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, int index, int onfa
 }
 
 code_reach_t generate_thunking_action_code(
-    generate_t *gen, int index, const node_const_array_t *vars, const node_const_array_t *capts, bool_t error, int onfail, int indent, bool_t bare
+    generate_t *gen, int index, const node_const_array_t *vars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare
 ) {
     assert(gen->rule->type == NODE_RULE);
     if (!bare) {
@@ -2523,7 +2542,7 @@ code_reach_t generate_thunking_action_code(
 }
 
 code_reach_t generate_thunking_error_code(
-    generate_t *gen, const node_t *expr, int index, const node_const_array_t *vars, const node_const_array_t *capts, int onfail, int indent, bool_t bare
+    generate_t *gen, const node_t *expr, int index, const node_const_array_t *vars, const node_const_array_t *capts, int onfail, size_t indent, bool_t bare
 ) {
     code_reach_t r;
     const int l = ++gen->label;
@@ -2552,7 +2571,7 @@ code_reach_t generate_thunking_error_code(
     return r;
 }
 
-static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, int indent, bool_t bare) {
+static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, size_t indent, bool_t bare) {
     if (node == NULL) {
         print_error("Internal error [%d]\n", __LINE__);
         exit(-1);
