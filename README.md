@@ -33,32 +33,37 @@ For convenience, the build environments using GCC, Clang, and Microsoft Visual S
 
 ### Using GCC ###
 
-`packcc` will be built in `build/gcc/bin/release` directory using `gcc` by executing the following commands:
+`packcc` will be built in both directories `build/gcc/bin/debug` and `build/gcc/bin/release` using `gcc` by executing the following commands:
 
 ```
 cd build/gcc
 make
 ```
 
+`packcc` in the directory `build/gcc/bin/release` is suitable for practical use.
+
 ### Using Clang ###
 
-`packcc` will be built in `build/clang/bin/release` directory using `clang` by executing the following commands:
+`packcc` will be built in both directories `build/clang/bin/debug` and `build/clang/bin/release` using `clang` by executing the following commands:
 
 ```
 cd build/clang
 make
 ```
 
+`packcc` in the directory `build/clang/bin/release` is suitable for practical use.
+
 ### Using Microsoft Visual Studio ###
 
 You have to install Microsoft Visual Studio 2019 in advance.
 After that, you can build `packcc.exe` by the following instructions:
-- open the solution file `build\msvc\msvc.sln`,
-- select a preferred solution configuration (*Debug* or *Release*) and a preferred solution platform (*x64* or *x86*),
+- Open the solution file `build\msvc\msvc.sln`,
+- Select a preferred solution configuration (*Debug* or *Release*) and a preferred solution platform (*x64* or *x86*),
 - Invoke the *Build Solution* menu item.
 
 `packcc.exe` will appear in `build\msvc\XXX\YYY` directory.
 Here, `XXX` is `x64` or `x86`, and `YYY` is `Debug` or `Release`.
+`packcc.exe` in the directory `build\msvc\XXX\Release` is suitable for practical use.
 
 ## Usage ##
 
