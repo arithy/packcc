@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS_D=-std=c89 -O0 -g2 -Wall
-CFLAGS_R=-std=c89 -O2 -Wall -D_NDEBUG
+CFLAGS_D=-O0 -g2 -Wall
+CFLAGS_R=-O2 -Wall -D_NDEBUG
 LDFLAGS_D=
 LDFLAGS_R=
 
