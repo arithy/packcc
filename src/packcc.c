@@ -384,7 +384,7 @@ static bool_t unescape_string(char *str) {
                     str[j++] = '\\'; str[j++] = 'x'; str[j] = '\0'; return FALSE;
                 }
                 if (str[i + 2] == '\0') {
-                    str[j++] = '\\'; str[j++] = 'x'; str[j++] = str[i + 1]; str[j] = '\0'; return FALSE; 
+                    str[j++] = '\\'; str[j++] = 'x'; str[j++] = str[i + 1]; str[j] = '\0'; return FALSE;
                 }
                 {
                     char c = str[i + 1];
@@ -1301,7 +1301,7 @@ static bool_t match_character(context_t *ctx, char ch) {
 static bool_t match_character_range(context_t *ctx, char min, char max) {
     if (refill_buffer(ctx, 1) >= 1) {
         const char c = ctx->buffer.buf[ctx->bufpos];
-        if (c >= min && c <= max) { 
+        if (c >= min && c <= max) {
             ctx->bufpos++;
             return TRUE;
         }
@@ -1942,6 +1942,7 @@ static bool_t parse(context_t *ctx) {
     {
         fputs(
             "#ifdef _MSC_VER\n"
+            "#undef _CRT_SECURE_NO_WARNINGS\n"
             "#define _CRT_SECURE_NO_WARNINGS\n"
             "#endif /* _MSC_VER */\n"
             "#include <stdio.h>\n"
@@ -1952,13 +1953,13 @@ static bool_t parse(context_t *ctx) {
             "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
             "static size_t strnlen(const char *str, size_t maxlen) {\n"
             "    size_t i;\n"
-            "    for (i = 0; str[i] && i < maxlen; i++);\n"
+            "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
             "}\n"
             "#else\n"
             "#include <unistd.h> /* for strnlen() */\n"
             "#endif /* defined __GNUC__ && defined _WIN32 */ \n"
-            "#endif /* _MSC_VER */\n"
+            "#endif /* !_MSC_VER */\n"
             "\n",
             ctx->sfile
         );
@@ -2072,17 +2073,15 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
                 indent += 4;
             }
             write_characters(gen->stream, ' ', indent);
-            fputs("const char *const s = ctx->buffer.buf + ctx->pos;\n", gen->stream);
-            write_characters(gen->stream, ' ', indent);
             fputs("if (\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
             fprintf(gen->stream, "pcc_refill_buffer(ctx, %llu) < %llu ||\n", (ullong_t)n, (ullong_t)n);
             for (i = 0; i < n - 1; i++) {
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf(gen->stream, "s[%llu] != '%s' ||\n", (ullong_t)i, escape_character(value[i], &s));
+                fprintf(gen->stream, "(ctx->buffer.buf + ctx->pos)[%llu] != '%s' ||\n", (ullong_t)i, escape_character(value[i], &s));
             }
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "s[%llu] != '%s'\n", (ullong_t)i, escape_character(value[i], &s));
+            fprintf(gen->stream, "(ctx->buffer.buf + ctx->pos)[%llu] != '%s'\n", (ullong_t)i, escape_character(value[i], &s));
             write_characters(gen->stream, ' ', indent);
             fprintf(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
@@ -2434,6 +2433,7 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     }
     write_characters(gen->stream, ' ', indent);
     fputs("const int p = ctx->pos;\n", gen->stream);
+    write_characters(gen->stream, ' ', indent);
     fputs("int q;\n", gen->stream);
     r = generate_code(gen, expr, onfail, indent, FALSE);
     write_characters(gen->stream, ' ', indent);
@@ -2486,7 +2486,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, int index, int onfa
     return CODE_REACH__BOTH;
 }
 
-code_reach_t generate_thunking_action_code(
+static code_reach_t generate_thunking_action_code(
     generate_t *gen, int index, const node_const_array_t *vars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare
 ) {
     assert(gen->rule->type == NODE_RULE);
@@ -2541,7 +2541,7 @@ code_reach_t generate_thunking_action_code(
     return CODE_REACH__ALWAYS_SUCCEED;
 }
 
-code_reach_t generate_thunking_error_code(
+static code_reach_t generate_thunking_error_code(
     generate_t *gen, const node_t *expr, int index, const node_const_array_t *vars, const node_const_array_t *capts, int onfail, size_t indent, bool_t bare
 ) {
     code_reach_t r;
@@ -2631,11 +2631,11 @@ static bool_t generate(context_t *ctx) {
         fputs(
             "#ifndef PCC_BUFFERSIZE\n"
             "#define PCC_BUFFERSIZE 256\n"
-            "#endif /* PCC_BUFFERSIZE */\n"
+            "#endif /* !PCC_BUFFERSIZE */\n"
             "\n"
             "#ifndef PCC_ARRAYSIZE\n"
             "#define PCC_ARRAYSIZE 2\n"
-            "#endif /* PCC_ARRAYSIZE */\n"
+            "#endif /* !PCC_ARRAYSIZE */\n"
             "\n"
             "typedef enum pcc_bool_tag {\n"
             "    PCC_FALSE = 0,\n"
@@ -2851,11 +2851,11 @@ static bool_t generate(context_t *ctx) {
             "    fprintf(stderr, \"Syntax error\\n\");\n"
             "    exit(1);\n"
             "}\n"
-            "#endif /* PCC_ERROR */\n"
+            "#endif /* !PCC_ERROR */\n"
             "\n"
             "#ifndef PCC_GETCHAR\n"
             "#define PCC_GETCHAR(auxil) getchar()\n"
-            "#endif /* PCC_GETCHAR */\n"
+            "#endif /* !PCC_GETCHAR */\n"
             "\n"
             "#ifndef PCC_MALLOC\n"
             "#define PCC_MALLOC(auxil, size) pcc_malloc_e(size)\n"
@@ -2867,7 +2867,7 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "    return p;\n"
             "}\n"
-            "#endif /* PCC_MALLOC */\n"
+            "#endif /* !PCC_MALLOC */\n"
             "\n"
             "#ifndef PCC_REALLOC\n"
             "#define PCC_REALLOC(auxil, ptr, size) pcc_realloc_e(ptr, size)\n"
@@ -2879,11 +2879,11 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "    return p;\n"
             "}\n"
-            "#endif /* PCC_REALLOC */\n"
+            "#endif /* !PCC_REALLOC */\n"
             "\n"
             "#ifndef PCC_FREE\n"
             "#define PCC_FREE(auxil, ptr) free(ptr)\n"
-            "#endif /* PCC_FREE */\n"
+            "#endif /* !PCC_FREE */\n"
             "\n"
             /* not used
             "static char *pcc_strdup_e(pcc_auxil_t auxil, const char *str) {\n"
@@ -3851,7 +3851,7 @@ static bool_t generate(context_t *ctx) {
         fprintf(
             ctx->hfile,
             "\n"
-            "#endif /* PCC_INCLUDED__%s */\n",
+            "#endif /* !PCC_INCLUDED__%s */\n",
             ctx->hid
         );
     }
