@@ -3871,7 +3871,7 @@ static bool_t generate(context_t *ctx) {
 
 static void print_version(FILE *output) {
     fprintf(output, "%s version %s\n", g_cmdname, VERSION);
-    fprintf(output, "Copyright (c) 2014 Arihiro Yoshida. All rights reserved.\n");
+    fprintf(output, "Copyright (c) 2014, 2019 Arihiro Yoshida. All rights reserved.\n");
 }
 
 static void print_usage(FILE *output) {
