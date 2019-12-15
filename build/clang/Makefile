@@ -1,6 +1,6 @@
 CC=clang
 CFLAGS_D=-O0 -g2 -Wall
-CFLAGS_R=-O2 -Wall -D_NDEBUG
+CFLAGS_R=-O2 -Wall -DNDEBUG
 LDFLAGS_D=
 LDFLAGS_R=
 
