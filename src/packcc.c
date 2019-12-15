@@ -61,7 +61,7 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #define unlink _unlink
 #endif
 
-#define VERSION "1.2.1"
+#define VERSION "1.2.2"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -291,6 +291,55 @@ static FILE *fopen_wt_e(const char *path) {
     return f;
 }
 
+static int fclose_e(FILE *stream) {
+    const int r = fclose(stream);
+    if (r == EOF) {
+        print_error("File closing error\n");
+        exit(2);
+    }
+    return r;
+}
+
+static int fgetc_e(FILE *stream) {
+    const int c = fgetc(stream);
+    if (c == EOF && ferror(stream)) {
+        print_error("File read error\n");
+        exit(2);
+    }
+    return c;
+}
+
+static int fputc_e(int c, FILE *stream) {
+    const int r = fputc(c, stream);
+    if (r == EOF) {
+        print_error("File write error\n");
+        exit(2);
+    }
+    return r;
+}
+
+static int fputs_e(const char *s, FILE *stream) {
+    const int r = fputs(s, stream);
+    if (r == EOF) {
+        print_error("File write error\n");
+        exit(2);
+    }
+    return r;
+}
+
+static int fprintf_e(FILE *stream, const char *format, ...) {
+    int n;
+    va_list a;
+    va_start(a, format);
+    n = vfprintf(stream, format, a);
+    va_end(a);
+    if (n < 0) {
+        print_error("File write error\n");
+        exit(2);
+    }
+    return n;
+}
+
 static void *malloc_e(size_t size) {
     void *const p = malloc(size);
     if (p == NULL) {
@@ -485,7 +534,7 @@ static void make_header_identifier(char *str) {
 
 static void write_characters(FILE *stream, char ch, size_t len) {
     size_t i;
-    for (i = 0; i < len; i++) fputc(ch, stream);
+    for (i = 0; i < len; i++) fputc_e(ch, stream);
 }
 
 static void write_text(FILE *stream, const char *ptr, size_t len) {
@@ -493,10 +542,10 @@ static void write_text(FILE *stream, const char *ptr, size_t len) {
     for (i = 0; i < len; i++) {
         if (ptr[i] == '\r') {
             if (i + 1 < len && ptr[i + 1] == '\n') i++;
-            fputc('\n', stream);
+            fputc_e('\n', stream);
         }
         else {
-            fputc(ptr[i], stream);
+            fputc_e(ptr[i], stream);
         }
     }
 }
@@ -559,19 +608,19 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
             case ' ':
             case '\v':
             case '\f':
-                if (s) l++; else fputc(ptr[i], stream);
+                if (s) l++; else fputc_e(ptr[i], stream);
                 break;
             case '\t':
-                if (s) l = (l + 8) & ~7; else fputc(ptr[i], stream);
+                if (s) l = (l + 8) & ~7; else fputc_e(ptr[i], stream);
                 break;
             case '\n':
-                fputc('\n', stream);
+                fputc_e('\n', stream);
                 s = TRUE;
                 l = 0;
                 break;
             case '\r':
                 if (i + 1 < len && ptr[i + 1] == '\n') i++;
-                fputc('\n', stream);
+                fputc_e('\n', stream);
                 s = TRUE;
                 l = 0;
                 break;
@@ -581,10 +630,10 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
                     write_characters(stream, ' ', INT_TO_SIZE_T(l - m) + indent);
                     s = FALSE;
                 }
-                fputc(ptr[i], stream);
+                fputc_e(ptr[i], stream);
             }
         }
-        if (!s) fputc('\n', stream);
+        if (!s) fputc_e('\n', stream);
     }
     else {
         for (i = 0; i < len; i++) {
@@ -598,7 +647,7 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
         if (i < len) {
             write_characters(stream, ' ', indent);
             write_text(stream, ptr + i, len - i);
-            fputc('\n', stream);
+            fputc_e('\n', stream);
         }
     }
 }
@@ -888,9 +937,9 @@ static void destroy_context(context_t *ctx) {
     free(ctx->atype);
     free(ctx->vtype);
     free(ctx->hid);
-    fclose(ctx->hfile); if (ctx->errnum) unlink(ctx->hname);
-    fclose(ctx->sfile); if (ctx->errnum) unlink(ctx->sname);
-    fclose(ctx->ifile);
+    fclose_e(ctx->hfile); if (ctx->errnum) unlink(ctx->hname);
+    fclose_e(ctx->sfile); if (ctx->errnum) unlink(ctx->sname);
+    fclose_e(ctx->ifile);
     free(ctx->hname);
     free(ctx->sname);
     free(ctx->iname);
@@ -1249,7 +1298,7 @@ static int refill_buffer(context_t *ctx, int num) {
     const int n = ctx->buffer.len - ctx->bufpos;
     if (n >= num) return n;
     while (ctx->buffer.len < ctx->bufpos + num) {
-        const int c = fgetc(ctx->ifile);
+        const int c = fgetc_e(ctx->ifile);
         if (c == EOF) break;
         char_array__add(&ctx->buffer, (char)c);
     }
@@ -1858,11 +1907,11 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *o
             match_spaces(ctx);
             if (output1 != NULL) {
                 write_code_block(output1, ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2), 0);
-                fputc('\n', output1);
+                fputc_e('\n', output1);
             }
             if (output2 != NULL) {
                 write_code_block(output2, ctx->buffer.buf + p + 1, INT_TO_SIZE_T(q - p - 2), 0);
-                fputc('\n', output2);
+                fputc_e('\n', output2);
             }
         }
         else {
@@ -1937,10 +1986,10 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
 }
 
 static bool_t parse(context_t *ctx) {
-    fprintf(ctx->sfile, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
-    fprintf(ctx->hfile, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
+    fprintf_e(ctx->sfile, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
+    fprintf_e(ctx->hfile, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     {
-        fputs(
+        fputs_e(
             "#ifdef _MSC_VER\n"
             "#undef _CRT_SECURE_NO_WARNINGS\n"
             "#define _CRT_SECURE_NO_WARNINGS\n"
@@ -1963,7 +2012,7 @@ static bool_t parse(context_t *ctx) {
             "\n",
             ctx->sfile
         );
-        fprintf(
+        fprintf_e(
             ctx->sfile,
             "#include \"%s\"\n"
             "\n",
@@ -1971,10 +2020,10 @@ static bool_t parse(context_t *ctx) {
         );
     }
     {
-        fprintf(
+        fprintf_e(
             ctx->hfile,
-            "#ifndef PCC_INCLUDED__%s\n"
-            "#define PCC_INCLUDED__%s\n"
+            "#ifndef PCC_INCLUDED_%s\n"
+            "#define PCC_INCLUDED_%s\n"
             "\n",
             ctx->hid, ctx->hid
         );
@@ -2069,41 +2118,41 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             size_t i;
             if (!bare) {
                 write_characters(gen->stream, ' ', indent);
-                fputs("{\n", gen->stream);
+                fputs_e("{\n", gen->stream);
                 indent += 4;
             }
             write_characters(gen->stream, ' ', indent);
-            fputs("if (\n", gen->stream);
+            fputs_e("if (\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "pcc_refill_buffer(ctx, %llu) < %llu ||\n", (ullong_t)n, (ullong_t)n);
+            fprintf_e(gen->stream, "pcc_refill_buffer(ctx, %llu) < %llu ||\n", (ullong_t)n, (ullong_t)n);
             for (i = 0; i < n - 1; i++) {
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf(gen->stream, "(ctx->buffer.buf + ctx->pos)[%llu] != '%s' ||\n", (ullong_t)i, escape_character(value[i], &s));
+                fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->pos)[%llu] != '%s' ||\n", (ullong_t)i, escape_character(value[i], &s));
             }
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "(ctx->buffer.buf + ctx->pos)[%llu] != '%s'\n", (ullong_t)i, escape_character(value[i], &s));
+            fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->pos)[%llu] != '%s'\n", (ullong_t)i, escape_character(value[i], &s));
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, ") goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "ctx->pos += %llu;\n", (ullong_t)n);
+            fprintf_e(gen->stream, "ctx->pos += %llu;\n", (ullong_t)n);
             if (!bare) {
                 indent -= 4;
                 write_characters(gen->stream, ' ', indent);
-                fputs("}\n", gen->stream);
+                fputs_e("}\n", gen->stream);
             }
             return CODE_REACH__BOTH;
         }
         else {
             write_characters(gen->stream, ' ', indent);
-            fputs("if (\n", gen->stream);
+            fputs_e("if (\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fputs("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
+            fputs_e("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "ctx->buffer.buf[ctx->pos] != '%s'\n", escape_character(value[0], &s));
+            fprintf_e(gen->stream, "ctx->buffer.buf[ctx->pos] != '%s'\n", escape_character(value[0], &s));
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, ") goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fputs("ctx->pos++;\n", gen->stream);
+            fputs_e("ctx->pos++;\n", gen->stream);
             return CODE_REACH__BOTH;
         }
     }
@@ -2123,89 +2172,89 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                 size_t i = a ? 1 : 0;
                 if (i + 1 == n) { /* fulfilled only if a == TRUE */
                     write_characters(gen->stream, ' ', indent);
-                    fputs("if (\n", gen->stream);
+                    fputs_e("if (\n", gen->stream);
                     write_characters(gen->stream, ' ', indent + 4);
-                    fputs("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
+                    fputs_e("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
                     write_characters(gen->stream, ' ', indent + 4);
-                    fprintf(gen->stream, "ctx->buffer.buf[ctx->pos] == '%s'\n", escape_character(value[i], &s));
+                    fprintf_e(gen->stream, "ctx->buffer.buf[ctx->pos] == '%s'\n", escape_character(value[i], &s));
                     write_characters(gen->stream, ' ', indent);
-                    fprintf(gen->stream, ") goto L%04d;\n", onfail);
+                    fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
                     write_characters(gen->stream, ' ', indent);
-                    fputs("ctx->pos++;\n", gen->stream);
+                    fputs_e("ctx->pos++;\n", gen->stream);
                     return CODE_REACH__BOTH;
                 }
                 else {
                     if (!bare) {
                         write_characters(gen->stream, ' ', indent);
-                        fputs("{\n", gen->stream);
+                        fputs_e("{\n", gen->stream);
                         indent += 4;
                     }
                     write_characters(gen->stream, ' ', indent);
-                    fputs("char c;\n", gen->stream);
+                    fputs_e("char c;\n", gen->stream);
                     write_characters(gen->stream, ' ', indent);
-                    fprintf(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
+                    fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
                     write_characters(gen->stream, ' ', indent);
-                    fputs("c = ctx->buffer.buf[ctx->pos];\n", gen->stream);
+                    fputs_e("c = ctx->buffer.buf[ctx->pos];\n", gen->stream);
                     if (i + 3 == n && value[i + 1] == '-') {
                         write_characters(gen->stream, ' ', indent);
-                        fprintf(gen->stream,
+                        fprintf_e(gen->stream,
                             a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n"
                               : "if (!(c >= '%s' && c <= '%s')) goto L%04d;\n",
                             escape_character(value[i], &s), escape_character(value[i + 2], &t), onfail);
                     }
                     else {
                         write_characters(gen->stream, ' ', indent);
-                        fputs(a ? "if (\n" : "if (!(\n", gen->stream);
+                        fputs_e(a ? "if (\n" : "if (!(\n", gen->stream);
                         for (; i < n; i++) {
                             write_characters(gen->stream, ' ', indent + 4);
                             if (i + 2 < n && value[i + 1] == '-') {
-                                fprintf(gen->stream, "(c >= '%s' && c <= '%s')%s\n",
+                                fprintf_e(gen->stream, "(c >= '%s' && c <= '%s')%s\n",
                                     escape_character(value[i], &s), escape_character(value[i + 2], &t), (i + 3 == n) ? "" : " ||");
                                 i += 2;
                             }
                             else {
-                                fprintf(gen->stream, "c == '%s'%s\n",
+                                fprintf_e(gen->stream, "c == '%s'%s\n",
                                     escape_character(value[i], &s), (i + 1 == n) ? "" : " ||");
                             }
                         }
                         write_characters(gen->stream, ' ', indent);
-                        fprintf(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
+                        fprintf_e(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
                     }
                     write_characters(gen->stream, ' ', indent);
-                    fputs("ctx->pos++;\n", gen->stream);
+                    fputs_e("ctx->pos++;\n", gen->stream);
                     if (!bare) {
                         indent -= 4;
                         write_characters(gen->stream, ' ', indent);
-                        fputs("}\n", gen->stream);
+                        fputs_e("}\n", gen->stream);
                     }
                     return CODE_REACH__BOTH;
                 }
             }
             else {
                 write_characters(gen->stream, ' ', indent);
-                fputs("if (\n", gen->stream);
+                fputs_e("if (\n", gen->stream);
                 write_characters(gen->stream, ' ', indent + 4);
-                fputs("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
+                fputs_e("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf(gen->stream, "ctx->buffer.buf[ctx->pos] != '%s'\n", escape_character(value[0], &s));
+                fprintf_e(gen->stream, "ctx->buffer.buf[ctx->pos] != '%s'\n", escape_character(value[0], &s));
                 write_characters(gen->stream, ' ', indent);
-                fprintf(gen->stream, ") goto L%04d;\n", onfail);
+                fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
                 write_characters(gen->stream, ' ', indent);
-                fputs("ctx->pos++;\n", gen->stream);
+                fputs_e("ctx->pos++;\n", gen->stream);
                 return CODE_REACH__BOTH;
             }
         }
         else {
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, "goto L%04d;\n", onfail);
             return CODE_REACH__ALWAYS_FAIL;
         }
     }
     else {
         write_characters(gen->stream, ' ', indent);
-        fprintf(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
+        fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
         write_characters(gen->stream, ' ', indent);
-        fputs("ctx->pos++;\n", gen->stream);
+        fputs_e("ctx->pos++;\n", gen->stream);
         return CODE_REACH__BOTH;
     }
 }
@@ -2217,28 +2266,28 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         code_reach_t r;
         if (!bare) {
             write_characters(gen->stream, ' ', indent);
-            fputs("{\n", gen->stream);
+            fputs_e("{\n", gen->stream);
             indent += 4;
         }
         if (min > 0) {
             write_characters(gen->stream, ' ', indent);
-            fputs("const int p = ctx->pos;\n", gen->stream);
+            fputs_e("const int p = ctx->pos;\n", gen->stream);
         }
         write_characters(gen->stream, ' ', indent);
-        fputs("int i;\n", gen->stream);
+        fputs_e("int i;\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
         if (max < 0)
-            fputs("for (i = 0;; i++) {\n", gen->stream);
+            fputs_e("for (i = 0;; i++) {\n", gen->stream);
         else
-            fprintf(gen->stream, "for (i = 0; i < %d; i++) {\n", max);
+            fprintf_e(gen->stream, "for (i = 0; i < %d; i++) {\n", max);
         {
             const int l = ++gen->label;
             r = generate_code(gen, expr, l, indent + 4, TRUE);
             write_characters(gen->stream, ' ', indent);
-            fputs("}\n", gen->stream);
+            fputs_e("}\n", gen->stream);
             if (r != CODE_REACH__ALWAYS_SUCCEED) {
                 write_characters(gen->stream, ' ', indent - 4);
-                fprintf(gen->stream, "L%04d:;\n", l);
+                fprintf_e(gen->stream, "L%04d:;\n", l);
             }
             else if (max < 0) {
                 print_error("Warning: Infinite loop detected in generated code\n");
@@ -2246,18 +2295,18 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         }
         if (min > 0) {
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "if (i < %d) {\n", min);
+            fprintf_e(gen->stream, "if (i < %d) {\n", min);
             write_characters(gen->stream, ' ', indent + 4);
-            fputs("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->pos = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf(gen->stream, "goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, "goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fputs("}\n", gen->stream);
+            fputs_e("}\n", gen->stream);
         }
         if (!bare) {
             indent -= 4;
             write_characters(gen->stream, ' ', indent);
-            fputs("}\n", gen->stream);
+            fputs_e("}\n", gen->stream);
         }
         return (min > 0) ? ((r == CODE_REACH__ALWAYS_FAIL) ? CODE_REACH__ALWAYS_FAIL : CODE_REACH__BOTH) : CODE_REACH__ALWAYS_SUCCEED;
     }
@@ -2269,7 +2318,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             const int l = ++gen->label;
             if (generate_code(gen, expr, l, indent, bare) != CODE_REACH__ALWAYS_SUCCEED) {
                 write_characters(gen->stream, ' ', indent - 4);
-                fprintf(gen->stream, "L%04d:;\n", l);
+                fprintf_e(gen->stream, "L%04d:;\n", l);
             }
             return CODE_REACH__ALWAYS_SUCCEED;
         }
@@ -2284,25 +2333,25 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
     code_reach_t r;
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
-        fputs("{\n", gen->stream);
+        fputs_e("{\n", gen->stream);
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fputs("const int p = ctx->pos;\n", gen->stream);
+    fputs_e("const int p = ctx->pos;\n", gen->stream);
     if (neg) {
         const int l = ++gen->label;
         r = generate_code(gen, expr, l, indent, FALSE);
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
-            fputs("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->pos = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
         if (r != CODE_REACH__ALWAYS_SUCCEED) {
             write_characters(gen->stream, ' ', indent - 4);
-            fprintf(gen->stream, "L%04d:;\n", l);
+            fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
-            fputs("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->pos = p;\n", gen->stream);
         }
         switch (r) {
         case CODE_REACH__ALWAYS_SUCCEED: r = CODE_REACH__ALWAYS_FAIL; break;
@@ -2316,29 +2365,29 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         r = generate_code(gen, expr, l, indent, FALSE);
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
-            fputs("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->pos = p;\n", gen->stream);
         }
         if (r == CODE_REACH__BOTH) {
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "goto L%04d;\n", m);
+            fprintf_e(gen->stream, "goto L%04d;\n", m);
         }
         if (r != CODE_REACH__ALWAYS_SUCCEED) {
             write_characters(gen->stream, ' ', indent - 4);
-            fprintf(gen->stream, "L%04d:;\n", l);
+            fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
-            fputs("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->pos = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
         if (r == CODE_REACH__BOTH) {
             write_characters(gen->stream, ' ', indent - 4);
-            fprintf(gen->stream, "L%04d:;\n", m);
+            fprintf_e(gen->stream, "L%04d:;\n", m);
         }
     }
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
-        fputs("}\n", gen->stream);
+        fputs_e("}\n", gen->stream);
     }
     return r;
 }
@@ -2351,7 +2400,7 @@ static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t
         case CODE_REACH__ALWAYS_FAIL:
             if (i < nodes->len - 1) {
                 write_characters(gen->stream, ' ', indent);
-                fputs("/* unreachable codes omitted */\n", gen->stream);
+                fputs_e("/* unreachable codes omitted */\n", gen->stream);
             }
             return CODE_REACH__ALWAYS_FAIL;
         case CODE_REACH__ALWAYS_SUCCEED:
@@ -2368,13 +2417,13 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
     int i, m = ++gen->label;
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
-        fputs("{\n", gen->stream);
+        fputs_e("{\n", gen->stream);
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fputs("const int p = ctx->pos;\n", gen->stream);
+    fputs_e("const int p = ctx->pos;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
-    fputs("const int n = chunk->thunks.len;\n", gen->stream);
+    fputs_e("const int n = chunk->thunks.len;\n", gen->stream);
     for (i = 0; i < nodes->len; i++) {
         const bool_t c = (i < nodes->len - 1) ? TRUE : FALSE;
         const int l = ++gen->label;
@@ -2382,16 +2431,16 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         case CODE_REACH__ALWAYS_SUCCEED:
             if (c) {
                 write_characters(gen->stream, ' ', indent);
-                fputs("/* unreachable codes omitted */\n", gen->stream);
+                fputs_e("/* unreachable codes omitted */\n", gen->stream);
             }
             if (b) {
                 write_characters(gen->stream, ' ', indent - 4);
-                fprintf(gen->stream, "L%04d:;\n", m);
+                fprintf_e(gen->stream, "L%04d:;\n", m);
             }
             if (!bare) {
                 indent -= 4;
                 write_characters(gen->stream, ' ', indent);
-                fputs("}\n", gen->stream);
+                fputs_e("}\n", gen->stream);
             }
             return CODE_REACH__ALWAYS_SUCCEED;
         case CODE_REACH__ALWAYS_FAIL:
@@ -2399,27 +2448,27 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         default:
             b = TRUE;
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "goto L%04d;\n", m);
+            fprintf_e(gen->stream, "goto L%04d;\n", m);
         }
         write_characters(gen->stream, ' ', indent - 4);
-        fprintf(gen->stream, "L%04d:;\n", l);
+        fprintf_e(gen->stream, "L%04d:;\n", l);
         write_characters(gen->stream, ' ', indent);
-        fputs("ctx->pos = p;\n", gen->stream);
+        fputs_e("ctx->pos = p;\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fputs("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
+        fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         if (!c) {
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "goto L%04d;\n", onfail);
+            fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
     }
     if (b) {
         write_characters(gen->stream, ' ', indent - 4);
-        fprintf(gen->stream, "L%04d:;\n", m);
+        fprintf_e(gen->stream, "L%04d:;\n", m);
     }
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
-        fputs("}\n", gen->stream);
+        fputs_e("}\n", gen->stream);
     }
     return b ? CODE_REACH__BOTH : CODE_REACH__ALWAYS_FAIL;
 }
@@ -2428,24 +2477,24 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     code_reach_t r;
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
-        fputs("{\n", gen->stream);
+        fputs_e("{\n", gen->stream);
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fputs("const int p = ctx->pos;\n", gen->stream);
+    fputs_e("const int p = ctx->pos;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
-    fputs("int q;\n", gen->stream);
+    fputs_e("int q;\n", gen->stream);
     r = generate_code(gen, expr, onfail, indent, FALSE);
     write_characters(gen->stream, ' ', indent);
-    fputs("q = ctx->pos;\n", gen->stream);
+    fputs_e("q = ctx->pos;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "chunk->capts.buf[%d].range.start = p;\n", index);
+    fprintf_e(gen->stream, "chunk->capts.buf[%d].range.start = p;\n", index);
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "chunk->capts.buf[%d].range.end = q;\n", index);
+    fprintf_e(gen->stream, "chunk->capts.buf[%d].range.end = q;\n", index);
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
-        fputs("}\n", gen->stream);
+        fputs_e("}\n", gen->stream);
     }
     return r;
 }
@@ -2453,35 +2502,35 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
 static code_reach_t generate_expanding_code(generate_t *gen, int index, int onfail, size_t indent, bool_t bare) {
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
-        fputs("{\n", gen->stream);
+        fputs_e("{\n", gen->stream);
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "const int n = chunk->capts.buf[%d].range.end - chunk->capts.buf[%d].range.start;\n", index, index);
+    fprintf_e(gen->stream, "const int n = chunk->capts.buf[%d].range.end - chunk->capts.buf[%d].range.start;\n", index, index);
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
+    fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
     write_characters(gen->stream, ' ', indent);
-    fputs("if (n > 0) {\n", gen->stream);
+    fputs_e("if (n > 0) {\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs("const char *const p = ctx->buffer.buf + ctx->pos;\n", gen->stream);
+    fputs_e("const char *const p = ctx->buffer.buf + ctx->pos;\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fprintf(gen->stream, "const char *const q = ctx->buffer.buf + chunk->capts.buf[%d].range.start;\n", index);
+    fprintf_e(gen->stream, "const char *const q = ctx->buffer.buf + chunk->capts.buf[%d].range.start;\n", index);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs("int i;\n", gen->stream);
+    fputs_e("int i;\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs("for (i = 0; i < n; i++) {\n", gen->stream);
+    fputs_e("for (i = 0; i < n; i++) {\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 8);
-    fprintf(gen->stream, "if (p[i] != q[i]) goto L%04d;\n", onfail);
+    fprintf_e(gen->stream, "if (p[i] != q[i]) goto L%04d;\n", onfail);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs("}\n", gen->stream);
+    fputs_e("}\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs("ctx->pos += n;\n", gen->stream);
+    fputs_e("ctx->pos += n;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
-    fputs("}\n", gen->stream);
+    fputs_e("}\n", gen->stream);
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
-        fputs("}\n", gen->stream);
+        fputs_e("}\n", gen->stream);
     }
     return CODE_REACH__BOTH;
 }
@@ -2492,51 +2541,51 @@ static code_reach_t generate_thunking_action_code(
     assert(gen->rule->type == NODE_RULE);
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
-        fputs("{\n", gen->stream);
+        fputs_e("{\n", gen->stream);
         indent += 4;
     }
     if (error) {
         write_characters(gen->stream, ' ', indent);
-        fputs("pcc_value_t null;\n", gen->stream);
+        fputs_e("pcc_value_t null;\n", gen->stream);
     }
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_%d, %d, %d);\n",
+    fprintf_e(gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_%d, %d, %d);\n",
         gen->rule->data.rule.name, index, gen->rule->data.rule.vars.len, gen->rule->data.rule.capts.len);
     {
         int i;
         for (i = 0; i < vars->len; i++) {
             assert(vars->buf[i]->type == NODE_REFERENCE);
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "thunk->data.leaf.values.buf[%d] = &(chunk->values.buf[%d]);\n",
+            fprintf_e(gen->stream, "thunk->data.leaf.values.buf[%d] = &(chunk->values.buf[%d]);\n",
                 vars->buf[i]->data.reference.index, vars->buf[i]->data.reference.index);
         }
         for (i = 0; i < capts->len; i++) {
             assert(capts->buf[i]->type == NODE_CAPTURE);
             write_characters(gen->stream, ' ', indent);
-            fprintf(gen->stream, "thunk->data.leaf.capts.buf[%d] = &(chunk->capts.buf[%d]);\n",
+            fprintf_e(gen->stream, "thunk->data.leaf.capts.buf[%d] = &(chunk->capts.buf[%d]);\n",
                 capts->buf[i]->data.capture.index, capts->buf[i]->data.capture.index);
         }
         write_characters(gen->stream, ' ', indent);
-        fputs("thunk->data.leaf.capt0.range.start = chunk->pos;\n", gen->stream);
+        fputs_e("thunk->data.leaf.capt0.range.start = chunk->pos;\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fputs("thunk->data.leaf.capt0.range.end = ctx->pos;\n", gen->stream);
+        fputs_e("thunk->data.leaf.capt0.range.end = ctx->pos;\n", gen->stream);
     }
     if (error) {
         write_characters(gen->stream, ' ', indent);
-        fputs("memset(&null, 0, sizeof(pcc_value_t)); /* in case */\n", gen->stream);
+        fputs_e("memset(&null, 0, sizeof(pcc_value_t)); /* in case */\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fputs("thunk->data.leaf.action(ctx, thunk, &null);\n", gen->stream);
+        fputs_e("thunk->data.leaf.action(ctx, thunk, &null);\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fputs("pcc_thunk__destroy(ctx->auxil, thunk);\n", gen->stream);
+        fputs_e("pcc_thunk__destroy(ctx->auxil, thunk);\n", gen->stream);
     }
     else {
         write_characters(gen->stream, ' ', indent);
-        fputs("pcc_thunk_array__add(ctx->auxil, &chunk->thunks, thunk);\n", gen->stream);
+        fputs_e("pcc_thunk_array__add(ctx->auxil, &chunk->thunks, thunk);\n", gen->stream);
     }
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
-        fputs("}\n", gen->stream);
+        fputs_e("}\n", gen->stream);
     }
     return CODE_REACH__ALWAYS_SUCCEED;
 }
@@ -2550,23 +2599,23 @@ static code_reach_t generate_thunking_error_code(
     assert(gen->rule->type == NODE_RULE);
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
-        fputs("{\n", gen->stream);
+        fputs_e("{\n", gen->stream);
         indent += 4;
     }
     r = generate_code(gen, expr, l, indent, TRUE);
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "goto L%04d;\n", m);
+    fprintf_e(gen->stream, "goto L%04d;\n", m);
     write_characters(gen->stream, ' ', indent - 4);
-    fprintf(gen->stream, "L%04d:;\n", l);
+    fprintf_e(gen->stream, "L%04d:;\n", l);
     generate_thunking_action_code(gen, index, vars, capts, TRUE, l, indent, FALSE);
     write_characters(gen->stream, ' ', indent);
-    fprintf(gen->stream, "goto L%04d;\n", onfail);
+    fprintf_e(gen->stream, "goto L%04d;\n", onfail);
     write_characters(gen->stream, ' ', indent - 4);
-    fprintf(gen->stream, "L%04d:;\n", m);
+    fprintf_e(gen->stream, "L%04d:;\n", m);
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
-        fputs("}\n", gen->stream);
+        fputs_e("}\n", gen->stream);
     }
     return r;
 }
@@ -2583,11 +2632,11 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
     case NODE_REFERENCE:
         write_characters(gen->stream, ' ', indent);
         if (node->data.reference.index >= 0) {
-            fprintf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[%d]))) goto L%04d;\n",
+            fprintf_e(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[%d]))) goto L%04d;\n",
                 node->data.reference.name, node->data.reference.index, onfail);
         }
         else {
-            fprintf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, NULL)) goto L%04d;\n",
+            fprintf_e(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, NULL)) goto L%04d;\n",
                 node->data.reference.name, onfail);
         }
         return CODE_REACH__BOTH;
@@ -2628,7 +2677,7 @@ static bool_t generate(context_t *ctx) {
     const bool_t ap = is_pointer_type(at);
     FILE *const stream = ctx->sfile;
     {
-        fputs(
+        fputs_e(
             "#ifndef PCC_BUFFERSIZE\n"
             "#define PCC_BUFFERSIZE 256\n"
             "#endif /* !PCC_BUFFERSIZE */\n"
@@ -2655,19 +2704,19 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "typedef %s%spcc_value_t;\n"
             "\n",
             vt, vp ? "" : " "
         );
-        fprintf(
+        fprintf_e(
             stream,
             "typedef %s%spcc_auxil_t;\n"
             "\n",
             at, ap ? "" : " "
         );
-        fputs(
+        fputs_e(
             "typedef struct pcc_value_table_tag {\n"
             "    pcc_value_t *buf;\n"
             "    int max;\n"
@@ -2702,13 +2751,13 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "typedef void (*pcc_action_t)(%s_context_t *, pcc_thunk_t *, pcc_value_t *);\n"
             "\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "typedef enum pcc_thunk_type_tag {\n"
             "    PCC_THUNK_LEAF,\n"
             "    PCC_THUNK_NODE,\n"
@@ -2772,13 +2821,13 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "typedef pcc_thunk_chunk_t *(*pcc_rule_t)(%s_context_t *);\n"
             "\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "typedef struct pcc_rule_set_tag {\n"
             "    pcc_rule_t *buf;\n"
             "    int max;\n"
@@ -2832,7 +2881,7 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "struct %s_context_tag {\n"
             "    int pos;\n"
@@ -2844,7 +2893,7 @@ static bool_t generate(context_t *ctx) {
             "\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "#ifndef PCC_ERROR\n"
             "#define PCC_ERROR(auxil) pcc_error()\n"
             "static void pcc_error(void) {\n"
@@ -3371,13 +3420,13 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static %s_context_t *pcc_context__create(pcc_auxil_t auxil) {\n"
             "    %s_context_t *const ctx = (%s_context_t *)PCC_MALLOC(auxil, sizeof(%s_context_t));\n",
             get_prefix(ctx), get_prefix(ctx), get_prefix(ctx), get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    ctx->pos = 0;\n"
             "    pcc_char_array__init(auxil, &ctx->buffer, PCC_BUFFERSIZE);\n"
             "    pcc_lr_table__init(auxil, &ctx->lrtable, PCC_BUFFERSIZE);\n"
@@ -3388,12 +3437,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static void pcc_context__destroy(%s_context_t *ctx) {\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    if (ctx == NULL) return;\n"
             "    pcc_lr_stack__term(ctx->auxil, &ctx->lrstack);\n"
             "    pcc_lr_table__term(ctx->auxil, &ctx->lrtable);\n"
@@ -3403,12 +3452,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static int pcc_refill_buffer(%s_context_t *ctx, int num) {\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    int n, c;\n"
             "    n = ctx->buffer.len - ctx->pos;\n"
             "    if (n >= num) return n;\n"
@@ -3422,12 +3471,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static void pcc_commit_buffer(%s_context_t *ctx) {\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->pos, ctx->buffer.len - ctx->pos);\n"
             "    ctx->buffer.len -= ctx->pos;\n"
             "    pcc_lr_table__shift(ctx->auxil, &ctx->lrtable, ctx->pos);\n"
@@ -3436,12 +3485,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static const char *pcc_get_capture_string(%s_context_t *ctx, const pcc_capture_t *capt) {\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    if (capt->string == NULL)\n"
             "        ((pcc_capture_t *)capt)->string =\n"
             "            pcc_strndup_e(ctx->auxil, ctx->buffer.buf + capt->range.start, capt->range.end - capt->range.start);\n"
@@ -3450,12 +3499,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    static pcc_value_t null;\n"
             "    pcc_thunk_chunk_t *c = NULL;\n"
             "    const int p = ctx->pos;\n"
@@ -3555,12 +3604,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "static void pcc_do_action(%s_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    int i;\n"
             "    for (i = 0; i < thunks->len; i++) {\n"
             "        pcc_thunk_t *const thunk = thunks->buf[i];\n"
@@ -3604,26 +3653,26 @@ static bool_t generate(context_t *ctx) {
                         print_error("Internal error [%d]\n", __LINE__);
                         exit(-1);
                     }
-                    fprintf(
+                    fprintf_e(
                         stream,
                         "static void pcc_action_%s_%d(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
                         r->name, d, get_prefix(ctx)
                     );
-                    fputs(
+                    fputs_e(
                         "#define auxil (__pcc_ctx->auxil)\n"
                         "#define __ (*__pcc_out)\n",
                         stream
                     );
                     for (k = 0; k < v->len; k++) {
                         assert(v->buf[k]->type == NODE_REFERENCE);
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#define %s (*__pcc_in->data.leaf.values.buf[%d])\n",
                             v->buf[k]->data.reference.var,
                             v->buf[k]->data.reference.index
                         );
                     }
-                    fputs(
+                    fputs_e(
                         "#define _0 pcc_get_capture_string(__pcc_ctx, &__pcc_in->data.leaf.capt0)\n"
                         "#define _0s ((const)__pcc_in->data.leaf.capt0.range.start)\n"
                         "#define _0e ((const)__pcc_in->data.leaf.capt0.range.end)\n",
@@ -3631,19 +3680,19 @@ static bool_t generate(context_t *ctx) {
                     );
                     for (k = 0; k < c->len; k++) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#define _%d pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.buf[%d])\n",
                             c->buf[k]->data.capture.index + 1,
                             c->buf[k]->data.capture.index
                         );
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#define _%ds __pcc_in->data.leaf.capts.buf[%d]->range.start\n",
                             c->buf[k]->data.capture.index + 1,
                             c->buf[k]->data.capture.index
                         );
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#define _%de __pcc_in->data.leaf.capts.buf[%d]->range.end\n",
                             c->buf[k]->data.capture.index + 1,
@@ -3653,23 +3702,23 @@ static bool_t generate(context_t *ctx) {
                     write_code_block(stream, s, strlen(s), 4);
                     for (k = c->len - 1; k >= 0; k--) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#undef _%de\n",
                             c->buf[k]->data.capture.index + 1
                         );
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#undef _%ds\n",
                             c->buf[k]->data.capture.index + 1
                         );
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#undef _%d\n",
                             c->buf[k]->data.capture.index + 1
                         );
                     }
-                    fputs(
+                    fputs_e(
                         "#undef _0e\n"
                         "#undef _0s\n"
                         "#undef _0\n",
@@ -3677,18 +3726,18 @@ static bool_t generate(context_t *ctx) {
                     );
                     for (k = v->len - 1; k >= 0; k--) {
                         assert(v->buf[k]->type == NODE_REFERENCE);
-                        fprintf(
+                        fprintf_e(
                             stream,
                             "#undef %s\n",
                             v->buf[k]->data.reference.var
                         );
                     }
-                    fputs(
+                    fputs_e(
                         "#undef __\n"
                         "#undef auxil\n",
                         stream
                     );
-                    fputs(
+                    fputs_e(
                         "}\n"
                         "\n",
                         stream
@@ -3699,13 +3748,13 @@ static bool_t generate(context_t *ctx) {
         {
             int i;
             for (i = 0; i < ctx->rules.len; i++) {
-                fprintf(
+                fprintf_e(
                     stream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx);\n",
                     ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
                 );
             }
-            fputs(
+            fputs_e(
                 "\n",
                 stream
             );
@@ -3715,76 +3764,76 @@ static bool_t generate(context_t *ctx) {
                 g.stream = stream;
                 g.rule = ctx->rules.buf[i];
                 g.label = 0;
-                fprintf(
+                fprintf_e(
                     stream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
                     ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
                 );
-                fputs(
+                fputs_e(
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
                     "    chunk->pos = ctx->pos;\n",
                     stream
                 );
-                fprintf(
+                fprintf_e(
                     stream,
                     "    pcc_value_table__resize(ctx->auxil, &chunk->values, %d);\n",
                     ctx->rules.buf[i]->data.rule.vars.len
                 );
-                fprintf(
+                fprintf_e(
                     stream,
                     "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, %d);\n",
                     ctx->rules.buf[i]->data.rule.capts.len
                 );
                 r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
-                fputs(
+                fputs_e(
                     "    return chunk;\n",
                     stream
                 );
                 if (r != CODE_REACH__ALWAYS_SUCCEED) {
-                    fputs(
+                    fputs_e(
                         "L0000:;\n"
                         "    pcc_thunk_chunk__destroy(ctx->auxil, chunk);\n"
                         "    return NULL;\n",
                         stream
                     );
                 }
-                fputs(
+                fputs_e(
                     "}\n"
                     "\n",
                     stream
                 );
             }
         }
-        fprintf(
+        fprintf_e(
             stream,
             "%s_context_t *%s_create(%s%sauxil) {\n",
             get_prefix(ctx), get_prefix(ctx),
             at, ap ? "" : " "
         );
-        fputs(
+        fputs_e(
             "    return pcc_context__create(auxil);\n"
             "}\n"
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "int %s_parse(%s_context_t *ctx, %s%s*ret) {\n",
             get_prefix(ctx), get_prefix(ctx),
             vt, vp ? "" : " "
         );
-        fputs(
+        fputs_e(
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_thunk_array__init(ctx->auxil, &thunks, PCC_ARRAYSIZE);\n",
             stream
         );
         if (ctx->rules.len > 0) {
-            fprintf(
+            fprintf_e(
                 stream,
                 "    if (pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &thunks, ret))\n",
                 ctx->rules.buf[0]->data.rule.name
             );
-            fputs(
+            fputs_e(
                 "        pcc_do_action(ctx, &thunks, ret);\n"
                 "    else\n"
                 "        PCC_ERROR(ctx->auxil);\n"
@@ -3792,72 +3841,72 @@ static bool_t generate(context_t *ctx) {
                 stream
             );
         }
-        fputs(
+        fputs_e(
             "    pcc_thunk_array__term(ctx->auxil, &thunks);\n"
             "    return pcc_refill_buffer(ctx, 1) >= 1;\n"
             "}\n"
             "\n",
             stream
         );
-        fprintf(
+        fprintf_e(
             stream,
             "void %s_destroy(%s_context_t *ctx) {\n",
             get_prefix(ctx), get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "    pcc_context__destroy(ctx);\n"
             "}\n",
             stream
         );
     }
     {
-        fputs(
+        fputs_e(
             "#ifdef __cplusplus\n"
             "extern \"C\" {\n"
             "#endif\n"
             "\n",
             ctx->hfile
         );
-        fprintf(
+        fprintf_e(
             ctx->hfile,
             "typedef struct %s_context_tag %s_context_t;\n"
             "\n",
             get_prefix(ctx), get_prefix(ctx)
         );
-        fprintf(
+        fprintf_e(
             ctx->hfile,
             "%s_context_t *%s_create(%s%sauxil);\n",
             get_prefix(ctx), get_prefix(ctx),
             at, ap ? "" : " "
         );
-        fprintf(
+        fprintf_e(
             ctx->hfile,
             "int %s_parse(%s_context_t *ctx, %s%s*ret);\n",
             get_prefix(ctx), get_prefix(ctx),
             vt, vp ? "" : " "
         );
-        fprintf(
+        fprintf_e(
             ctx->hfile,
             "void %s_destroy(%s_context_t *ctx);\n",
             get_prefix(ctx), get_prefix(ctx)
         );
-        fputs(
+        fputs_e(
             "\n"
             "#ifdef __cplusplus\n"
             "}\n"
             "#endif\n",
             ctx->hfile
         );
-        fprintf(
+        fprintf_e(
             ctx->hfile,
             "\n"
-            "#endif /* !PCC_INCLUDED__%s */\n",
+            "#endif /* !PCC_INCLUDED_%s */\n",
             ctx->hid
         );
     }
     {
         match_eol(ctx);
-        if (!match_eof(ctx)) fputc('\n', stream);
+        if (!match_eof(ctx)) fputc_e('\n', stream);
         commit_buffer(ctx);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const int n = (ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
