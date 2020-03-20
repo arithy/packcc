@@ -2305,7 +2305,7 @@ static bool_t parse(context_t *ctx) {
             "#include <string.h>\n"
             "\n"
             "#ifndef _MSC_VER\n"
-            "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
+            "#if ((defined USE_SYSTEM_STRNLEN) == 0) && defined __GNUC__ && defined _WIN32 /* MinGW */\n"
             "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
             "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
             "    size_t i;\n"
