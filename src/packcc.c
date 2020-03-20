@@ -46,7 +46,7 @@
 #include <assert.h>
 
 #ifndef _MSC_VER
-#if defined __GNUC__ && defined _WIN32 /* MinGW */
+#if ((defined USE_SYSTEM_STRNLEN) == 0) && defined __GNUC__ && defined _WIN32 /* MinGW */
 #define strnlen(str, maxlen) strnlen_(str, maxlen)
 static size_t strnlen_(const char *str, size_t maxlen) {
     size_t i;
