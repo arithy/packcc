@@ -3920,17 +3920,17 @@ static bool_t generate(context_t *ctx) {
 
 static void print_version(FILE *output) {
     fprintf(output, "%s version %s\n", g_cmdname, VERSION);
-    fprintf(output, "Copyright (c) 2014, 2019 Arihiro Yoshida. All rights reserved.\n");
+    fprintf(output, "Copyright (c) 2014, 2019, 2020 Arihiro Yoshida. All rights reserved.\n");
 }
 
 static void print_usage(FILE *output) {
     fprintf(output, "Usage: %s [OPTIONS] [FILE]\n", g_cmdname);
     fprintf(output, "Generates a packrat parser for C.\n");
     fprintf(output, "\n");
-    fprintf(output, "  -o BASENAME  specify a base name of output source and header files\n");
-    fprintf(output, "  -d           with debug information\n");
-    fprintf(output, "  -h           print this help message and exit\n");
-    fprintf(output, "  -v           print the version and exit\n");
+    fprintf(output, "  -o BASENAME    specify a base name of output source and header files\n");
+    fprintf(output, "  -d, --debug    with debug information\n");
+    fprintf(output, "  -h, --help     print this help message and exit\n");
+    fprintf(output, "  -v, --version  print the version and exit\n");
 }
 
 int main(int argc, char **argv) {
@@ -3956,7 +3956,7 @@ int main(int argc, char **argv) {
             if (argv[i][0] != '-') {
                 break;
             }
-            else if (strcmp(argv[i] + 1, "-") == 0) {
+            else if (strcmp(argv[i], "--") == 0) {
                 i++; break;
             }
             else if (argv[i][1] == 'o') {
@@ -3975,13 +3975,13 @@ int main(int argc, char **argv) {
                 }
                 opt_o = o;
             }
-            else if (strcmp(argv[i] + 1, "d") == 0) {
+            else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
                 opt_d = TRUE;
             }
-            else if (strcmp(argv[i] + 1, "h") == 0) {
+            else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
                 opt_h = TRUE;
             }
-            else if (strcmp(argv[i] + 1, "v") == 0) {
+            else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
                 opt_v = TRUE;
             }
             else {
