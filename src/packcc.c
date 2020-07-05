@@ -1,7 +1,7 @@
 /*
  * PackCC: a packrat parser generator for C.
  *
- * Copyright (c) 2014, 2019 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019, 2020 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -61,7 +61,7 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #define unlink _unlink
 #endif
 
-#define VERSION "1.2.2"
+#define VERSION "1.2.3"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -484,7 +484,7 @@ static const char *escape_character(char ch, char (*buf)[5]) {
         if (ch >= '\x20' && ch < '\x7f')
             snprintf(*buf, 5, "%c", ch);
         else
-            snprintf(*buf, 5, "\\x%02x", (unsigned)ch);
+            snprintf(*buf, 5, "\\x%02x", (unsigned char)ch);
     }
     (*buf)[4] = '\0';
     return *buf;
@@ -626,7 +626,7 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
                 break;
             default:
                 if (s) {
-                    assert(m >= 0); /* m must not be the inital value -1 */
+                    assert(m >= 0); /* m must not be the initial value -1 */
                     write_characters(stream, ' ', INT_TO_SIZE_T(l - m) + indent);
                     s = FALSE;
                 }
