@@ -61,7 +61,7 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #define unlink _unlink
 #endif
 
-#define VERSION "1.2.3"
+#define VERSION "1.3.0"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -2275,22 +2275,28 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         }
         write_characters(gen->stream, ' ', indent);
         fputs_e("int i;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        if (max < 0)
+        if (max < 0) {
+            write_characters(gen->stream, ' ', indent);
             fputs_e("for (i = 0;; i++) {\n", gen->stream);
-        else
+            write_characters(gen->stream, ' ', indent + 4);
+            fputs_e("const int o = ctx->pos;\n", gen->stream);
+        }
+        else {
+            write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "for (i = 0; i < %d; i++) {\n", max);
+        }
         {
             const int l = ++gen->label;
             r = generate_code(gen, expr, l, indent + 4, TRUE);
+            if (max < 0) {
+                write_characters(gen->stream, ' ', indent + 4);
+                fputs_e("if (ctx->pos == o) break;\n", gen->stream);
+            }
             write_characters(gen->stream, ' ', indent);
             fputs_e("}\n", gen->stream);
             if (r != CODE_REACH__ALWAYS_SUCCEED) {
                 write_characters(gen->stream, ' ', indent - 4);
                 fprintf_e(gen->stream, "L%04d:;\n", l);
-            }
-            else if (max < 0) {
-                print_error("Warning: Infinite loop detected in generated code\n");
             }
         }
         if (min > 0) {
