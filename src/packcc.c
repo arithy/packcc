@@ -3682,8 +3682,8 @@ static bool_t generate(context_t *ctx) {
                     }
                     fputs_e(
                         "#define _0 pcc_get_capture_string(__pcc_ctx, &__pcc_in->data.leaf.capt0)\n"
-                        "#define _0s ((const)__pcc_in->data.leaf.capt0.range.start)\n"
-                        "#define _0e ((const)__pcc_in->data.leaf.capt0.range.end)\n",
+                        "#define _0s ((const int)__pcc_in->data.leaf.capt0.range.start)\n"
+                        "#define _0e ((const int)__pcc_in->data.leaf.capt0.range.end)\n",
                         stream
                     );
                     for (k = 0; k < c->len; k++) {
