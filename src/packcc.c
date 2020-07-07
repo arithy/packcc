@@ -46,7 +46,8 @@
 
 #ifndef _MSC_VER
 #if defined __GNUC__ && defined _WIN32 /* MinGW */
-static size_t strnlen(const char *str, size_t maxlen) {
+#define strnlen(str, maxlen) strnlen_(str, maxlen)
+static size_t strnlen_(const char *str, size_t maxlen) {
     size_t i;
     for (i = 0; i < maxlen && str[i]; i++);
     return i;
@@ -61,7 +62,7 @@ static size_t strnlen(const char *str, size_t maxlen) {
 #define unlink _unlink
 #endif
 
-#define VERSION "1.3.0"
+#define VERSION "1.3.1"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -2000,7 +2001,8 @@ static bool_t parse(context_t *ctx) {
             "\n"
             "#ifndef _MSC_VER\n"
             "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
-            "static size_t strnlen(const char *str, size_t maxlen) {\n"
+            "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
+            "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
