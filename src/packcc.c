@@ -2273,39 +2273,48 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         }
         if (min > 0) {
             write_characters(gen->stream, ' ', indent);
-            fputs_e("const int p = ctx->pos;\n", gen->stream);
+            fputs_e("const int p0 = ctx->pos;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("const int n0 = chunk->thunks.len;\n", gen->stream);
         }
         write_characters(gen->stream, ' ', indent);
         fputs_e("int i;\n", gen->stream);
-        if (max < 0) {
-            write_characters(gen->stream, ' ', indent);
+        write_characters(gen->stream, ' ', indent);
+        if (max < 0)
             fputs_e("for (i = 0;; i++) {\n", gen->stream);
-            write_characters(gen->stream, ' ', indent + 4);
-            fputs_e("const int o = ctx->pos;\n", gen->stream);
-        }
-        else {
-            write_characters(gen->stream, ' ', indent);
+        else
             fprintf_e(gen->stream, "for (i = 0; i < %d; i++) {\n", max);
-        }
+        write_characters(gen->stream, ' ', indent + 4);
+        fputs_e("const int p = ctx->pos;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent + 4);
+        fputs_e("const int n = chunk->thunks.len;\n", gen->stream);
         {
             const int l = ++gen->label;
             r = generate_code(gen, expr, l, indent + 4, TRUE);
-            if (max < 0) {
-                write_characters(gen->stream, ' ', indent + 4);
-                fputs_e("if (ctx->pos == o) break;\n", gen->stream);
-            }
-            write_characters(gen->stream, ' ', indent);
-            fputs_e("}\n", gen->stream);
+            write_characters(gen->stream, ' ', indent + 4);
+            fputs_e("if (ctx->pos == p) break;\n", gen->stream);
             if (r != CODE_REACH__ALWAYS_SUCCEED) {
-                write_characters(gen->stream, ' ', indent - 4);
+                write_characters(gen->stream, ' ', indent + 4);
+                fputs_e("continue;\n", gen->stream);
+                write_characters(gen->stream, ' ', indent);
                 fprintf_e(gen->stream, "L%04d:;\n", l);
+                write_characters(gen->stream, ' ', indent + 4);
+                fputs_e("ctx->pos = p;\n", gen->stream);
+                write_characters(gen->stream, ' ', indent + 4);
+                fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
+                write_characters(gen->stream, ' ', indent + 4);
+                fputs_e("break;\n", gen->stream);
             }
         }
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("}\n", gen->stream);
         if (min > 0) {
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "if (i < %d) {\n", min);
             write_characters(gen->stream, ' ', indent + 4);
-            fputs_e("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->pos = p0;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent + 4);
+            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n0);\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
             fprintf_e(gen->stream, "goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
@@ -2323,10 +2332,35 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             return generate_code(gen, expr, onfail, indent, bare);
         }
         else {
-            const int l = ++gen->label;
-            if (generate_code(gen, expr, l, indent, bare) != CODE_REACH__ALWAYS_SUCCEED) {
-                write_characters(gen->stream, ' ', indent - 4);
-                fprintf_e(gen->stream, "L%04d:;\n", l);
+            if (!bare) {
+                write_characters(gen->stream, ' ', indent);
+                fputs_e("{\n", gen->stream);
+                indent += 4;
+            }
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("const int p = ctx->pos;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("const int n = chunk->thunks.len;\n", gen->stream);
+            {
+                const int l = ++gen->label;
+                if (generate_code(gen, expr, l, indent, TRUE) != CODE_REACH__ALWAYS_SUCCEED) {
+                    const int m = ++gen->label;
+                    write_characters(gen->stream, ' ', indent);
+                    fprintf_e(gen->stream, "goto L%04d;\n", m);
+                    write_characters(gen->stream, ' ', indent - 4);
+                    fprintf_e(gen->stream, "L%04d:;\n", l);
+                    write_characters(gen->stream, ' ', indent);
+                    fputs_e("ctx->pos = p;\n", gen->stream);
+                    write_characters(gen->stream, ' ', indent);
+                    fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
+                    write_characters(gen->stream, ' ', indent - 4);
+                    fprintf_e(gen->stream, "L%04d:;\n", m);
+                }
+            }
+            if (!bare) {
+                indent -= 4;
+                write_characters(gen->stream, ' ', indent);
+                fputs_e("}\n", gen->stream);
             }
             return CODE_REACH__ALWAYS_SUCCEED;
         }
