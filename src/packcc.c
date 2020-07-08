@@ -2380,12 +2380,16 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
     }
     write_characters(gen->stream, ' ', indent);
     fputs_e("const int p = ctx->pos;\n", gen->stream);
+    write_characters(gen->stream, ' ', indent);
+    fputs_e("const int n = chunk->thunks.len;\n", gen->stream);
     if (neg) {
         const int l = ++gen->label;
         r = generate_code(gen, expr, l, indent, FALSE);
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->pos = p;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
@@ -2394,6 +2398,8 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->pos = p;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         }
         switch (r) {
         case CODE_REACH__ALWAYS_SUCCEED: r = CODE_REACH__ALWAYS_FAIL; break;
@@ -2408,6 +2414,8 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->pos = p;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         }
         if (r == CODE_REACH__BOTH) {
             write_characters(gen->stream, ' ', indent);
@@ -2418,6 +2426,8 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->pos = p;\n", gen->stream);
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
