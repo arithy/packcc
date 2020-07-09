@@ -1,5 +1,10 @@
 %prefix "calc"
 
+%source {
+#include <stdio.h>
+#include <stdlib.h>
+}
+
 statement <- _ e:expression _ EOL { printf("answer=%d\n", e); }
            / ( !EOL . )* EOL      { printf("error\n"); }
 
