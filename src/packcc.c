@@ -2290,7 +2290,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         fputs_e("const int n = chunk->thunks.len;\n", gen->stream);
         {
             const int l = ++gen->label;
-            r = generate_code(gen, expr, l, indent + 4, TRUE);
+            r = generate_code(gen, expr, l, indent + 4, FALSE);
             write_characters(gen->stream, ' ', indent + 4);
             fputs_e("if (ctx->pos == p) break;\n", gen->stream);
             if (r != CODE_REACH__ALWAYS_SUCCEED) {
@@ -2343,7 +2343,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             fputs_e("const int n = chunk->thunks.len;\n", gen->stream);
             {
                 const int l = ++gen->label;
-                if (generate_code(gen, expr, l, indent, TRUE) != CODE_REACH__ALWAYS_SUCCEED) {
+                if (generate_code(gen, expr, l, indent, FALSE) != CODE_REACH__ALWAYS_SUCCEED) {
                     const int m = ++gen->label;
                     write_characters(gen->stream, ' ', indent);
                     fprintf_e(gen->stream, "goto L%04d;\n", m);
