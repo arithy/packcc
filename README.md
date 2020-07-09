@@ -196,7 +196,7 @@ A dollar (`$`) followed by a positive integer represents a text previously captu
 This matches `0foo0`, `123foo123`, etc.
 
 ```
-'[' < '='* > '[' !( ']' $1 ']' ) . )* ( ']' $1 ']' )
+'[' < '='* > '[' ( !( ']' $1 ']' ) . )* ( ']' $1 ']' )
 ```
 
 This matches `[[`...`]]`, `[=[`...`]=]`, `[==[`...`]==]`, etc.
@@ -289,8 +289,8 @@ Some macros are prepared to customize the parser. The macro definition should be
 
 ```
 %source {
-    #define PCC_GETCHAR(auxil) get_character(auxil->input)
-    #define PCC_BUFFERSIZE 1024
+#define PCC_GETCHAR(auxil) get_character(auxil->input)
+#define PCC_BUFFERSIZE 1024
 }
 ```
 
@@ -431,6 +431,11 @@ A desktop calculator. Note that there are **left-recursive** grammar rules.
 
 ```
 %prefix "calc"
+
+%source {
+#include <stdio.h>
+#include <stdlib.h>
+}
 
 statement <- _ e:expression _ EOL { printf("answer=%d\n", e); }
            / ( !EOL . )* EOL      { printf("error\n"); }
