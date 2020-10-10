@@ -2007,8 +2007,6 @@ static bool_t parse(context_t *ctx) {
             "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
             "}\n"
-            "#else\n"
-            "#include <unistd.h> /* for strnlen() */\n"
             "#endif /* defined __GNUC__ && defined _WIN32 */ \n"
             "#endif /* !_MSC_VER */\n"
             "\n",
