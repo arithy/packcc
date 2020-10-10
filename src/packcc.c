@@ -3107,7 +3107,7 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
             "static void pcc_capture_const_table__term(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
-            "    PCC_FREE(auxil, (pcc_capture_t **)table->buf);\n"
+            "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n"
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, int valuec, int captc) {\n"
