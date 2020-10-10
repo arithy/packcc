@@ -99,7 +99,7 @@ typedef enum node_type_tag {
     NODE_CAPTURE,
     NODE_EXPAND,
     NODE_ACTION,
-    NODE_ERROR,
+    NODE_ERROR
 } node_type_t;
 
 typedef struct node_tag node_t;
@@ -246,7 +246,7 @@ typedef enum string_flag_tag {
     STRING_FLAG__NONE = 0,
     STRING_FLAG__NOTEMPTY = 1,
     STRING_FLAG__NOTVOID = 2,
-    STRING_FLAG__IDENTIFIER = 4,
+    STRING_FLAG__IDENTIFIER = 4
 } string_flag_t;
 
 typedef enum code_reach_tag {
@@ -2118,11 +2118,6 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
         char s[5];
         if (n > 1) {
             size_t i;
-            if (!bare) {
-                write_characters(gen->stream, ' ', indent);
-                fputs_e("{\n", gen->stream);
-                indent += 4;
-            }
             write_characters(gen->stream, ' ', indent);
             fputs_e("if (\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
@@ -2137,11 +2132,6 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "ctx->pos += %llu;\n", (ullong_t)n);
-            if (!bare) {
-                indent -= 4;
-                write_characters(gen->stream, ' ', indent);
-                fputs_e("}\n", gen->stream);
-            }
             return CODE_REACH__BOTH;
         }
         else {
@@ -2812,7 +2802,7 @@ static bool_t generate(context_t *ctx) {
         fputs_e(
             "typedef enum pcc_thunk_type_tag {\n"
             "    PCC_THUNK_LEAF,\n"
-            "    PCC_THUNK_NODE,\n"
+            "    PCC_THUNK_NODE\n"
             "} pcc_thunk_type_t;\n"
             "\n"
             "typedef struct pcc_thunk_leaf_tag {\n"
@@ -2854,7 +2844,7 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "typedef enum pcc_lr_answer_type_tag {\n"
             "    PCC_LR_ANSWER_LR,\n"
-            "    PCC_LR_ANSWER_CHUNK,\n"
+            "    PCC_LR_ANSWER_CHUNK\n"
             "} pcc_lr_answer_type_t;\n"
             "\n"
             "typedef union pcc_lr_answer_data_tag {\n"
