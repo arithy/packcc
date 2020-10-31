@@ -52,14 +52,14 @@ static size_t strnlen_(const char *str, size_t maxlen) {
     for (i = 0; i < maxlen && str[i]; i++);
     return i;
 }
-#else
-#include <unistd.h> /* for strnlen() */
 #endif
 #endif
 
 #ifdef _MSC_VER
 #define snprintf _snprintf
 #define unlink _unlink
+#else
+#include <unistd.h> /* for unlink() */
 #endif
 
 #define VERSION "1.3.1"
@@ -2007,8 +2007,6 @@ static bool_t parse(context_t *ctx) {
             "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
             "}\n"
-            "#else\n"
-            "#include <unistd.h> /* for strnlen() */\n"
             "#endif /* defined __GNUC__ && defined _WIN32 */ \n"
             "#endif /* !_MSC_VER */\n"
             "\n",
