@@ -34,4 +34,4 @@ jobs:
         ./install.sh /usr/local
     - name: run test cases
       run: |
-        /usr/local/bin/bats tests
+        test/test.sh
