@@ -20,18 +20,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: build packcc
-      run: |
-        (
-        cd  build/$CC
-        make
-        )
     - name: install bats
       run: |
         curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz
         tar zxvf bats-core-1.2.1.tar.gz
         cd bats-core-1.2.1 &&
         ./install.sh /usr/local
-    - name: run test cases
+    - name: build packcc
       run: |
-        test/test.sh
+        (
+        cd  build/$CC
+        make all check
+        )

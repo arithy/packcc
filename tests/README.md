@@ -9,7 +9,7 @@ If you don't have it installed, you can do so using your package manager or from
 $ curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz &&
   tar zxvf bats-core-1.2.1.tar.gz &&
   cd bats-core-1.2.1 &&
-  ./install.sh /usr/local
+  sudo ./install.sh /usr/local
 ```
 
 After installing `bats-core-1.2.1`, you can run the tests using `tests/test.sh` script:
@@ -24,6 +24,10 @@ $ ./test.sh
 
 The script passes all its arguments to `bats`, for example to run only some tests,
 you can call it with `--filter <regexp>`. To see all the available arguments, execute `tests/test.sh --help`
+
+The behavior of the `test.sh` can also be influenced by environment variables:
+ - `PACKCC` - Path to compiled packcc binary. If unset, the script will compile it before running the tests.
+ - `CC` - Compiler to use to compile `packcc` (if necessary) and tested programs. Defaults to `cc`.
 
 ## How to write a generic test case
 

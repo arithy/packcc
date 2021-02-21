@@ -14,6 +14,13 @@ load $TESTDIR/utils.sh
 EOF
 }
 
+build() {
+    if [ -z "$PACKCC" ]; then
+        export PACKCC="$TESTDIR/packcc"
+        "${CC:-cc}" -o "$PACKCC" $ROOTDIR/src/packcc.c
+    fi
+}
+
 clean() {
     rm -f packcc *.d/test.bats *.d/parser{,.c,.h}
 }
@@ -26,8 +33,7 @@ main() {
 
     cd "$TESTDIR"
     clean
-
-    "${CC:-cc}" -o packcc $ROOTDIR/src/packcc.c
+    build
 
     for DIR in *.d; do
         # Do not generate test file if the directory already contains some
