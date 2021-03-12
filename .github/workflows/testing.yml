@@ -25,7 +25,7 @@ jobs:
         curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz
         tar zxvf bats-core-1.2.1.tar.gz
         cd bats-core-1.2.1 &&
-        ./install.sh /usr/local
+        sudo ./install.sh /usr/local
     - name: build packcc
       run: |
         (
