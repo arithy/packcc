@@ -1,0 +1,6 @@
+FILE <- TOKEN (_ TOKEN)* _*
+TOKEN <- (HELLO / WORLD / SMILEY) { PRINT($0); }
+HELLO <- "Hello"
+WORLD <- 'world'
+SMILEY <- "😊"
+_ <- ' ' / '\n'

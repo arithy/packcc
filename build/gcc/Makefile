@@ -5,6 +5,7 @@ LDFLAGS_D=
 LDFLAGS_R=
 
 SRCDIR=../../src
+TESTDIR=../../tests
 TMPDIR_D=tmp/debug
 TMPDIR_R=tmp/release
 BINDIR_D=bin/debug
@@ -46,6 +47,9 @@ $(TMPDIR_D)/examples/%.c $(TMPDIR_D)/examples/%.h: $(SRCDIR)/examples/%.peg $(BI
 
 $(TMPDIR_R)/examples/%.c $(TMPDIR_R)/examples/%.h: $(SRCDIR)/examples/%.peg $(BINDIR_R)/packcc
 	mkdir -p $(dir $@) && $(BINDIR_R)/packcc -o $(basename $@) $<
+
+check: $(BINDIR_R)/packcc
+	PACKCC=$$PWD/$^ $(TESTDIR)/test.sh
 
 clean:
 	rm -f $(BINS) $(SRCS)
