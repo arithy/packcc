@@ -2991,7 +2991,10 @@ static bool_t generate(context_t *ctx) {
             "    s[m] = '\\0';\n"
             "    return s;\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static void pcc_char_array__init(pcc_auxil_t auxil, pcc_char_array_t *array, int max) {\n"
             "    array->len = 0;\n"
             "    array->max = max;\n"
@@ -3099,7 +3102,10 @@ static bool_t generate(context_t *ctx) {
             "static void pcc_capture_const_table__term(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, int valuec, int captc) {\n"
             "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
             "    thunk->type = PCC_THUNK_LEAF;\n"
@@ -3182,7 +3188,10 @@ static bool_t generate(context_t *ctx) {
             "    pcc_value_table__term(auxil, &chunk->values);\n"
             "    PCC_FREE(auxil, chunk);\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static void pcc_rule_set__init(pcc_auxil_t auxil, pcc_rule_set_t *set, int max) {\n"
             "    set->len = 0;\n"
             "    set->max = max;\n"
@@ -3231,7 +3240,10 @@ static bool_t generate(context_t *ctx) {
             "static void pcc_rule_set__term(pcc_auxil_t auxil, pcc_rule_set_t *set) {\n"
             "    PCC_FREE(auxil, set->buf);\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static pcc_lr_head_t *pcc_lr_head__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
             "    pcc_lr_head_t *const head = (pcc_lr_head_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_head_t));\n"
             "    head->rule = rule;\n"
@@ -3303,7 +3315,10 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "    PCC_FREE(auxil, answer);\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, int max) {\n"
             "    map->len = 0;\n"
             "    map->max = max;\n"
@@ -3346,7 +3361,10 @@ static bool_t generate(context_t *ctx) {
             "    for (i = map->len - 1; i >= 0; i--) pcc_lr_answer__destroy(auxil, map->buf[i].answer);\n"
             "    PCC_FREE(auxil, map->buf);\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_auxil_t auxil) {\n"
             "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_table_entry_t));\n"
             "    entry->head = NULL;\n"
@@ -3431,7 +3449,10 @@ static bool_t generate(context_t *ctx) {
             "    for (i = table->len - 1; i >= 0; i--) pcc_lr_table_entry__destroy(auxil, table->buf[i]);\n"
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
-            "\n"
+            "\n",
+            stream
+        );
+        fputs_e(
             "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
             "    pcc_lr_entry_t *const lr = (pcc_lr_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_entry_t));\n"
             "    lr->rule = rule;\n"
