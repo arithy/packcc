@@ -214,11 +214,11 @@ In this example, if the input is `012foobar`, the action `{ puts("OK"); }` is to
 In the action, the C source code can use the predefined variables below.
 
 - **`$$`**
-    The output variable, to which the result of the rule is stored.
+    The output variable, to which the result of the action is stored. The data type is the one specified by `%value`. The default data type is `int`.
 - **`auxil`**
-    The user-defined data that is passed to the API function `pcc_create()`.
+    The user-defined data that has been given via the API function `pcc_create()`. The data type is the one specified by `%auxil`. The default data type is `void *`.
 - _variable_
-    The result of the evaluated rule, which has been stored to the variable `$$` in the action in the evaluated rule.
+    The result of another action that has already been evaluated. The data type is the one specified by `%value`. The default data type is `int`.
 - **`$`**_n_
     The string of the captured text. The _n_ is the positive integer that corresponds to the order of capturing. The variable `$1` holds the string of the first captured text.
 - **`$`**_n_**`s`**
@@ -232,13 +232,20 @@ In the action, the C source code can use the predefined variables below.
 - **`$0e`**
     The current position in the input at which the element immediately before the action ends to match.
 
-The example is shown below.
+An example is shown below.
 
 ```
 term <- l:term _ '+' _ r:factor { $$ = l + r; }
 factor <- < [0-9]+ >            { $$ = atoi($1); }
 _ <- [ \t]*
 ```
+
+Note that the string data held by `$`_n_ and `$0` are discarded immediately after evaluation of the action.
+If the string data are needed after the action, they must be copied in `$$` or `auxil`.
+If they are required to be copied in `$$`, it is recommended to define a structure as the type of output data using `%value`, and to copy the necessary string data in its member variable.
+Similarly, if they are required to be copied in `auxil`, it is recommended to define a structure as the type of user-defined data using `%auxil`, and to copy the necessary string data in its member variable.
+
+The position values are 0-based; that is, the first position is 0. The data type is `size_t` (before version 1.4.0, it was `int`).
 
 **_element_ `~` `{` _c source code_ `}`**
 
@@ -263,7 +270,7 @@ The specified C source code is copied verbatim to both of the C header file and 
 
 **`%value` `"`_output data type_`"`**
 
-The type of output data, which is retrieved from the parser API function `pcc_parse()`, is changed to the specified one from the default `int`.
+The type of output data, which is output as `$$` in each action and can be retrieved from the parser API function `pcc_parse()`, is changed to the specified one from the default `int`.
 
 **`%auxil` `"`_user-defined data type_`"`**
 
@@ -388,7 +395,7 @@ Creates a parser context. This context needs to be passed to the functions below
 int pcc_parse(pcc_context_t *ctx, int *ret);
 ```
 
-Parses an input text (from standard input by default) and returns the result in `ret`. The `ret` can be `NULL` if no output data is needed. This function returns `0` if no text is left to be parsed, or a non-`0` value otherwise.
+Parses an input text (from standard input by default) and returns the result in `ret`. The `ret` can be `NULL` if no output data is needed. This function returns `0` if no text is left to be parsed, or a nonzero value otherwise.
 
 ```C
 void pcc_destroy(pcc_context_t *ctx);
