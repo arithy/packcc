@@ -2,12 +2,14 @@
 
 load $TESTDIR/utils.sh
 
-calc_compile() {
+@test "Testing calc.d - generation" {
+    test_generate calc.d
+}
+
+@test "Testing calc.d - compilation" {
     "${CC:-cc}" calc.d/parser.c -o calc.d/parser
 }
 
-@test "Testing calc.d" {
-    test_generate calc.d
-    calc_compile
-    test_run calc.d
+@test "Testing calc.d - run" {
+    run_for_input calc.d/input.txt
 }

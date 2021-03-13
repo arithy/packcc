@@ -15,11 +15,16 @@ $ curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archi
 After installing `bats-core-1.2.1`, you can run the tests using `tests/test.sh` script:
 ```
 $ ./test.sh
- ✓ Testing basic.d
- ✓ Testing calc.d
- ✓ Testing strings.d
+ ✓ Testing basic.d - generation
+ ✓ Testing basic.d - compilation
+ ✓ Testing basic.d - run
+ ...
+ ✓ Testing strings.d - generation
+ ✓ Testing strings.d - compilation
+ ✓ Testing strings.d - run
+ ✓ Testing strings.d - run [utf8]
 
-3 tests, 0 failures
+19 tests, 0 failures, 1 skipped
 ```
 
 The script passes all its arguments to `bats`, for example to run only some tests,
@@ -29,9 +34,9 @@ The behavior of the `test.sh` can also be influenced by environment variables:
  - `PACKCC` - Path to compiled packcc binary. If unset, the script will compile it before running the tests.
  - `CC` - Compiler to use to compile `packcc` (if necessary) and tested programs. Defaults to `cc`.
 
-## How to write a generic test case
+## How to write generic test cases
 
-To create a new test case, just follow these simple steps:
+To create a new tests, just follow these simple steps:
 
 1. Create a directory with suitable name, e.g.: `tests/sequence.d`.
 2. Create a grammar file called `input.peg` in this directory.
@@ -39,13 +44,13 @@ To create a new test case, just follow these simple steps:
 4. Create a file with expected output for each of the inputs. The names must match the input,
    just replace "input" with "expected". E.g.: for `input-1.txt`, there must be `expected-1.txt`
 
-Each test automatically performs three steps:
+Each test automatically performs three or more test cases:
 
 1. Generates a parser from the `input.peg` grammar.
 2. Compiles the generated parser
 3. Runs the parser with specified inputs, comparing the output with the contents of expected files.
 
-## How to write a customized test case
+## How to write a customized tests
 
 Sometimes the auto-generated test is not exactly what you need. In such case, you can simply create your own:
 
@@ -56,3 +61,13 @@ Sometimes the auto-generated test is not exactly what you need. In such case, yo
 The test script will notice the customized files and will not generate a generic one.
 However, you can still reuse as much of the common code as you want simply by loading `tests/utils.sh`
 and calling the prepared functions. See [calc.d/calc.bats](calc.d/calc.bats) as an example.
+
+## How to skip a test case
+
+*Note: This paragraph applies only to automatically generated test cases. For customized tests,
+just add `skip` directive to your* `*.bats` *file as needed.*
+
+Sometimes it is useful to skip a test, for example to avoid an input that triggers known bug
+that has not yet been fixed. To do so, simply rename the input file to `input*.skip.txt`.
+
+If you want to skip all test cases in directory, rename the grammar file to `input.skip.peg`.
