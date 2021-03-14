@@ -4,10 +4,14 @@
 
 #define PRINT(X) printf("%s\n", X);
 
+#ifndef RET_TYPE
+#define RET_TYPE int
+#endif
+
 #include "parser.c"
 
 int main(int argc, char **argv) {
-    int ret;
+    RET_TYPE ret;
     pcc_context_t *ctx = pcc_create(NULL);
     while (pcc_parse(ctx, &ret));
     pcc_destroy(ctx);
