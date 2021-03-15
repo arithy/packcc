@@ -1,4 +1,4 @@
-# Testing packcc
+# Testing PackCC
 
 ## How to run
 
