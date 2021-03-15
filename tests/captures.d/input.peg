@@ -1,0 +1,13 @@
+FILE <- (LINE '\n')*
+LINE <- ALL / FIRST / SECOND / MULTI1 / MULTI2 / MORE / CAPTURED / UNKNOWN
+
+ALL <- <'capture' _ 'all'> { PRINT($1); }
+FIRST <- <'capture'> _ 'first' { PRINT($1); }
+SECOND <- 'capture' _ <'second'> { PRINT($1); }
+MULTI1 <- 'capture' _ 'multiple1' (_ <[a-z]+>)+ { PRINT($1); }
+MULTI2 <- 'capture' _ 'multiple2' (_ <[a-z]+> { PRINT($1); })+
+MORE <- <'more'> _ <'captures'> { printf("%s %s\n", $1, $2); }
+CAPTURED <- "captured" _ <[a-z]+> _ 'and' _ $1 { PRINT($1); }
+
+UNKNOWN <- [^\n]+ { printf("ERROR: %s\n", $0); }
+_ <- " "
