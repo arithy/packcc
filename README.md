@@ -214,11 +214,11 @@ In this example, if the input is `012foobar`, the action `{ puts("OK"); }` is to
 In the action, the C source code can use the predefined variables below.
 
 - **`$$`**
-    The output variable, to which the result of the action is stored. The data type is the one specified by `%value`. The default data type is `int`.
+    The output variable, to which the result of the rule is stored. The data type is the one specified by `%value`. The default data type is `int`.
 - **`auxil`**
     The user-defined data that has been given via the API function `pcc_create()`. The data type is the one specified by `%auxil`. The default data type is `void *`.
 - _variable_
-    The result of another action that has already been evaluated. The data type is the one specified by `%value`. The default data type is `int`.
+    The result of another rule that has already been evaluated. The data type is the one specified by `%value`. The default data type is `int`.
 - **`$`**_n_
     The string of the captured text. The _n_ is the positive integer that corresponds to the order of capturing. The variable `$1` holds the string of the first captured text.
 - **`$`**_n_**`s`**
