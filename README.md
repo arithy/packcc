@@ -18,6 +18,7 @@ Unlike common packrat parsers, PackCC can support direct and indirect **left-rec
 Some additional features are as follows:
 
 - Thread-safe and reentrant,
+- Supports UTF-8 multibyte characters (version 1.4.0 or later),
 - Generates more ease-of-understanding parser source codes,
 - Consists of just a single compact source file,
 - Under MIT license. (not under a certain contagious license!)
@@ -86,6 +87,8 @@ packcc -o parser example.peg
 ```
 
 By running this, the parser source `parser.h` and `parser.c` are generated.
+
+If you want to disable UTF-8 support, specify the command line option `-a` (version 1.4.0 or later).
 
 If you want to confirm the version of the `packcc` command, execute the below.
 

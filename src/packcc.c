@@ -230,6 +230,7 @@ typedef struct context_tag {
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
     char *prefix; /* the prefix of the API function names (NULL means the default) */
+    bool_t ascii; /* UTF-8 support disabled if true  */
     bool_t debug; /* debug information is output if true */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
@@ -244,6 +245,7 @@ typedef struct generate_tag {
     FILE *stream;
     const node_t *rule;
     int label;
+    bool_t ascii;
 } generate_t;
 
 typedef enum string_flag_tag {
@@ -435,6 +437,101 @@ static bool_t is_pointer_type(const char *str) {
     return (n > 0 && str[n - 1] == '*') ? TRUE : FALSE;
 }
 
+static bool_t is_valid_utf8_string(const char *str) {
+    int k = 0, n = 0, u = 0;
+    size_t i;
+    for (i = 0; str[i]; i++) {
+        const int c = (int)(unsigned char)str[i];
+        switch (k) {
+        case 0:
+            if (c >= 0x80) {
+                if ((c & 0xe0) == 0xc0) {
+                    u = c & 0x1f;
+                    n = k = 1;
+                }
+                else if ((c & 0xf0) == 0xe0) {
+                    u = c & 0x0f;
+                    n = k = 2;
+                }
+                else if ((c & 0xf8) == 0xf0) {
+                    u = c & 0x07;
+                    n = k = 3;
+                }
+                else {
+                    return FALSE;
+                }
+            }
+            break;
+        case 1:
+        case 2:
+        case 3:
+            if ((c & 0xc0) == 0x80) {
+                u <<= 6;
+                u |= c & 0x3f;
+                k--;
+                if (k == 0) {
+                    switch (n) {
+                    case 1:
+                        if (u < 0x80) return FALSE;
+                        break;
+                    case 2:
+                        if (u < 0x800) return FALSE;
+                        break;
+                    case 3:
+                        if (u < 0x10000 || u > 0x10ffff) return FALSE;
+                        break;
+                    default:
+                        assert(((void)"unexpected control flow", 0));
+                        return FALSE; /* never reached */
+                    }
+                    u = 0;
+                    n = 0;
+                }
+            }
+            else {
+                return FALSE;
+            }
+            break;
+        default:
+            assert(((void)"unexpected control flow", 0));
+            return FALSE; /* never reached */
+        }
+    }
+    return (k == 0) ? TRUE : FALSE;
+}
+
+static size_t utf8_to_utf32(const char *seq, int *out) { /* without checking UTF-8 validity */
+    const int c = (int)(unsigned char)seq[0];
+    const size_t n =
+        (c == 0) ? 0 : (c < 0x80) ? 1 :
+        ((c & 0xe0) == 0xc0) ? 2 :
+        ((c & 0xf0) == 0xe0) ? 3 :
+        ((c & 0xf8) == 0xf0) ? 4 : 1;
+    int u = 0;
+    switch (n) {
+    case 0:
+    case 1:
+        u = c;
+        break;
+    case 2:
+        u = ((c & 0x1f) << 6) |
+            ((int)(unsigned char)seq[1] & 0x3f);
+        break;
+    case 3:
+        u = ((c & 0x0f) << 12) |
+            (((int)(unsigned char)seq[1] & 0x3f) << 6) |
+            (seq[1] ? ((int)(unsigned char)seq[2] & 0x3f) : 0);
+        break;
+    default:
+        u = ((c & 0x07) << 18) |
+            (((int)(unsigned char)seq[1] & 0x3f) << 12) |
+            (seq[1] ? (((int)(unsigned char)seq[2] & 0x3f) << 6) : 0) |
+            (seq[2] ? ((int)(unsigned char)seq[3] & 0x3f) : 0);
+    }
+    if (out) *out = u;
+    return n;
+}
+
 static bool_t unescape_string(char *str) {
     bool_t b = TRUE;
     size_t i, j;
@@ -557,7 +654,7 @@ static bool_t unescape_string(char *str) {
                 break;
             case '\n': break;
             case '\r': if (str[i + 1] == '\n') i++; break;
-            default: str[j++] = str[i];
+            default: str[j++] = '\\'; str[j++] = str[i];
             }
         }
         else {
@@ -585,7 +682,7 @@ static const char *escape_character(char ch, char (*buf)[5]) {
         if (ch >= '\x20' && ch < '\x7f')
             snprintf(*buf, 5, "%c", ch);
         else
-            snprintf(*buf, 5, "\\x%02x", (unsigned char)ch);
+            snprintf(*buf, 5, "\\x%02x", (int)(unsigned char)ch);
     }
     (*buf)[4] = '\0';
     return *buf;
@@ -908,7 +1005,7 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
-static context_t *create_context(const char *iname, const char *oname, bool_t debug) {
+static context_t *create_context(const char *iname, const char *oname, bool_t ascii, bool_t debug) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
     ctx->iname = strdup_e((iname && iname[0]) ? iname : "-");
     ctx->sname = (oname && oname[0]) ? add_fileext(oname, "c") : replace_fileext(ctx->iname, "c");
@@ -920,6 +1017,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t de
     ctx->vtype = NULL;
     ctx->atype = NULL;
     ctx->prefix = NULL;
+    ctx->ascii = ascii;
     ctx->debug = debug;
     ctx->errnum = 0;
     ctx->linenum = 0;
@@ -1816,6 +1914,10 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             print_error("%s:%llu:%llu: Illegal escape sequence\n", ctx->iname, (ullong_t)(l + 1), (ullong_t)(m + 1));
             ctx->errnum++;
         }
+        if (!ctx->ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
+            print_error("%s:%llu:%llu: Invalid UTF-8 string\n", ctx->iname, (ullong_t)(l + 1), (ullong_t)(m + 1));
+            ctx->errnum++;
+        }
     }
     else if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
         const size_t q = ctx->bufpos;
@@ -1824,6 +1926,10 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.string.value)) {
             print_error("%s:%llu:%llu: Illegal escape sequence\n", ctx->iname, (ullong_t)(l + 1), (ullong_t)(m + 1));
+            ctx->errnum++;
+        }
+        if (!ctx->ascii && !is_valid_utf8_string(n_p->data.string.value)) {
+            print_error("%s:%llu:%llu: Invalid UTF-8 string\n", ctx->iname, (ullong_t)(l + 1), (ullong_t)(m + 1));
             ctx->errnum++;
         }
     }
@@ -2303,6 +2409,7 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
 }
 
 static code_reach_t generate_matching_charclass_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
+    assert(gen->ascii);
     if (value != NULL) {
         const size_t n = strlen(value);
         if (n > 0) {
@@ -2335,7 +2442,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                     fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
                     write_characters(gen->stream, ' ', indent);
                     fputs_e("c = ctx->buffer.buf[ctx->pos];\n", gen->stream);
-                    if (i + 3 == n && value[i + 1] == '-') {
+                    if (i + 3 == n && value[i] != '\\' && value[i + 1] == '-') {
                         write_characters(gen->stream, ' ', indent);
                         fprintf_e(gen->stream,
                             a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n"
@@ -2347,6 +2454,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                         fputs_e(a ? "if (\n" : "if (!(\n", gen->stream);
                         for (; i < n; i++) {
                             write_characters(gen->stream, ' ', indent + 4);
+                            if (value[i] == '\\' && i + 1 < n) i++;
                             if (i + 2 < n && value[i + 1] == '-') {
                                 fprintf_e(gen->stream, "(c >= '%s' && c <= '%s')%s\n",
                                     escape_character(value[i], &s), escape_character(value[i + 2], &t), (i + 3 == n) ? "" : " ||");
@@ -2396,6 +2504,157 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
         write_characters(gen->stream, ' ', indent);
         fputs_e("ctx->pos++;\n", gen->stream);
         return CODE_REACH__BOTH;
+    }
+}
+
+static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
+    const size_t n = (value != NULL) ? strlen(value) : 0;
+    if (value == NULL || n > 0) {
+        const bool_t a = (n > 0 && value[0] == '^') ? TRUE : FALSE;
+        size_t i = a ? 1 : 0;
+        if (!bare) {
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("{\n", gen->stream);
+            indent += 4;
+        }
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("int c, u;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("size_t n;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("c = (int)(unsigned char)ctx->buffer.buf[ctx->pos];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("n = (c < 0x80) ? 1 :\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    ((c & 0xe0) == 0xc0) ? 2 :\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    ((c & 0xf0) == 0xe0) ? 3 :\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    ((c & 0xf8) == 0xf0) ? 4 : 0;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "if (n < 1) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("switch (n) {\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("case 1:\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u = c;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    break;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("case 2:\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u = c & 0x1f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if (u < 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    break;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("case 3:\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u = c & 0x0f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if (u < 0x800) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    break;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("case 4:\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u = c & 0x07;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 3];\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    if (u < 0x10000 || u > 0x10ffff) goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("    break;\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("default:\n", gen->stream);
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "    goto L%04d;\n", onfail);
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("}\n", gen->stream);
+        if (value != NULL && !(a && n == 1)) { /* not '.' or '[^]' */
+            int u0 = 0;
+            bool_t r = FALSE;
+            write_characters(gen->stream, ' ', indent);
+            fputs_e(a ? "if (\n" : "if (!(\n", gen->stream);
+            while (i < n) {
+                int u = 0;
+                if (value[i] == '\\' && i + 1 < n) i++;
+                i += utf8_to_utf32(value + i, &u);
+                if (r) { /* character range */
+                    write_characters(gen->stream, ' ', indent + 4);
+                    fprintf_e(gen->stream, "(u >= 0x%06x && u <= 0x%06x)%s\n", u0, u, (i < n) ? " ||" : "");
+                    u0 = 0;
+                    r = FALSE;
+                }
+                else if (value[i] != '-') { /* single character */
+                    write_characters(gen->stream, ' ', indent + 4);
+                    fprintf_e(gen->stream, "u == 0x%06x%s\n", u, (i < n) ? " ||" : "");
+                    u0 = 0;
+                    r = FALSE;
+                }
+                else {
+                    assert(value[i] == '-');
+                    i++;
+                    u0 = u;
+                    r = TRUE;
+                }
+            }
+            write_characters(gen->stream, ' ', indent);
+            fprintf_e(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
+        }
+        write_characters(gen->stream, ' ', indent);
+        fputs_e("ctx->pos += n;\n", gen->stream);
+        if (!bare) {
+            indent -= 4;
+            write_characters(gen->stream, ' ', indent);
+            fputs_e("}\n", gen->stream);
+        }
+        return CODE_REACH__BOTH;
+    }
+    else {
+        write_characters(gen->stream, ' ', indent);
+        fprintf_e(gen->stream, "goto L%04d;\n", onfail);
+        return CODE_REACH__ALWAYS_FAIL;
     }
 }
 
@@ -2834,7 +3093,9 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
     case NODE_STRING:
         return generate_matching_string_code(gen, node->data.string.value, onfail, indent, bare);
     case NODE_CHARCLASS:
-        return generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
+        return gen->ascii ?
+            generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
+            generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
     case NODE_QUANTITY:
         return generate_quantifying_code(gen, node->data.quantity.expr, node->data.quantity.min, node->data.quantity.max, onfail, indent, bare);
     case NODE_PREDICATE:
@@ -4061,6 +4322,7 @@ static bool_t generate(context_t *ctx) {
                 g.stream = stream;
                 g.rule = ctx->rules.buf[i];
                 g.label = 0;
+                g.ascii = ctx->ascii;
                 fprintf_e(
                     stream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
@@ -4225,6 +4487,7 @@ static void print_usage(FILE *output) {
     fprintf(output, "Generates a packrat parser for C.\n");
     fprintf(output, "\n");
     fprintf(output, "  -o BASENAME    specify a base name of output source and header files\n");
+    fprintf(output, "  -a, --ascii    disable UTF-8 support\n");
     fprintf(output, "  -d, --debug    with debug information\n");
     fprintf(output, "  -h, --help     print this help message and exit\n");
     fprintf(output, "  -v, --version  print the version and exit\n");
@@ -4233,6 +4496,7 @@ static void print_usage(FILE *output) {
 int main(int argc, char **argv) {
     const char *iname = NULL;
     const char *oname = NULL;
+    bool_t ascii = FALSE;
     bool_t debug = FALSE;
 #ifdef _MSC_VER
 #ifdef _DEBUG
@@ -4245,6 +4509,7 @@ int main(int argc, char **argv) {
     {
         const char *fname = NULL;
         const char *opt_o = NULL;
+        bool_t opt_a = FALSE;
         bool_t opt_d = FALSE;
         bool_t opt_h = FALSE;
         bool_t opt_v = FALSE;
@@ -4271,6 +4536,9 @@ int main(int argc, char **argv) {
                     exit(1);
                 }
                 opt_o = o;
+            }
+            else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--ascii") == 0) {
+                opt_a = TRUE;
             }
             else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
                 opt_d = TRUE;
@@ -4308,10 +4576,11 @@ int main(int argc, char **argv) {
         }
         iname = (fname != NULL && fname[0] != '\0') ? fname : NULL;
         oname = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
+        ascii = opt_a;
         debug = opt_d;
     }
     {
-        context_t *const ctx = create_context(iname, oname, debug);
+        context_t *const ctx = create_context(iname, oname, ascii, debug);
         const int b = parse(ctx) && generate(ctx);
         destroy_context(ctx);
         if (!b) exit(10);
