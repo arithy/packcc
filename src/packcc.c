@@ -1830,6 +1830,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             assert(s != VOID_VALUE); /* s should have a valid value when r has a valid value */
             assert(q >= p);
             n_p->data.reference.var = strndup_e(ctx->buffer.buf + p, q - p);
+            if (n_p->data.reference.var[0] == '_') {
+                print_error("%s:%llu:%llu: Leading underscore in variable name '%s'\n",
+                    ctx->iname, (ullong_t)(l + 1), (ullong_t)(m + 1), n_p->data.reference.var);
+                ctx->errnum++;
+            }
             {
                 size_t i;
                 for (i = 0; i < rule->data.rule.vars.len; i++) {

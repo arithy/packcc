@@ -116,6 +116,8 @@ The element stands for the entire pattern in the rule with the name given by _ru
 term <- l:term _ '+' _ r:factor { $$ = l + r; }
 ```
 
+A variable identifier must consist of alphabets (both uppercase and lowercase letters), digits, and underscores. The first letter must be an alphabet. The reserved keywords in C cannot be used.
+
 **_sequence1_ `/` _sequence2_ `/` ... `/` _sequenceN_**
 
 Each _sequence_ is tried in turn until one of them matches, at which time matching for the overall pattern succeeds. If no _sequence_ matches then the matching for the overall pattern fails. The operator slash (`/`) has the least priority. The example is shown below.
