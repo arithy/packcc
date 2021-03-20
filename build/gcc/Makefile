@@ -6,10 +6,10 @@ LDFLAGS_R=
 
 SRCDIR=../../src
 TESTDIR=../../tests
-TMPDIR_D=tmp/debug
-TMPDIR_R=tmp/release
-BINDIR_D=bin/debug
-BINDIR_R=bin/release
+TMPDIR_D=debug/tmp
+TMPDIR_R=release/tmp
+BINDIR_D=debug/bin
+BINDIR_R=release/bin
 
 EXAMPLES:=$(patsubst $(SRCDIR)/examples/%.peg,examples/%,$(wildcard $(SRCDIR)/examples/*.peg))
 

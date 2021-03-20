@@ -34,25 +34,25 @@ For convenience, the build environments using GCC, Clang, and Microsoft Visual S
 
 ### Using GCC ###
 
-`packcc` will be built in both directories `build/gcc/bin/debug` and `build/gcc/bin/release` using `gcc` by executing the following commands:
+`packcc` will be built in both directories `build/gcc/debug/bin` and `build/gcc/release/bin` using `gcc` by executing the following commands:
 
 ```
 cd build/gcc
 make
 ```
 
-`packcc` in the directory `build/gcc/bin/release` is suitable for practical use.
+`packcc` in the directory `build/gcc/release/bin` is suitable for practical use.
 
 ### Using Clang ###
 
-`packcc` will be built in both directories `build/clang/bin/debug` and `build/clang/bin/release` using `clang` by executing the following commands:
+`packcc` will be built in both directories `build/clang/debug/bin` and `build/clang/release/bin` using `clang` by executing the following commands:
 
 ```
 cd build/clang
 make
 ```
 
-`packcc` in the directory `build/clang/bin/release` is suitable for practical use.
+`packcc` in the directory `build/clang/release/bin` is suitable for practical use.
 
 ### Using Microsoft Visual Studio ###
 
