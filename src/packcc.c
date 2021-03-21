@@ -1432,7 +1432,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-void dump_escaped(const char* s) {
+static void dump_escaped(const char* s) {
     char buf[5];
     if (s == NULL) {
         fprintf(stdout, "null");
@@ -1444,7 +1444,7 @@ void dump_escaped(const char* s) {
     }
 }
 
-void dump_void_value(ullong_t value) {
+static void dump_void_value(ullong_t value) {
     if (value == VOID_VALUE) {
         fprintf(stdout, "void");
     } else {
