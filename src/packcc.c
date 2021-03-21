@@ -1432,95 +1432,137 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-static void dump_node(context_t *ctx, const node_t *node) {
+static void dump_escaped(const char* s) {
+    char buf[5];
+    if (s == NULL) {
+        fprintf(stdout, "null");
+        return;
+    }
+    while(*s) {
+        escape_character(*s++, &buf);
+        fprintf(stdout, "%s", buf);
+    }
+}
+
+static void dump_void_value(ullong_t value) {
+    if (value == VOID_VALUE) {
+        fprintf(stdout, "void");
+    } else {
+        fprintf(stdout, "%llu", value);
+    }
+}
+
+static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     if (node == NULL) return;
     switch (node->type) {
     case NODE_RULE:
-        fprintf(stdout, "Rule(name:'%s',ref:%d,vars.len:%llu,capts.len:%llu,codes.len:%llu){\n",
-            node->data.rule.name, node->data.rule.ref,
+        fprintf(stdout, "%*sRule(name:'%s', ref:%d, vars.len:%llu, capts.len:%llu, codes.len:%llu) {\n",
+            indent, "", node->data.rule.name, node->data.rule.ref,
             (ullong_t)node->data.rule.vars.len, (ullong_t)node->data.rule.capts.len, (ullong_t)node->data.rule.codes.len);
-        dump_node(ctx, node->data.rule.expr);
-        fprintf(stdout, "}\n");
+        dump_node(ctx, node->data.rule.expr, indent + 2);
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_REFERENCE:
-        fprintf(stdout, "Reference(var:'%s',index:%llu,name:'%s',rule:'%s')\n",
-            node->data.reference.var, (ullong_t)node->data.reference.index, node->data.reference.name,
+        fprintf(stdout, "%*sReference(var:'%s', index:", indent, "", node->data.reference.var);
+        dump_void_value((ullong_t)node->data.reference.index);
+        fprintf(stdout, ", name:'%s', rule:'%s')\n", node->data.reference.name,
             (node->data.reference.rule) ? node->data.reference.rule->data.rule.name : NULL);
         break;
     case NODE_STRING:
-        fprintf(stdout, "String(value:'%s')\n", node->data.string.value);
+        fprintf(stdout, "%*sString(value:'", indent, "");
+        dump_escaped(node->data.string.value);
+        fprintf(stdout, "')\n");
         break;
     case NODE_CHARCLASS:
-        fprintf(stdout, "Charclass(value:'%s')\n", node->data.charclass.value);
+        fprintf(stdout, "%*sCharclass(value:'", indent, "");
+        dump_escaped(node->data.charclass.value);
+        fprintf(stdout, "')\n");
         break;
     case NODE_QUANTITY:
-        fprintf(stdout, "Quantity(min:%d,max%d){\n", node->data.quantity.min, node->data.quantity.max);
-        dump_node(ctx, node->data.quantity.expr);
-        fprintf(stdout, "}\n");
+        fprintf(stdout, "%*sQuantity(min:%d, max%d) {\n", indent, "", node->data.quantity.min, node->data.quantity.max);
+        dump_node(ctx, node->data.quantity.expr, indent + 2);
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_PREDICATE:
-        fprintf(stdout, "Predicate(neg:%d){\n", node->data.predicate.neg);
-        dump_node(ctx, node->data.predicate.expr);
-        fprintf(stdout, "}\n");
+        fprintf(stdout, "%*sPredicate(neg:%d) {\n", indent, "", node->data.predicate.neg);
+        dump_node(ctx, node->data.predicate.expr, indent + 2);
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_SEQUENCE:
-        fprintf(stdout, "Sequence(max:%llu,len:%llu){\n", (ullong_t)node->data.sequence.nodes.max, (ullong_t)node->data.sequence.nodes.len);
+        fprintf(stdout, "%*sSequence(max:%llu, len:%llu) {\n",
+            indent, "", (ullong_t)node->data.sequence.nodes.max, (ullong_t)node->data.sequence.nodes.len);
         {
             size_t i;
             for (i = 0; i < node->data.sequence.nodes.len; i++) {
-                dump_node(ctx, node->data.sequence.nodes.buf[i]);
+                dump_node(ctx, node->data.sequence.nodes.buf[i], indent + 2);
             }
         }
-        fprintf(stdout, "}\n");
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_ALTERNATE:
-        fprintf(stdout, "Alternate(max:%llu,len:%llu){\n", (ullong_t)node->data.alternate.nodes.max, (ullong_t)node->data.alternate.nodes.len);
+        fprintf(stdout, "%*sAlternate(max:%llu, len:%llu) {\n",
+            indent, "", (ullong_t)node->data.alternate.nodes.max, (ullong_t)node->data.alternate.nodes.len);
         {
             size_t i;
             for (i = 0; i < node->data.alternate.nodes.len; i++) {
-                dump_node(ctx, node->data.alternate.nodes.buf[i]);
+                dump_node(ctx, node->data.alternate.nodes.buf[i], indent + 2);
             }
         }
-        fprintf(stdout, "}\n");
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_CAPTURE:
-        fprintf(stdout, "Capture(index:%llu){\n", (ullong_t)node->data.capture.index);
-        dump_node(ctx, node->data.capture.expr);
-        fprintf(stdout, "}\n");
+        fprintf(stdout, "%*sCapture(index:", indent, "");
+        dump_void_value((ullong_t)node->data.capture.index);
+        fprintf(stdout, ") {\n");
+        dump_node(ctx, node->data.capture.expr, indent + 2);
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_EXPAND:
-        fprintf(stdout, "Expand(index:%llu)\n", (ullong_t)node->data.expand.index);
-        break;
-    case NODE_ACTION:
-        fprintf(stdout, "Action(index:%llu,value:{%s},vars:\n", (ullong_t)node->data.action.index, node->data.action.value);
-        {
-            size_t i;
-            for (i = 0; i < node->data.action.vars.len; i++) {
-                fprintf(stdout, "    '%s'\n", node->data.action.vars.buf[i]->data.reference.var);
-            }
-            for (i = 0; i < node->data.action.capts.len; i++) {
-                fprintf(stdout, "    $%llu\n", (ullong_t)(node->data.action.capts.buf[i]->data.capture.index + 1));
-            }
-        }
+        fprintf(stdout, "%*sExpand(index:", indent, "");
+        dump_void_value((ullong_t)node->data.expand.index);
         fprintf(stdout, ")\n");
         break;
+    case NODE_ACTION:
+        fprintf(stdout, "%*sAction(index:", indent, "");
+        dump_void_value((ullong_t)node->data.action.index);
+        fprintf(stdout, ", value:{");
+        dump_escaped(node->data.action.value);
+        fprintf(stdout, "}, vars:");
+        if (node->data.action.vars.len + node->data.action.capts.len > 0) {
+            size_t i;
+            fprintf(stdout, "\n");
+            for (i = 0; i < node->data.action.vars.len; i++) {
+                fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.action.vars.buf[i]->data.reference.var);
+            }
+            for (i = 0; i < node->data.action.capts.len; i++) {
+                fprintf(stdout, "%*s$%llu\n", indent + 2, "", (ullong_t)(node->data.action.capts.buf[i]->data.capture.index + 1));
+            }
+            fprintf(stdout, "%*s)\n", indent, "");
+        } else {
+            fprintf(stdout, "none)\n");
+        }
+        break;
     case NODE_ERROR:
-        fprintf(stdout, "Error(index:%llu,value:{%s},vars:\n", (ullong_t)node->data.error.index, node->data.error.value);
+        fprintf(stdout, "%*sError(index:", indent, "");
+        dump_void_value((ullong_t)node->data.error.index);
+        fprintf(stdout, ", value:{");
+        dump_escaped(node->data.error.value);
+        fprintf(stdout, "}, vars:\n");
         {
             size_t i;
             for (i = 0; i < node->data.error.vars.len; i++) {
-                fprintf(stdout, "    '%s'\n", node->data.error.vars.buf[i]->data.reference.var);
+                fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.error.vars.buf[i]->data.reference.var);
             }
             for (i = 0; i < node->data.error.capts.len; i++) {
-                fprintf(stdout, "    $%llu\n", (ullong_t)(node->data.error.capts.buf[i]->data.capture.index + 1));
+                fprintf(stdout, "%*s$%llu\n", indent + 2, "", (ullong_t)(node->data.error.capts.buf[i]->data.capture.index + 1));
             }
         }
-        fprintf(stdout, "){\n");
-        dump_node(ctx, node->data.error.expr);
-        fprintf(stdout, "}\n");
+        fprintf(stdout, "%*s) {\n", indent, "");
+        dump_node(ctx, node->data.error.expr, indent + 2);
+        fprintf(stdout, "%*s}\n", indent, "");
         break;
     default:
-        print_error("Internal error [%d]\n", __LINE__);
+        print_error("%*sInternal error [%d]\n", indent, "", __LINE__);
         exit(-1);
     }
 }
@@ -2148,9 +2190,9 @@ static const char *get_prefix(context_t *ctx) {
 }
 
 static void dump_options(context_t *ctx) {
-    fprintf(stdout, "value_type:'%s'\n", get_value_type(ctx));
-    fprintf(stdout, "auxil_type:'%s'\n", get_auxil_type(ctx));
-    fprintf(stdout, "prefix:'%s'\n", get_prefix(ctx));
+    fprintf(stdout, "value_type: '%s'\n", get_value_type(ctx));
+    fprintf(stdout, "auxil_type: '%s'\n", get_auxil_type(ctx));
+    fprintf(stdout, "prefix: '%s'\n", get_prefix(ctx));
 }
 
 static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *output1, FILE *output2) {
@@ -2364,7 +2406,7 @@ static bool_t parse(context_t *ctx) {
     if (ctx->debug) {
         size_t i;
         for (i = 0; i < ctx->rules.len; i++) {
-            dump_node(ctx, ctx->rules.buf[i]);
+            dump_node(ctx, ctx->rules.buf[i], 0);
         }
         dump_options(ctx);
     }
