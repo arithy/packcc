@@ -63,6 +63,10 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #include <unistd.h> /* for unlink() */
 #endif
 
+#ifndef __attribute__
+#define __attribute__(x)
+#endif
+
 #define VERSION "1.4.0"
 
 #ifndef BUFFER_INIT_SIZE
@@ -73,10 +77,6 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #endif
 
 #define VOID_VALUE (~(size_t)0)
-
-#ifndef __attribute__
-#define __attribute__(x)
-#endif
 
 typedef unsigned long long ullong_t; /* Mainly used to print size_t values safely (ex. printf("%llu", (ullong_t)value);) */
 
@@ -219,6 +219,11 @@ struct node_tag {
     node_data_t data;
 };
 
+typedef enum code_flag_tag {
+    CODE_FLAG__NONE = 0,
+    CODE_FLAG__UTF8_CHARCLASS_USED = 1
+} code_flag_t;
+
 typedef struct context_tag {
     char *iname;  /* the path name of the PEG file being parsed */
     char *sname;  /* the path name of the C source file being generated */
@@ -232,6 +237,7 @@ typedef struct context_tag {
     char *prefix; /* the prefix of the API function names (NULL means the default) */
     bool_t ascii; /* UTF-8 support disabled if true  */
     bool_t debug; /* debug information is output if true */
+    code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
     ptrdiff_t linepos;   /* the beginning position of the current line in the character buffer; can be negative when not left in the buffer */
@@ -1019,6 +1025,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->prefix = NULL;
     ctx->ascii = ascii;
     ctx->debug = debug;
+    ctx->flags = CODE_FLAG__NONE;
     ctx->errnum = 0;
     ctx->linenum = 0;
     ctx->linepos = 0;
@@ -1951,6 +1958,9 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         match_spaces(ctx);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = NULL;
+        if (!ctx->ascii) {
+            ctx->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
+        }
     }
     else if (match_character_class(ctx)) {
         const size_t q = ctx->bufpos;
@@ -1964,6 +1974,9 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         if (!ctx->ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
             print_error("%s:%llu:%llu: Invalid UTF-8 string\n", ctx->iname, (ullong_t)(l + 1), (ullong_t)(m + 1));
             ctx->errnum++;
+        }
+        if (!ctx->ascii && n_p->data.charclass.value[0] != '\0') {
+            ctx->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
     else if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
@@ -2565,99 +2578,11 @@ static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const
             indent += 4;
         }
         write_characters(gen->stream, ' ', indent);
-        fputs_e("int c, u;\n", gen->stream);
+        fputs_e("int u;\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fputs_e("size_t n;\n", gen->stream);
+        fputs_e("const size_t n = pcc_get_char_as_utf32(ctx, &u);\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("c = (int)(unsigned char)ctx->buffer.buf[ctx->pos];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("n = (c < 0x80) ? 1 :\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    ((c & 0xe0) == 0xc0) ? 2 :\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    ((c & 0xf0) == 0xe0) ? 3 :\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    ((c & 0xf8) == 0xf0) ? 4 : 0;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "if (n < 1) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("switch (n) {\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("case 1:\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u = c;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    break;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("case 2:\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u = c & 0x1f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if (u < 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    break;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("case 3:\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u = c & 0x0f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if (u < 0x800) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    break;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("case 4:\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u = c & 0x07;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 3];\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if ((c & 0xc0) != 0x80) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    u <<= 6; u |= c & 0x3f;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    if (u < 0x10000 || u > 0x10ffff) goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("    break;\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("default:\n", gen->stream);
-        write_characters(gen->stream, ' ', indent);
-        fprintf_e(gen->stream, "    goto L%04d;\n", onfail);
-        write_characters(gen->stream, ' ', indent);
-        fputs_e("}\n", gen->stream);
+        fprintf_e(gen->stream, "if (n == 0) goto L%04d;\n", onfail);
         if (value != NULL && !(a && n == 1)) { /* not '.' or '[^]' */
             int u0 = 0;
             bool_t r = FALSE;
@@ -4099,6 +4024,67 @@ static bool_t generate(context_t *ctx) {
             "\n",
             stream
         );
+        if (ctx->flags & CODE_FLAG__UTF8_CHARCLASS_USED) {
+            fprintf_e(
+                stream,
+                "static size_t pcc_get_char_as_utf32(%s_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n",
+                get_prefix(ctx)
+            );
+            fputs_e(
+                "    int c, u;\n"
+                "    size_t n;\n"
+                "    if (pcc_refill_buffer(ctx, 1) < 1) return 0;\n"
+                "    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos];\n"
+                "    n = (c < 0x80) ? 1 :\n"
+                "        ((c & 0xe0) == 0xc0) ? 2 :\n"
+                "        ((c & 0xf0) == 0xe0) ? 3 :\n"
+                "        ((c & 0xf8) == 0xf0) ? 4 : 0;\n"
+                "    if (n < 1) return 0;\n"
+                "    if (pcc_refill_buffer(ctx, n) < n) return 0;\n"
+                "    switch (n) {\n"
+                "    case 1:\n"
+                "        u = c;\n"
+                "        break;\n"
+                "    case 2:\n"
+                "        u = c & 0x1f;\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n"
+                "        if ((c & 0xc0) != 0x80) return 0;\n"
+                "        u <<= 6; u |= c & 0x3f;\n"
+                "        if (u < 0x80) return 0;\n"
+                "        break;\n"
+                "    case 3:\n"
+                "        u = c & 0x0f;\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n"
+                "        if ((c & 0xc0) != 0x80) return 0;\n"
+                "        u <<= 6; u |= c & 0x3f;\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n"
+                "        if ((c & 0xc0) != 0x80) return 0;\n"
+                "        u <<= 6; u |= c & 0x3f;\n"
+                "        if (u < 0x800) return 0;\n"
+                "        break;\n"
+                "    case 4:\n"
+                "        u = c & 0x07;\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n"
+                "        if ((c & 0xc0) != 0x80) return 0;\n"
+                "        u <<= 6; u |= c & 0x3f;\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n"
+                "        if ((c & 0xc0) != 0x80) return 0;\n"
+                "        u <<= 6; u |= c & 0x3f;\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 3];\n"
+                "        if ((c & 0xc0) != 0x80) return 0;\n"
+                "        u <<= 6; u |= c & 0x3f;\n"
+                "        if (u < 0x10000 || u > 0x10ffff) return 0;\n"
+                "        break;\n"
+                "    default:\n"
+                "        return 0;\n"
+                "    }\n"
+                "    if (out) *out = u;\n"
+                "    return n;\n"
+                "}\n"
+                "\n",
+                stream
+            );
+        }
         fprintf_e(
             stream,
             "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
