@@ -1432,7 +1432,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-static void dump_escaped(const char* s) {
+static void dump_escaped(const char *s) {
     char buf[5];
     if (s == NULL) {
         fprintf(stdout, "null");
@@ -1444,11 +1444,11 @@ static void dump_escaped(const char* s) {
     }
 }
 
-static void dump_void_value(ullong_t value) {
+static void dump_void_value(size_t value) {
     if (value == VOID_VALUE) {
         fprintf(stdout, "void");
     } else {
-        fprintf(stdout, "%llu", value);
+        fprintf(stdout, "%llu", (ullong_t)value);
     }
 }
 
@@ -1464,7 +1464,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_REFERENCE:
         fprintf(stdout, "%*sReference(var:'%s', index:", indent, "", node->data.reference.var);
-        dump_void_value((ullong_t)node->data.reference.index);
+        dump_void_value(node->data.reference.index);
         fprintf(stdout, ", name:'%s', rule:'%s')\n", node->data.reference.name,
             (node->data.reference.rule) ? node->data.reference.rule->data.rule.name : NULL);
         break;
@@ -1512,19 +1512,19 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_CAPTURE:
         fprintf(stdout, "%*sCapture(index:", indent, "");
-        dump_void_value((ullong_t)node->data.capture.index);
+        dump_void_value(node->data.capture.index);
         fprintf(stdout, ") {\n");
         dump_node(ctx, node->data.capture.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_EXPAND:
         fprintf(stdout, "%*sExpand(index:", indent, "");
-        dump_void_value((ullong_t)node->data.expand.index);
+        dump_void_value(node->data.expand.index);
         fprintf(stdout, ")\n");
         break;
     case NODE_ACTION:
         fprintf(stdout, "%*sAction(index:", indent, "");
-        dump_void_value((ullong_t)node->data.action.index);
+        dump_void_value(node->data.action.index);
         fprintf(stdout, ", value:{");
         dump_escaped(node->data.action.value);
         fprintf(stdout, "}, vars:");
@@ -1544,7 +1544,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_ERROR:
         fprintf(stdout, "%*sError(index:", indent, "");
-        dump_void_value((ullong_t)node->data.error.index);
+        dump_void_value(node->data.error.index);
         fprintf(stdout, ", value:{");
         dump_escaped(node->data.error.value);
         fprintf(stdout, "}, vars:\n");
