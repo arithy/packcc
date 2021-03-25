@@ -1,14 +1,7 @@
 %source {
-static const char *dbg_str(int event) {
-    switch(event) {
-        case PCC_DBG_EVALUATE: return "Evaluating rule";
-        case PCC_DBG_MATCH: return "Matched rule";
-        case PCC_DBG_NOMATCH: return "Abandoning rule";
-        default: return "Unknown event";
-    }
-};
+static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning rule" };
 #define PCC_DEBUG(event, rule, level, pos, buffer, length) \
-    fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str(event), rule, pos, length, buffer)
+    fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str[event], rule, pos, length, buffer)
 }
 
 TOP <- (RULE_A / RULE_B) EOL

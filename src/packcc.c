@@ -1454,7 +1454,8 @@ static void dump_escaped(const char *s) {
 static void dump_void_value(size_t value) {
     if (value == VOID_VALUE) {
         fprintf(stdout, "void");
-    } else {
+    }
+    else {
         fprintf(stdout, "%llu", (ullong_t)value);
     }
 }
@@ -1545,7 +1546,8 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
                 fprintf(stdout, "%*s$%llu\n", indent + 2, "", (ullong_t)(node->data.action.capts.buf[i]->data.capture.index + 1));
             }
             fprintf(stdout, "%*s)\n", indent, "");
-        } else {
+        }
+        else {
             fprintf(stdout, "none)\n");
         }
         break;
@@ -2323,8 +2325,8 @@ static bool_t parse(context_t *ctx) {
             "#endif /* !_MSC_VER */\n"
             "\n"
             "#define PCC_DBG_EVALUATE 0\n"
-            "#define PCC_DBG_MATCH 1\n"
-            "#define PCC_DBG_NOMATCH 2\n"
+            "#define PCC_DBG_MATCH    1\n"
+            "#define PCC_DBG_NOMATCH  2\n"
             "\n",
             ctx->sfile
         );

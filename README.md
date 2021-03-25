@@ -380,26 +380,20 @@ The default is defined as below.
 
 **`PCC_DEBUG(`**_event_**`,`**_rule_**`,`**_level_**`,`**_pos_**`,`**_buffer_**`,`**_length_**`)`**
 
-The function macro for debugging. Sometimes, especially for complex parsers, it is useful to see how exactly the parser processes the input. This macro is called on important *events* and allows to log or display current state of the parsers. The argument `rule` is a string that contains name of currently evaluated rule. Non-negative integer `level` is a specifying how deep in the rule hierarchy the parser currently is. Argument `pos` holds position from the start of current context in bytes. In case of `event == DBG_MATCH` argument `buffer` holds matched input and `length` is its size. for other events `buffer` and `length` describe part of currently loaded input, that is used to evaluate rule.
+The function macro for debugging. Sometimes, especially for complex parsers, it is useful to see how exactly the parser processes the input. This macro is called on important *events* and allows to log or display the current state of the parser. The argument `rule` is a string that contains the name of the currently evaluated rule. The non-negative integer `level` specifies how deep in the rule hierarchy the parser currently is. The argument `pos` holds the position from the start of the current context in bytes. In case of `event == PCC_DBG_MATCH`, the argument `buffer` holds the matched input and `length` is its size. For other events, `buffer` and `length` indicate a part of the currently loaded input, which is used to evaluate the current rule.
 
 There are currently three supported events:
- - `DBG_EVALUATE` - called when the parser starts to evaluate `rule`
- - `DBG_MATCH` - called when `rule` is matched, at which point buffer holds entire matched string
- - `DBG_NOMATCH` - called when the parsers determines that the input does not match currently evaluated `rule`
+ - `PCC_DBG_EVALUATE` (= 0) - called when the parser starts to evaluate `rule`
+ - `PCC_DBG_MATCH` (= 1) - called when `rule` is matched, at which point buffer holds entire matched string
+ - `PCC_DBG_NOMATCH` (= 2) - called when the parser determines that the input does not match currently evaluated `rule`
 
-Very simple implementation could look like this:
+A very simple implementation could look like this:
 
 ```C
-static const char *dbg_str(int event) {
-    switch(event) {
-        case PCC_DBG_EVALUATE: return "Evaluating rule";
-        case PCC_DBG_MATCH: return "Matched rule";
-        case PCC_DBG_NOMATCH: return "Abandoning rule";
-        default: return "Unknown event";
-    }
-};
-#define PCC_DEBUG(event, rule, level, pos, length, buffer) \
-    fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str(event), rule, pos, length, buffer)
+static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning rule" };
+#define PCC_DEBUG(event, rule, level, pos, buffer, length) \
+    fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str[event], rule, pos, length, buffer)
+}
 ```
 
 The default is to do nothing:
