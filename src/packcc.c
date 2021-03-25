@@ -2321,6 +2321,10 @@ static bool_t parse(context_t *ctx) {
             "}\n"
             "#endif /* defined __GNUC__ && defined _WIN32 */ \n"
             "#endif /* !_MSC_VER */\n"
+            "\n"
+            "#define PCC_DBG_EVALUATE 0\n"
+            "#define PCC_DBG_MATCH 1\n"
+            "#define PCC_DBG_NOMATCH 2\n"
             "\n",
             ctx->sfile
         );
@@ -3311,6 +3315,7 @@ static bool_t generate(context_t *ctx) {
             stream,
             "struct %s_context_tag {\n"
             "    size_t pos;\n"
+            "    size_t level;\n"
             "    pcc_char_array_t buffer;\n"
             "    pcc_lr_table_t lrtable;\n"
             "    pcc_lr_stack_t lrstack;\n"
@@ -3359,6 +3364,10 @@ static bool_t generate(context_t *ctx) {
             "#ifndef PCC_FREE\n"
             "#define PCC_FREE(auxil, ptr) free(ptr)\n"
             "#endif /* !PCC_FREE */\n"
+            "\n"
+            "#ifndef PCC_DEBUG\n"
+            "#define PCC_DEBUG(event, rule, level, pos, buffer, length) ((void)0)\n"
+            "#endif /* !PCC_DEBUG */\n"
             "\n"
             /* not used
             "static char *pcc_strdup_e(pcc_auxil_t auxil, const char *str) {\n"
@@ -3954,6 +3963,7 @@ static bool_t generate(context_t *ctx) {
         );
         fputs_e(
             "    ctx->pos = 0;\n"
+            "    ctx->level = 0;\n"
             "    pcc_char_array__init(auxil, &ctx->buffer, PCC_BUFFERSIZE);\n"
             "    pcc_lr_table__init(auxil, &ctx->lrtable, PCC_BUFFERSIZE);\n"
             "    pcc_lr_stack__init(auxil, &ctx->lrstack, PCC_ARRAYSIZE);\n"
@@ -4361,10 +4371,13 @@ static bool_t generate(context_t *ctx) {
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
                     ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
                 );
-                fputs_e(
+                fprintf_e(
+                    stream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
-                    "    chunk->pos = ctx->pos;\n",
-                    stream
+                    "    chunk->pos = ctx->pos;\n"
+                    "    PCC_DEBUG(PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
+                    "    ctx->level++;\n",
+                    ctx->rules.buf[i]->data.rule.name
                 );
                 fprintf_e(
                     stream,
@@ -4377,16 +4390,22 @@ static bool_t generate(context_t *ctx) {
                     (ullong_t)ctx->rules.buf[i]->data.rule.capts.len
                 );
                 r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
-                fputs_e(
+                fprintf_e(
+                    stream,
+                    "    ctx->level--;\n"
+                    "    PCC_DEBUG(PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->pos - chunk->pos));\n"
                     "    return chunk;\n",
-                    stream
+                    ctx->rules.buf[i]->data.rule.name
                 );
                 if (r != CODE_REACH__ALWAYS_SUCCEED) {
-                    fputs_e(
+                    fprintf_e(
+                        stream,
                         "L0000:;\n"
+                        "    ctx->level--;\n"
+                        "    PCC_DEBUG(PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->pos - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx->auxil, chunk);\n"
                         "    return NULL;\n",
-                        stream
+                        ctx->rules.buf[i]->data.rule.name
                     );
                 }
                 fputs_e(

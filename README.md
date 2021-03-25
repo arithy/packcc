@@ -378,6 +378,35 @@ The default is defined as below.
 #define PCC_FREE(auxil, ptr) free(ptr)
 ```
 
+**`PCC_DEBUG(`**_event_**`,`**_rule_**`,`**_level_**`,`**_pos_**`,`**_buffer_**`,`**_length_**`)`**
+
+The function macro for debugging. Sometimes, especially for complex parsers, it is useful to see how exactly the parser processes the input. This macro is called on important *events* and allows to log or display current state of the parsers. The argument `rule` is a string that contains name of currently evaluated rule. Non-negative integer `level` is a specifying how deep in the rule hierarchy the parser currently is. Argument `pos` holds position from the start of current context in bytes. In case of `event == DBG_MATCH` argument `buffer` holds matched input and `length` is its size. for other events `buffer` and `length` describe part of currently loaded input, that is used to evaluate rule.
+
+There are currently three supported events:
+ - `DBG_EVALUATE` - called when the parser starts to evaluate `rule`
+ - `DBG_MATCH` - called when `rule` is matched, at which point buffer holds entire matched string
+ - `DBG_NOMATCH` - called when the parsers determines that the input does not match currently evaluated `rule`
+
+Very simple implementation could look like this:
+
+```C
+static const char *dbg_str(int event) {
+    switch(event) {
+        case PCC_DBG_EVALUATE: return "Evaluating rule";
+        case PCC_DBG_MATCH: return "Matched rule";
+        case PCC_DBG_NOMATCH: return "Abandoning rule";
+        default: return "Unknown event";
+    }
+};
+#define PCC_DEBUG(event, rule, level, pos, length, buffer) \
+    fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str(event), rule, pos, length, buffer)
+```
+
+The default is to do nothing:
+```C
+#define PCC_DEBUG(event, rule, level, pos, buffer, length) ((void)0)
+```
+
 **`PCC_BUFFERSIZE`**
 
 The initial size (the number of characters) of the text buffer. The text buffer is expanded as needed. The default is `256`.

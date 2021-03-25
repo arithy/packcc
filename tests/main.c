@@ -3,6 +3,7 @@
 #include "parser.h"
 
 #define PRINT(X) printf("%s\n", X);
+#define PRINT_L(LBL, X) printf("%s: %s\n", LBL, X);
 
 #ifndef RET_TYPE
 #define RET_TYPE int
