@@ -26,6 +26,14 @@ jobs:
         tar zxvf bats-core-1.2.1.tar.gz
         cd bats-core-1.2.1 &&
         sudo ./install.sh /usr/local
+    - name: install clang-format-11
+      run: |
+        CODENAME="$(sed -n 's/UBUNTU_CODENAME=//p' /etc/os-release)"
+        echo "deb http://apt.llvm.org/$CODENAME/ llvm-toolchain-$CODENAME-11 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo apt-get update
+        sudo apt-get install clang-format-11
+        sudo ln -s /usr/bin/clang-format-11 /usr/local/bin/clang-format
     - name: build packcc
       run: |
         (

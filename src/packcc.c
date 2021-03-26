@@ -50,7 +50,7 @@
 #define strnlen(str, maxlen) strnlen_(str, maxlen)
 static size_t strnlen_(const char *str, size_t maxlen) {
     size_t i;
-    for (i = 0; i < maxlen && str[i]; i++);
+    for (i = 0; i < maxlen && str[i]; i++) {}
     return i;
 }
 #endif
@@ -200,18 +200,18 @@ typedef struct node_error_tag {
 } node_error_t;
 
 typedef union node_data_tag {
-    node_rule_t      rule;
+    node_rule_t rule;
     node_reference_t reference;
-    node_string_t    string;
+    node_string_t string;
     node_charclass_t charclass;
-    node_quantity_t  quantity;
+    node_quantity_t quantity;
     node_predicate_t predicate;
-    node_sequence_t  sequence;
+    node_sequence_t sequence;
     node_alternate_t alternate;
-    node_capture_t   capture;
-    node_expand_t    expand;
-    node_action_t    action;
-    node_error_t     error;
+    node_capture_t capture;
+    node_expand_t expand;
+    node_action_t action;
+    node_error_t error;
 } node_data_t;
 
 struct node_tag {
@@ -225,25 +225,25 @@ typedef enum code_flag_tag {
 } code_flag_t;
 
 typedef struct context_tag {
-    char *iname;  /* the path name of the PEG file being parsed */
-    char *sname;  /* the path name of the C source file being generated */
-    char *hname;  /* the path name of the C header file being generated */
-    FILE *ifile;  /* the input stream of the PEG file */
-    FILE *sfile;  /* the output stream of the C source file */
-    FILE *hfile;  /* the output stream of the C header file */
-    char *hid;    /* the macro name for the include guard of the C header file */
-    char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
-    char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
-    char *prefix; /* the prefix of the API function names (NULL means the default) */
-    bool_t ascii; /* UTF-8 support disabled if true  */
-    bool_t debug; /* debug information is output if true */
-    code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
-    size_t errnum;       /* the current number of PEG parsing errors */
-    size_t linenum;      /* the current line number (0-based) */
-    ptrdiff_t linepos;   /* the beginning position of the current line in the character buffer; can be negative when not left in the buffer */
-    size_t bufpos;       /* the current parsing position in the character buffer */
-    char_array_t buffer; /* the character buffer */
-    node_array_t rules;  /* the PEG rules */
+    char *iname;                /* the path name of the PEG file being parsed */
+    char *sname;                /* the path name of the C source file being generated */
+    char *hname;                /* the path name of the C header file being generated */
+    FILE *ifile;                /* the input stream of the PEG file */
+    FILE *sfile;                /* the output stream of the C source file */
+    FILE *hfile;                /* the output stream of the C header file */
+    char *hid;                  /* the macro name for the include guard of the C header file */
+    char *vtype;                /* the type name of the data output by the parsing API function (NULL means the default) */
+    char *atype;                /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
+    char *prefix;               /* the prefix of the API function names (NULL means the default) */
+    bool_t ascii;               /* UTF-8 support disabled if true  */
+    bool_t debug;               /* debug information is output if true */
+    code_flag_t flags;          /* bitwise flags to control code generation; updated during PEG parsing */
+    size_t errnum;              /* the current number of PEG parsing errors */
+    size_t linenum;             /* the current line number (0-based) */
+    ptrdiff_t linepos;          /* the beginning position of the current line in the character buffer; can be negative when not left in the buffer */
+    size_t bufpos;              /* the current parsing position in the character buffer */
+    char_array_t buffer;        /* the character buffer */
+    node_array_t rules;         /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
 } context_t;
 
@@ -282,7 +282,9 @@ static int print_error(const char *format, ...) __attribute__((format(printf, 1,
     n = fprintf(stderr, "%s: ", g_cmdname);
     if (n >= 0) {
         const int k = vfprintf(stderr, format, a);
-        if (k < 0) n = k; else n += k;
+        if (k < 0) n = k;
+        else
+            n += k;
     }
     va_end(a);
     return n;
@@ -409,13 +411,12 @@ static bool_t is_filled_string(const char *str) {
     size_t i;
     for (i = 0; str[i]; i++) {
         if (
-            str[i] != ' '  &&
+            str[i] != ' ' &&
             str[i] != '\v' &&
             str[i] != '\f' &&
             str[i] != '\t' &&
             str[i] != '\n' &&
-            str[i] != '\r'
-        ) return TRUE;
+            str[i] != '\r') return TRUE;
     }
     return FALSE;
 }
@@ -423,17 +424,15 @@ static bool_t is_filled_string(const char *str) {
 static bool_t is_identifier_string(const char *str) {
     size_t i;
     if (!(
-        (str[0] >= 'a' && str[0] <= 'z') ||
-        (str[0] >= 'A' && str[0] <= 'Z') ||
-         str[0] == '_'
-    )) return FALSE;
+            (str[0] >= 'a' && str[0] <= 'z') ||
+            (str[0] >= 'A' && str[0] <= 'Z') ||
+            str[0] == '_')) return FALSE;
     for (i = 1; str[i]; i++) {
         if (!(
-            (str[i] >= 'a' && str[i] <= 'z') ||
-            (str[i] >= 'A' && str[i] <= 'Z') ||
-            (str[i] >= '0' && str[i] <= '9') ||
-             str[i] == '_'
-        )) return FALSE;
+                (str[i] >= 'a' && str[i] <= 'z') ||
+                (str[i] >= 'A' && str[i] <= 'Z') ||
+                (str[i] >= '0' && str[i] <= '9') ||
+                str[i] == '_')) return FALSE;
     }
     return TRUE;
 }
@@ -509,10 +508,11 @@ static bool_t is_valid_utf8_string(const char *str) {
 static size_t utf8_to_utf32(const char *seq, int *out) { /* without checking UTF-8 validity */
     const int c = (int)(unsigned char)seq[0];
     const size_t n =
-        (c == 0) ? 0 : (c < 0x80) ? 1 :
-        ((c & 0xe0) == 0xc0) ? 2 :
-        ((c & 0xf0) == 0xe0) ? 3 :
-        ((c & 0xf8) == 0xf0) ? 4 : 1;
+        (c == 0) ? 0 : (c < 0x80)       ? 1 :
+                   ((c & 0xe0) == 0xc0) ? 2 :
+                   ((c & 0xf0) == 0xe0) ? 3 :
+                   ((c & 0xf8) == 0xf0) ? 4 :
+                                          1;
     int u = 0;
     switch (n) {
     case 0:
@@ -545,7 +545,10 @@ static bool_t unescape_string(char *str) {
         if (str[i] == '\\') {
             i++;
             switch (str[i]) {
-            case '\0': str[j++] = '\\'; str[j] = '\0'; return FALSE;
+            case '\0':
+                str[j++] = '\\';
+                str[j] = '\0';
+                return FALSE;
             case '0': str[j++] = '\x00'; break;
             case 'a': str[j++] = '\x07'; break;
             case 'b': str[j++] = '\x08'; break;
@@ -563,13 +566,15 @@ static bool_t unescape_string(char *str) {
                         const char d =
                             (c >= '0' && c <= '9') ? c - '0' :
                             (c >= 'a' && c <= 'f') ? c - 'a' + 10 :
-                            (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+                            (c >= 'A' && c <= 'F') ? c - 'A' + 10 :
+                                                     -1;
                         if (d < 0) break;
                         s = (s << 4) | d;
                     }
                     if (k < 2) {
                         const size_t l = i + k;
-                        str[j++] = '\\'; str[j++] = 'x';
+                        str[j++] = '\\';
+                        str[j++] = 'x';
                         while (i <= l) str[j++] = str[++i];
                         if (c == '\0') return FALSE;
                         b = FALSE;
@@ -589,13 +594,15 @@ static bool_t unescape_string(char *str) {
                         const char d =
                             (c >= '0' && c <= '9') ? c - '0' :
                             (c >= 'a' && c <= 'f') ? c - 'a' + 10 :
-                            (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+                            (c >= 'A' && c <= 'F') ? c - 'A' + 10 :
+                                                     -1;
                         if (d < 0) break;
                         s = (s << 4) | d;
                     }
                     if (k < 4 || (s & 0xfc00) == 0xdc00) { /* invalid character or invalid surrogate code point */
                         const size_t l = i + k;
-                        str[j++] = '\\'; str[j++] = 'u';
+                        str[j++] = '\\';
+                        str[j++] = 'u';
                         while (i <= l) str[j++] = str[++i];
                         if (c == '\0') return FALSE;
                         b = FALSE;
@@ -614,14 +621,16 @@ static bool_t unescape_string(char *str) {
                                 const char d =
                                     (c >= '0' && c <= '9') ? c - '0' :
                                     (c >= 'a' && c <= 'f') ? c - 'a' + 10 :
-                                    (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+                                    (c >= 'A' && c <= 'F') ? c - 'A' + 10 :
+                                                             -1;
                                 if (d < 0) break;
                                 t = (t << 4) | d;
                             }
                         }
                         if (k < 10 || (t & 0xfc00) != 0xdc00) { /* invalid character or invalid surrogate code point */
-                            const size_t l = i + 4; /* NOTE: Not i + k to redo with recovery. */
-                            str[j++] = '\\'; str[j++] = 'u';
+                            const size_t l = i + 4;             /* NOTE: Not i + k to redo with recovery. */
+                            str[j++] = '\\';
+                            str[j++] = 'u';
                             while (i <= l) str[j++] = str[++i];
                             b = FALSE;
                             continue;
@@ -644,12 +653,13 @@ static bool_t unescape_string(char *str) {
                         else if (u < 0x110000) {
                             str[j++] = (char)(0xf0 | (u >> 18));
                             str[j++] = (char)(0x80 | ((u >> 12) & 0x3f));
-                            str[j++] = (char)(0x80 | ((u >>  6) & 0x3f));
+                            str[j++] = (char)(0x80 | ((u >> 6) & 0x3f));
                             str[j++] = (char)(0x80 | (u & 0x3f));
                         }
                         else { /* never reached theoretically; in case */
                             const size_t l = i + 10;
-                            str[j++] = '\\'; str[j++] = 'u';
+                            str[j++] = '\\';
+                            str[j++] = 'u';
                             while (i <= l) str[j++] = str[++i];
                             b = FALSE;
                             continue;
@@ -659,7 +669,9 @@ static bool_t unescape_string(char *str) {
                 }
                 break;
             case '\n': break;
-            case '\r': if (str[i + 1] == '\n') i++; break;
+            case '\r':
+                if (str[i + 1] == '\n') i++;
+                break;
             default: str[j++] = '\\'; str[j++] = str[i];
             }
         }
@@ -681,9 +693,9 @@ static const char *escape_character(char ch, char (*buf)[5]) {
     case '\x0d': strncpy(*buf, "\\r", 5); break;
     case '\x09': strncpy(*buf, "\\t", 5); break;
     case '\x0b': strncpy(*buf, "\\v", 5); break;
-    case '\\':  strncpy(*buf, "\\\\", 5); break;
-    case '\'':  strncpy(*buf, "\\\'", 5); break;
-    case '\"':  strncpy(*buf, "\\\"", 5); break;
+    case '\\': strncpy(*buf, "\\\\", 5); break;
+    case '\'': strncpy(*buf, "\\\'", 5); break;
+    case '\"': strncpy(*buf, "\\\"", 5); break;
     default:
         if (ch >= '\x20' && ch < '\x7f')
             snprintf(*buf, 5, "%c", ch);
@@ -698,13 +710,12 @@ static void remove_heading_blank(char *str) {
     size_t i, j;
     for (i = 0; str[i]; i++) {
         if (
-            str[i] != ' '  &&
+            str[i] != ' ' &&
             str[i] != '\v' &&
             str[i] != '\f' &&
             str[i] != '\t' &&
             str[i] != '\n' &&
-            str[i] != '\r'
-        ) break;
+            str[i] != '\r') break;
     }
     for (j = 0; str[i]; i++) {
         str[j++] = str[i];
@@ -716,13 +727,12 @@ static void remove_trailing_blank(char *str) {
     size_t i, j;
     for (j = 0, i = 0; str[i]; i++) {
         if (
-            str[i] != ' '  &&
+            str[i] != ' ' &&
             str[i] != '\v' &&
             str[i] != '\f' &&
             str[i] != '\t' &&
             str[i] != '\n' &&
-            str[i] != '\r'
-        ) j = i + 1;
+            str[i] != '\r') j = i + 1;
     }
     str[j] = '\0';
 }
@@ -732,7 +742,8 @@ static void make_header_identifier(char *str) {
     for (i = 0; str[i]; i++) {
         str[i] =
             ((str[i] >= 'A' && str[i] <= 'Z') || (str[i] >= '0' && str[i] <= '9')) ? str[i] :
-             (str[i] >= 'a' && str[i] <= 'z') ? str[i] - 'a' + 'A' : '_';
+            (str[i] >= 'a' && str[i] <= 'z')                                       ? str[i] - 'a' + 'A' :
+                                                                                     '_';
     }
 }
 
@@ -793,13 +804,12 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
         }
         for (i = 0; i < k; i++) {
             if (
-                ptr[i] != ' '  &&
+                ptr[i] != ' ' &&
                 ptr[i] != '\v' &&
                 ptr[i] != '\f' &&
                 ptr[i] != '\t' &&
                 ptr[i] != '\n' &&
-                ptr[i] != '\r'
-            ) break;
+                ptr[i] != '\r') break;
         }
         if (i < k) {
             write_characters(stream, ' ', indent);
@@ -812,10 +822,14 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
             case ' ':
             case '\v':
             case '\f':
-                if (s) l++; else fputc_e(ptr[i], stream);
+                if (s) l++;
+                else
+                    fputc_e(ptr[i], stream);
                 break;
             case '\t':
-                if (s) l = (l + 8) & ~7; else fputc_e(ptr[i], stream);
+                if (s) l = (l + 8) & ~7;
+                else
+                    fputc_e(ptr[i], stream);
                 break;
             case '\n':
                 fputc_e('\n', stream);
@@ -843,11 +857,10 @@ static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t i
     else {
         for (i = 0; i < len; i++) {
             if (
-                ptr[i] != ' '  &&
+                ptr[i] != ' ' &&
                 ptr[i] != '\v' &&
                 ptr[i] != '\f' &&
-                ptr[i] != '\t'
-            ) break;
+                ptr[i] != '\t') break;
         }
         if (i < len) {
             write_characters(stream, ' ', indent);
@@ -907,10 +920,10 @@ static size_t hash_string(const char *str) {
 }
 
 static size_t populate_bits(size_t x) {
-    x |= x >>  1;
-    x |= x >>  2;
-    x |= x >>  4;
-    x |= x >>  8;
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
     x |= x >> 16;
 #ifndef _M_IX86 /* not Windows for x86 (32-bit) */
     x |= x >> 32;
@@ -1019,7 +1032,8 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->ifile = (iname && iname[0]) ? fopen_rb_e(ctx->iname) : stdin;
     ctx->sfile = fopen_wt_e(ctx->sname);
     ctx->hfile = fopen_wt_e(ctx->hname);
-    ctx->hid = strdup_e(ctx->hname); make_header_identifier(ctx->hid);
+    ctx->hid = strdup_e(ctx->hname);
+    make_header_identifier(ctx->hid);
     ctx->vtype = NULL;
     ctx->atype = NULL;
     ctx->prefix = NULL;
@@ -1173,8 +1187,10 @@ static void destroy_context(context_t *ctx) {
     free(ctx->atype);
     free(ctx->vtype);
     free(ctx->hid);
-    fclose_e(ctx->hfile); if (ctx->errnum) unlink(ctx->hname);
-    fclose_e(ctx->sfile); if (ctx->errnum) unlink(ctx->sname);
+    fclose_e(ctx->hfile);
+    if (ctx->errnum) unlink(ctx->hname);
+    fclose_e(ctx->sfile);
+    if (ctx->errnum) unlink(ctx->sname);
     fclose_e(ctx->ifile);
     free(ctx->hname);
     free(ctx->sname);
@@ -1445,7 +1461,7 @@ static void dump_escaped(const char *s) {
         fprintf(stdout, "null");
         return;
     }
-    while(*s) {
+    while (*s) {
         escape_character(*s++, &buf);
         fprintf(stdout, "%s", buf);
     }
@@ -1783,7 +1799,8 @@ static bool_t match_spaces(context_t *ctx) {
 
 static bool_t match_number(context_t *ctx) {
     if (match_character_range(ctx, '0', '9')) {
-        while (match_character_range(ctx, '0', '9'));
+        while (match_character_range(ctx, '0', '9'))
+            ;
         return TRUE;
     }
     return FALSE;
@@ -1793,14 +1810,13 @@ static bool_t match_identifier(context_t *ctx) {
     if (
         match_character_range(ctx, 'a', 'z') ||
         match_character_range(ctx, 'A', 'Z') ||
-        match_character(ctx, '_')
-    ) {
+        match_character(ctx, '_')) {
         while (
             match_character_range(ctx, 'a', 'z') ||
             match_character_range(ctx, 'A', 'Z') ||
             match_character_range(ctx, '0', '9') ||
-            match_character(ctx, '_')
-        );
+            match_character(ctx, '_'))
+            ;
         return TRUE;
     }
     return FALSE;
@@ -1822,8 +1838,7 @@ static bool_t match_code_block(context_t *ctx) {
                 match_comment_c(ctx) ||
                 match_comment_cxx(ctx) ||
                 match_quotation_single(ctx) ||
-                match_quotation_double(ctx)
-            ) continue;
+                match_quotation_double(ctx)) continue;
             if (match_character(ctx, '{')) {
                 d++;
             }
@@ -2024,7 +2039,8 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
     node_t *n_q = NULL;
     node_t *n_r = NULL;
     node_t *n_t = NULL;
-    const char t = match_character(ctx, '&') ? '&' : match_character(ctx, '!') ? '!' : '\0';
+    const char t = match_character(ctx, '&') ? '&' : match_character(ctx, '!') ? '!' :
+                                                                                 '\0';
     if (t) match_spaces(ctx);
     n_p = parse_primary(ctx, rule);
     if (n_p == NULL) goto EXCEPTION;
@@ -2075,7 +2091,7 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             match_spaces(ctx);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
-            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, q - p -2);
+            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -2293,7 +2309,8 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
                 *output = s;
             }
             else {
-                free(s); s = NULL;
+                free(s);
+                s = NULL;
             }
         }
     }
@@ -2328,14 +2345,12 @@ static bool_t parse(context_t *ctx) {
             "#define PCC_DBG_MATCH    1\n"
             "#define PCC_DBG_NOMATCH  2\n"
             "\n",
-            ctx->sfile
-        );
+            ctx->sfile);
         fprintf_e(
             ctx->sfile,
             "#include \"%s\"\n"
             "\n",
-            ctx->hname
-        );
+            ctx->hname);
     }
     {
         fprintf_e(
@@ -2343,8 +2358,7 @@ static bool_t parse(context_t *ctx) {
             "#ifndef PCC_INCLUDED_%s\n"
             "#define PCC_INCLUDED_%s\n"
             "\n",
-            ctx->hid, ctx->hid
-        );
+            ctx->hid, ctx->hid);
     }
     {
         bool_t b = TRUE;
@@ -2361,8 +2375,7 @@ static bool_t parse(context_t *ctx) {
                 parse_directive_include_(ctx, "%common", ctx->sfile, ctx->hfile) ||
                 parse_directive_string_(ctx, "%value", &ctx->vtype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
                 parse_directive_string_(ctx, "%auxil", &ctx->atype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
-                parse_directive_string_(ctx, "%prefix", &ctx->prefix, STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)
-            ) {
+                parse_directive_string_(ctx, "%prefix", &ctx->prefix, STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)) {
                 b = TRUE;
             }
             else if (match_character(ctx, '%')) {
@@ -2511,8 +2524,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                     if (i + 3 == n && value[i] != '\\' && value[i + 1] == '-') {
                         write_characters(gen->stream, ' ', indent);
                         fprintf_e(gen->stream,
-                            a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n"
-                              : "if (!(c >= '%s' && c <= '%s')) goto L%04d;\n",
+                            a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n" : "if (!(c >= '%s' && c <= '%s')) goto L%04d;\n",
                             escape_character(value[i], &s), escape_character(value[i + 2], &t), onfail);
                     }
                     else {
@@ -2964,8 +2976,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
 }
 
 static code_reach_t generate_thunking_action_code(
-    generate_t *gen, size_t index, const node_const_array_t *vars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare
-) {
+    generate_t *gen, size_t index, const node_const_array_t *vars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare) {
     assert(gen->rule->type == NODE_RULE);
     if (!bare) {
         write_characters(gen->stream, ' ', indent);
@@ -3019,8 +3030,7 @@ static code_reach_t generate_thunking_action_code(
 }
 
 static code_reach_t generate_thunking_error_code(
-    generate_t *gen, const node_t *expr, size_t index, const node_const_array_t *vars, const node_const_array_t *capts, int onfail, size_t indent, bool_t bare
-) {
+    generate_t *gen, const node_t *expr, size_t index, const node_const_array_t *vars, const node_const_array_t *capts, int onfail, size_t indent, bool_t bare) {
     code_reach_t r;
     const int l = ++gen->label;
     const int m = ++gen->label;
@@ -3072,8 +3082,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_matching_string_code(gen, node->data.string.value, onfail, indent, bare);
     case NODE_CHARCLASS:
         return gen->ascii ?
-            generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
-            generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
+                   generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
+                   generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
     case NODE_QUANTITY:
         return generate_quantifying_code(gen, node->data.quantity.expr, node->data.quantity.min, node->data.quantity.max, onfail, indent, bare);
     case NODE_PREDICATE:
@@ -3088,12 +3098,10 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_expanding_code(gen, node->data.expand.index, onfail, indent, bare);
     case NODE_ACTION:
         return generate_thunking_action_code(
-            gen, node->data.action.index, &node->data.action.vars, &node->data.action.capts, FALSE, onfail, indent, bare
-        );
+            gen, node->data.action.index, &node->data.action.vars, &node->data.action.capts, FALSE, onfail, indent, bare);
     case NODE_ERROR:
         return generate_thunking_error_code(
-            gen, node->data.error.expr, node->data.error.index, &node->data.error.vars, &node->data.error.capts, onfail, indent, bare
-        );
+            gen, node->data.error.expr, node->data.error.index, &node->data.error.vars, &node->data.error.capts, onfail, indent, bare);
     default:
         print_error("Internal error [%d]\n", __LINE__);
         exit(-1);
@@ -3134,20 +3142,17 @@ static bool_t generate(context_t *ctx) {
             "    size_t end;\n"
             "} pcc_range_t;\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "typedef %s%spcc_value_t;\n"
             "\n",
-            vt, vp ? "" : " "
-        );
+            vt, vp ? "" : " ");
         fprintf_e(
             stream,
             "typedef %s%spcc_auxil_t;\n"
             "\n",
-            at, ap ? "" : " "
-        );
+            at, ap ? "" : " ");
         fputs_e(
             "typedef struct pcc_value_table_tag {\n"
             "    pcc_value_t *buf;\n"
@@ -3181,14 +3186,12 @@ static bool_t generate(context_t *ctx) {
             "typedef struct pcc_thunk_tag pcc_thunk_t;\n"
             "typedef struct pcc_thunk_array_tag pcc_thunk_array_t;\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "typedef void (*pcc_action_t)(%s_context_t *, pcc_thunk_t *, pcc_value_t *);\n"
             "\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "typedef enum pcc_thunk_type_tag {\n"
             "    PCC_THUNK_LEAF,\n"
@@ -3251,14 +3254,12 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_answer_t *hold;\n"
             "};\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "typedef pcc_thunk_chunk_t *(*pcc_rule_t)(%s_context_t *);\n"
             "\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "typedef struct pcc_rule_set_tag {\n"
             "    pcc_rule_t *buf;\n"
@@ -3311,8 +3312,7 @@ static bool_t generate(context_t *ctx) {
             "    size_t len;\n"
             "} pcc_lr_stack_t;\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "struct %s_context_tag {\n"
@@ -3324,8 +3324,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_auxil_t auxil;\n"
             "};\n"
             "\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "#ifndef PCC_ERROR\n"
             "#define PCC_ERROR(auxil) pcc_error()\n"
@@ -3389,8 +3388,7 @@ static bool_t generate(context_t *ctx) {
             "    return s;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_char_array__init(pcc_auxil_t auxil, pcc_char_array_t *array, size_t max) {\n"
             "    array->len = 0;\n"
@@ -3415,8 +3413,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, array->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_value_table__init(pcc_auxil_t auxil, pcc_value_table_t *table, size_t max) {\n"
             "    table->len = 0;\n"
@@ -3440,8 +3437,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_value_refer_table__init(pcc_auxil_t auxil, pcc_value_refer_table_t *table, size_t max) {\n"
             "    table->len = 0;\n"
@@ -3467,8 +3463,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_capture_table__init(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t max) {\n"
             "    table->len = 0;\n"
@@ -3503,8 +3498,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_capture_const_table__init(pcc_auxil_t auxil, pcc_capture_const_table_t *table, size_t max) {\n"
             "    table->len = 0;\n"
@@ -3530,8 +3524,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, size_t valuec, size_t captc) {\n"
             "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
@@ -3571,8 +3564,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, thunk);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_thunk_array__init(pcc_auxil_t auxil, pcc_thunk_array_t *array, size_t max) {\n"
             "    array->len = 0;\n"
@@ -3608,8 +3600,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, array->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_auxil_t auxil) {\n"
             "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_chunk_t));\n"
@@ -3628,8 +3619,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, chunk);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_rule_set__init(pcc_auxil_t auxil, pcc_rule_set_t *set, size_t max) {\n"
             "    set->len = 0;\n"
@@ -3684,8 +3674,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, set->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static pcc_lr_head_t *pcc_lr_head__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
             "    pcc_lr_head_t *const head = (pcc_lr_head_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_head_t));\n"
@@ -3704,8 +3693,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, head);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr);\n"
             "\n"
@@ -3762,8 +3750,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, answer);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, size_t max) {\n"
             "    map->len = 0;\n"
@@ -3814,8 +3801,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, map->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_auxil_t auxil) {\n"
             "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_table_entry_t));\n"
@@ -3834,8 +3820,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, entry);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_lr_table__init(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t max) {\n"
             "    table->len = 0;\n"
@@ -3910,8 +3895,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
             "    pcc_lr_entry_t *const lr = (pcc_lr_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_entry_t));\n"
@@ -3925,8 +3909,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, lr);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fputs_e(
             "static void pcc_lr_stack__init(pcc_auxil_t auxil, pcc_lr_stack_t *stack, size_t max) {\n"
             "    stack->len = 0;\n"
@@ -3955,14 +3938,12 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, stack->buf);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "static %s_context_t *pcc_context__create(pcc_auxil_t auxil) {\n"
             "    %s_context_t *const ctx = (%s_context_t *)PCC_MALLOC(auxil, sizeof(%s_context_t));\n",
-            get_prefix(ctx), get_prefix(ctx), get_prefix(ctx), get_prefix(ctx)
-        );
+            get_prefix(ctx), get_prefix(ctx), get_prefix(ctx), get_prefix(ctx));
         fputs_e(
             "    ctx->pos = 0;\n"
             "    ctx->level = 0;\n"
@@ -3973,13 +3954,11 @@ static bool_t generate(context_t *ctx) {
             "    return ctx;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "static void pcc_context__destroy(%s_context_t *ctx) {\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "    if (ctx == NULL) return;\n"
             "    pcc_lr_stack__term(ctx->auxil, &ctx->lrstack);\n"
@@ -3988,13 +3967,11 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(ctx->auxil, ctx);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "static size_t pcc_refill_buffer(%s_context_t *ctx, size_t num) {\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "    const size_t n = ctx->buffer.len - ctx->pos;\n"
             "    if (n >= num) return n;\n"
@@ -4006,13 +3983,11 @@ static bool_t generate(context_t *ctx) {
             "    return ctx->buffer.len - ctx->pos;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "static void pcc_commit_buffer(%s_context_t *ctx) {\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->pos, ctx->buffer.len - ctx->pos);\n"
             "    ctx->buffer.len -= ctx->pos;\n"
@@ -4020,13 +3995,11 @@ static bool_t generate(context_t *ctx) {
             "    ctx->pos = 0;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "static const char *pcc_get_capture_string(%s_context_t *ctx, const pcc_capture_t *capt) {\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "    if (capt->string == NULL)\n"
             "        ((pcc_capture_t *)capt)->string =\n"
@@ -4034,14 +4007,12 @@ static bool_t generate(context_t *ctx) {
             "    return capt->string;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         if (ctx->flags & CODE_FLAG__UTF8_CHARCLASS_USED) {
             fprintf_e(
                 stream,
                 "static size_t pcc_get_char_as_utf32(%s_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n",
-                get_prefix(ctx)
-            );
+                get_prefix(ctx));
             fputs_e(
                 "    int c, u;\n"
                 "    size_t n;\n"
@@ -4094,14 +4065,12 @@ static bool_t generate(context_t *ctx) {
                 "    return n;\n"
                 "}\n"
                 "\n",
-                stream
-            );
+                stream);
         }
         fprintf_e(
             stream,
             "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "    static pcc_value_t null;\n"
             "    pcc_thunk_chunk_t *c = NULL;\n"
@@ -4201,13 +4170,11 @@ static bool_t generate(context_t *ctx) {
             "    return PCC_TRUE;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "static void pcc_do_action(%s_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
-            get_prefix(ctx)
-        );
+            get_prefix(ctx));
         fputs_e(
             "    size_t i;\n"
             "    for (i = 0; i < thunks->len; i++) {\n"
@@ -4225,8 +4192,7 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         {
             size_t i, j, k;
             for (i = 0; i < ctx->rules.len; i++) {
@@ -4255,47 +4221,40 @@ static bool_t generate(context_t *ctx) {
                     fprintf_e(
                         stream,
                         "static void pcc_action_%s_%d(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
-                        r->name, d, get_prefix(ctx)
-                    );
+                        r->name, d, get_prefix(ctx));
                     fputs_e(
                         "#define auxil (__pcc_ctx->auxil)\n"
                         "#define __ (*__pcc_out)\n",
-                        stream
-                    );
+                        stream);
                     k = 0;
                     while (k < v->len) {
                         assert(v->buf[k]->type == NODE_REFERENCE);
                         fprintf_e(
                             stream,
                             "#define %s (*__pcc_in->data.leaf.values.buf[%llu])\n",
-                            v->buf[k]->data.reference.var, (ullong_t)v->buf[k]->data.reference.index
-                        );
+                            v->buf[k]->data.reference.var, (ullong_t)v->buf[k]->data.reference.index);
                         k++;
                     }
                     fputs_e(
                         "#define _0 pcc_get_capture_string(__pcc_ctx, &__pcc_in->data.leaf.capt0)\n"
                         "#define _0s ((const size_t)__pcc_in->data.leaf.capt0.range.start)\n"
                         "#define _0e ((const size_t)__pcc_in->data.leaf.capt0.range.end)\n",
-                        stream
-                    );
+                        stream);
                     k = 0;
                     while (k < c->len) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf_e(
                             stream,
                             "#define _%llu pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.buf[%llu])\n",
-                            (ullong_t)(c->buf[k]->data.capture.index + 1), (ullong_t)c->buf[k]->data.capture.index
-                        );
+                            (ullong_t)(c->buf[k]->data.capture.index + 1), (ullong_t)c->buf[k]->data.capture.index);
                         fprintf_e(
                             stream,
                             "#define _%llus ((const size_t)__pcc_in->data.leaf.capts.buf[%llu]->range.start)\n",
-                            (ullong_t)(c->buf[k]->data.capture.index + 1), (ullong_t)c->buf[k]->data.capture.index
-                        );
+                            (ullong_t)(c->buf[k]->data.capture.index + 1), (ullong_t)c->buf[k]->data.capture.index);
                         fprintf_e(
                             stream,
                             "#define _%llue ((const size_t)__pcc_in->data.leaf.capts.buf[%llu]->range.end)\n",
-                            (ullong_t)(c->buf[k]->data.capture.index + 1), (ullong_t)c->buf[k]->data.capture.index
-                        );
+                            (ullong_t)(c->buf[k]->data.capture.index + 1), (ullong_t)c->buf[k]->data.capture.index);
                         k++;
                     }
                     write_code_block(stream, s, strlen(s), 4);
@@ -4306,25 +4265,21 @@ static bool_t generate(context_t *ctx) {
                         fprintf_e(
                             stream,
                             "#undef _%llue\n",
-                            (ullong_t)(c->buf[k]->data.capture.index + 1)
-                        );
+                            (ullong_t)(c->buf[k]->data.capture.index + 1));
                         fprintf_e(
                             stream,
                             "#undef _%llus\n",
-                            (ullong_t)(c->buf[k]->data.capture.index + 1)
-                        );
+                            (ullong_t)(c->buf[k]->data.capture.index + 1));
                         fprintf_e(
                             stream,
                             "#undef _%llu\n",
-                            (ullong_t)(c->buf[k]->data.capture.index + 1)
-                        );
+                            (ullong_t)(c->buf[k]->data.capture.index + 1));
                     }
                     fputs_e(
                         "#undef _0e\n"
                         "#undef _0s\n"
                         "#undef _0\n",
-                        stream
-                    );
+                        stream);
                     k = v->len;
                     while (k > 0) {
                         k--;
@@ -4332,19 +4287,16 @@ static bool_t generate(context_t *ctx) {
                         fprintf_e(
                             stream,
                             "#undef %s\n",
-                            v->buf[k]->data.reference.var
-                        );
+                            v->buf[k]->data.reference.var);
                     }
                     fputs_e(
                         "#undef __\n"
                         "#undef auxil\n",
-                        stream
-                    );
+                        stream);
                     fputs_e(
                         "}\n"
                         "\n",
-                        stream
-                    );
+                        stream);
                 }
             }
         }
@@ -4354,13 +4306,11 @@ static bool_t generate(context_t *ctx) {
                 fprintf_e(
                     stream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx);\n",
-                    ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
-                );
+                    ctx->rules.buf[i]->data.rule.name, get_prefix(ctx));
             }
             fputs_e(
                 "\n",
-                stream
-            );
+                stream);
             for (i = 0; i < ctx->rules.len; i++) {
                 code_reach_t r;
                 generate_t g;
@@ -4371,34 +4321,29 @@ static bool_t generate(context_t *ctx) {
                 fprintf_e(
                     stream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
-                    ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
-                );
+                    ctx->rules.buf[i]->data.rule.name, get_prefix(ctx));
                 fprintf_e(
                     stream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
                     "    chunk->pos = ctx->pos;\n"
                     "    PCC_DEBUG(PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
                     "    ctx->level++;\n",
-                    ctx->rules.buf[i]->data.rule.name
-                );
+                    ctx->rules.buf[i]->data.rule.name);
                 fprintf_e(
                     stream,
                     "    pcc_value_table__resize(ctx->auxil, &chunk->values, %llu);\n",
-                    (ullong_t)ctx->rules.buf[i]->data.rule.vars.len
-                );
+                    (ullong_t)ctx->rules.buf[i]->data.rule.vars.len);
                 fprintf_e(
                     stream,
                     "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, %llu);\n",
-                    (ullong_t)ctx->rules.buf[i]->data.rule.capts.len
-                );
+                    (ullong_t)ctx->rules.buf[i]->data.rule.capts.len);
                 r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
                 fprintf_e(
                     stream,
                     "    ctx->level--;\n"
                     "    PCC_DEBUG(PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->pos - chunk->pos));\n"
                     "    return chunk;\n",
-                    ctx->rules.buf[i]->data.rule.name
-                );
+                    ctx->rules.buf[i]->data.rule.name);
                 if (r != CODE_REACH__ALWAYS_SUCCEED) {
                     fprintf_e(
                         stream,
@@ -4407,70 +4352,59 @@ static bool_t generate(context_t *ctx) {
                         "    PCC_DEBUG(PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->pos - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx->auxil, chunk);\n"
                         "    return NULL;\n",
-                        ctx->rules.buf[i]->data.rule.name
-                    );
+                        ctx->rules.buf[i]->data.rule.name);
                 }
                 fputs_e(
                     "}\n"
                     "\n",
-                    stream
-                );
+                    stream);
             }
         }
         fprintf_e(
             stream,
             "%s_context_t *%s_create(%s%sauxil) {\n",
             get_prefix(ctx), get_prefix(ctx),
-            at, ap ? "" : " "
-        );
+            at, ap ? "" : " ");
         fputs_e(
             "    return pcc_context__create(auxil);\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "int %s_parse(%s_context_t *ctx, %s%s*ret) {\n",
             get_prefix(ctx), get_prefix(ctx),
-            vt, vp ? "" : " "
-        );
+            vt, vp ? "" : " ");
         fputs_e(
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_thunk_array__init(ctx->auxil, &thunks, PCC_ARRAYSIZE);\n",
-            stream
-        );
+            stream);
         if (ctx->rules.len > 0) {
             fprintf_e(
                 stream,
                 "    if (pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &thunks, ret))\n",
-                ctx->rules.buf[0]->data.rule.name
-            );
+                ctx->rules.buf[0]->data.rule.name);
             fputs_e(
                 "        pcc_do_action(ctx, &thunks, ret);\n"
                 "    else\n"
                 "        PCC_ERROR(ctx->auxil);\n"
                 "    pcc_commit_buffer(ctx);\n",
-                stream
-            );
+                stream);
         }
         fputs_e(
             "    pcc_thunk_array__term(ctx->auxil, &thunks);\n"
             "    return pcc_refill_buffer(ctx, 1) >= 1;\n"
             "}\n"
             "\n",
-            stream
-        );
+            stream);
         fprintf_e(
             stream,
             "void %s_destroy(%s_context_t *ctx) {\n",
-            get_prefix(ctx), get_prefix(ctx)
-        );
+            get_prefix(ctx), get_prefix(ctx));
         fputs_e(
             "    pcc_context__destroy(ctx);\n"
             "}\n",
-            stream
-        );
+            stream);
     }
     {
         fputs_e(
@@ -4478,44 +4412,37 @@ static bool_t generate(context_t *ctx) {
             "extern \"C\" {\n"
             "#endif\n"
             "\n",
-            ctx->hfile
-        );
+            ctx->hfile);
         fprintf_e(
             ctx->hfile,
             "typedef struct %s_context_tag %s_context_t;\n"
             "\n",
-            get_prefix(ctx), get_prefix(ctx)
-        );
+            get_prefix(ctx), get_prefix(ctx));
         fprintf_e(
             ctx->hfile,
             "%s_context_t *%s_create(%s%sauxil);\n",
             get_prefix(ctx), get_prefix(ctx),
-            at, ap ? "" : " "
-        );
+            at, ap ? "" : " ");
         fprintf_e(
             ctx->hfile,
             "int %s_parse(%s_context_t *ctx, %s%s*ret);\n",
             get_prefix(ctx), get_prefix(ctx),
-            vt, vp ? "" : " "
-        );
+            vt, vp ? "" : " ");
         fprintf_e(
             ctx->hfile,
             "void %s_destroy(%s_context_t *ctx);\n",
-            get_prefix(ctx), get_prefix(ctx)
-        );
+            get_prefix(ctx), get_prefix(ctx));
         fputs_e(
             "\n"
             "#ifdef __cplusplus\n"
             "}\n"
             "#endif\n",
-            ctx->hfile
-        );
+            ctx->hfile);
         fprintf_e(
             ctx->hfile,
             "\n"
             "#endif /* !PCC_INCLUDED_%s */\n",
-            ctx->hid
-        );
+            ctx->hid);
     }
     {
         match_eol(ctx);
@@ -4573,10 +4500,12 @@ int main(int argc, char **argv) {
                 break;
             }
             else if (strcmp(argv[i], "--") == 0) {
-                i++; break;
+                i++;
+                break;
             }
             else if (argv[i][1] == 'o') {
-                const char *const o = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
+                const char *const o = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ? argv[i] :
+                                                                                          NULL;
                 if (o == NULL) {
                     print_error("Output base name missing\n");
                     fprintf(stderr, "\n");

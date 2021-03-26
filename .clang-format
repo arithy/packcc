@@ -1,0 +1,14 @@
+AlignAfterOpenBracket: DontAlign
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: true
+BraceWrapping:
+  BeforeElse: true
+BreakBeforeTernaryOperators: false
+BreakBeforeBraces: Custom
+ColumnLimit: 0
+IndentCaseBlocks: true
+IndentGotoLabels: false
+IndentWidth: 4
+SortIncludes: false
