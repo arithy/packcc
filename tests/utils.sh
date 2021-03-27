@@ -1,5 +1,5 @@
 test_generate () {
-    (cd "$1" && "$PACKCC" -o "parser" "input.peg")
+    (cd "$1" && "$PACKCC" -o "parser" "${2:-input.peg}")
 }
 
 test_compile() {
