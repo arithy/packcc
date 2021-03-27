@@ -4298,7 +4298,9 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    write_code_block(stream, s, strlen(s), 4);
+                    int t = strlen(s);
+                    while (s[t - 1] == ' ') t--;
+                    write_code_block(stream, s, t, 4);
                     k = c->len;
                     while (k > 0) {
                         k--;
