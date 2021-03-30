@@ -405,6 +405,51 @@ static size_t string_to_size_t(const char *str) {
 #undef M
 }
 
+static size_t find_first_trailing_space(const char *str, size_t start, size_t end, size_t *next) {
+    size_t j = start, i;
+    for (i = start; i < end; i++) {
+        switch (str[i]) {
+        case ' ':
+        case '\v':
+        case '\f':
+        case '\t':
+            break;
+        case '\n':
+            if (next) *next = i + 1;
+            return j;
+        case '\r':
+            if (i + 1 < end && str[i + 1] == '\n') i++;
+            if (next) *next = i + 1;
+            return j;
+        default:
+            j = i + 1;
+        }
+    }
+    if (next) *next = end;
+    return j;
+}
+
+static size_t count_indent_spaces(const char *str, size_t start, size_t end, size_t *next) {
+    size_t n = 0, i;
+    for (i = start; i < end; i++) {
+        switch (str[i]) {
+        case ' ':
+        case '\v':
+        case '\f':
+            n++;
+            break;
+        case '\t':
+            n = (n + 8) & ~7;
+            break;
+        default:
+            if (next) *next = i;
+            return n;
+        }
+    }
+    if (next) *next = end;
+    return n;
+}
+
 static bool_t is_filled_string(const char *str) {
     size_t i;
     for (i = 0; str[i]; i++) {
@@ -755,104 +800,44 @@ static void write_text(FILE *stream, const char *ptr, size_t len) {
 }
 
 static void write_code_block(FILE *stream, const char *ptr, size_t len, size_t indent) {
-    size_t i;
-    for (i = 0; i < len; i++) {
-        if (ptr[i] == '\n') break;
-        if (ptr[i] == '\r') {
-            if (i + 1 < len && ptr[i + 1] == '\n') i++;
-            break;
-        }
+    size_t i, j, k;
+    j = find_first_trailing_space(ptr, 0, len, &k);
+    for (i = 0; i < j; i++) {
+        if (
+            ptr[i] != ' '  &&
+            ptr[i] != '\v' &&
+            ptr[i] != '\f' &&
+            ptr[i] != '\t'
+        ) break;
     }
-    if (i < len) {
-        bool_t s = TRUE;
-        const size_t k = i + 1;
-        size_t l = 0, m = VOID_VALUE;
-        for (i = k; i < len; i++) {
-            switch (ptr[i]) {
-            case ' ':
-            case '\v':
-            case '\f':
-                if (s) l++;
-                break;
-            case '\t':
-                if (s) l = (l + 8) & ~7;
-                break;
-            case '\n':
-                s = TRUE;
-                l = 0;
-                break;
-            case '\r':
-                if (i + 1 < len && ptr[i + 1] == '\n') i++;
-                s = TRUE;
-                l = 0;
-                break;
-            default:
-                s = FALSE;
-                m = (m != VOID_VALUE && m < l) ? m : l;
+    if (i < j) {
+        write_characters(stream, ' ', indent);
+        write_text(stream, ptr + i, j - i);
+        fputc_e('\n', stream);
+    }
+    if (k < len) {
+        size_t m = VOID_VALUE;
+        size_t h;
+        for (i = k; i < len; i = h) {
+            j = find_first_trailing_space(ptr, i, len, &h);
+            if (i < j) {
+                const size_t l = count_indent_spaces(ptr, i, j, NULL);
+                if (m == VOID_VALUE || m > l) m = l;
             }
         }
-        for (i = 0; i < k; i++) {
-            if (
-                ptr[i] != ' '  &&
-                ptr[i] != '\v' &&
-                ptr[i] != '\f' &&
-                ptr[i] != '\t' &&
-                ptr[i] != '\n' &&
-                ptr[i] != '\r'
-            ) break;
-        }
-        if (i < k) {
-            write_characters(stream, ' ', indent);
-            write_text(stream, ptr + i, k - i);
-        }
-        s = TRUE;
-        l = 0;
-        for (i = k; i < len; i++) {
-            switch (ptr[i]) {
-            case ' ':
-            case '\v':
-            case '\f':
-                if (s) l++; else fputc_e(ptr[i], stream);
-                break;
-            case '\t':
-                if (s) l = (l + 8) & ~7; else fputc_e(ptr[i], stream);
-                break;
-            case '\n':
+        for (i = k; i < len; i = h) {
+            j = find_first_trailing_space(ptr, i, len, &h);
+            if (i < j) {
+                const size_t l = count_indent_spaces(ptr, i, j, &i);
+                assert(m != VOID_VALUE); /* m must have a valid value */
+                assert(l >= m);
+                write_characters(stream, ' ', l - m + indent);
+                write_text(stream, ptr + i, j - i);
                 fputc_e('\n', stream);
-                s = TRUE;
-                l = 0;
-                break;
-            case '\r':
-                if (i + 1 < len && ptr[i + 1] == '\n') i++;
-                fputc_e('\n', stream);
-                s = TRUE;
-                l = 0;
-                break;
-            default:
-                if (s) {
-                    assert(m != VOID_VALUE); /* m must have a valid value */
-                    assert(l >= m);
-                    write_characters(stream, ' ', l - m + indent);
-                    s = FALSE;
-                }
-                fputc_e(ptr[i], stream);
             }
-        }
-        if (!s) fputc_e('\n', stream);
-    }
-    else {
-        for (i = 0; i < len; i++) {
-            if (
-                ptr[i] != ' '  &&
-                ptr[i] != '\v' &&
-                ptr[i] != '\f' &&
-                ptr[i] != '\t'
-            ) break;
-        }
-        if (i < len) {
-            write_characters(stream, ' ', indent);
-            write_text(stream, ptr + i, len - i);
-            fputc_e('\n', stream);
+            else if (h < len) {
+                fputc_e('\n', stream);
+            }
         }
     }
 }
@@ -4298,9 +4283,7 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    int t = strlen(s);
-                    while (s[t - 1] == ' ') t--;
-                    write_code_block(stream, s, t, 4);
+                    write_code_block(stream, s, strlen(s), 4);
                     k = c->len;
                     while (k > 0) {
                         k--;
