@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS_D=-Wall -Wextra -Wno-unused-parameter -pedantic -O0 -g2
-CFLAGS_R=-Wall -Wextra -Wno-unused-parameter -pedantic -O2 -DNDEBUG
+CFLAGS_D=-std=gnu89 -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -O0 -g2
+CFLAGS_R=-std=gnu89 -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -O2 -DNDEBUG
 LDFLAGS_D=
 LDFLAGS_R=
 
