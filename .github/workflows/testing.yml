@@ -26,6 +26,10 @@ jobs:
         tar zxvf bats-core-1.2.1.tar.gz
         cd bats-core-1.2.1 &&
         sudo ./install.sh /usr/local
+    - name: install uncrustify
+      run: |
+        curl -LO http://launchpadlibrarian.net/516341795/uncrustify_0.72.0+dfsg1-2_amd64.deb
+        sudo dpkg -i uncrustify_0.72.0+dfsg1-2_amd64.deb || true
     - name: build packcc
       run: |
         (

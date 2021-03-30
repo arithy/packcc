@@ -425,14 +425,14 @@ static bool_t is_identifier_string(const char *str) {
     if (!(
         (str[0] >= 'a' && str[0] <= 'z') ||
         (str[0] >= 'A' && str[0] <= 'Z') ||
-         str[0] == '_'
+        str[0] == '_'
     )) return FALSE;
     for (i = 1; str[i]; i++) {
         if (!(
             (str[i] >= 'a' && str[i] <= 'z') ||
             (str[i] >= 'A' && str[i] <= 'Z') ||
             (str[i] >= '0' && str[i] <= '9') ||
-             str[i] == '_'
+            str[i] == '_'
         )) return FALSE;
     }
     return TRUE;
@@ -732,7 +732,7 @@ static void make_header_identifier(char *str) {
     for (i = 0; str[i]; i++) {
         str[i] =
             ((str[i] >= 'A' && str[i] <= 'Z') || (str[i] >= '0' && str[i] <= '9')) ? str[i] :
-             (str[i] >= 'a' && str[i] <= 'z') ? str[i] - 'a' + 'A' : '_';
+            (str[i] >= 'a' && str[i] <= 'z') ? str[i] - 'a' + 'A' : '_';
     }
 }
 
@@ -1204,7 +1204,7 @@ static void make_rulehash(context_t *ctx) {
         }
         ctx->rulehash.buf[j] = ctx->rules.buf[i];
 
-EXCEPTION:;
+    EXCEPTION:;
     }
 }
 
@@ -1445,7 +1445,7 @@ static void dump_escaped(const char *s) {
         fprintf(stdout, "null");
         return;
     }
-    while(*s) {
+    while (*s) {
         escape_character(*s++, &buf);
         fprintf(stdout, "%s", buf);
     }
@@ -2075,7 +2075,7 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             match_spaces(ctx);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
-            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, q - p -2);
+            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -2321,7 +2321,7 @@ static bool_t parse(context_t *ctx) {
             "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
             "}\n"
-            "#endif /* defined __GNUC__ && defined _WIN32 */ \n"
+            "#endif /* defined __GNUC__ && defined _WIN32 */\n"
             "#endif /* !_MSC_VER */\n"
             "\n"
             "#define PCC_DBG_EVALUATE 0\n"
@@ -3072,8 +3072,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_matching_string_code(gen, node->data.string.value, onfail, indent, bare);
     case NODE_CHARCLASS:
         return gen->ascii ?
-            generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
-            generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
+               generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
+               generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
     case NODE_QUANTITY:
         return generate_quantifying_code(gen, node->data.quantity.expr, node->data.quantity.min, node->data.quantity.max, onfail, indent, bare);
     case NODE_PREDICATE:
@@ -4298,7 +4298,9 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    write_code_block(stream, s, strlen(s), 4);
+                    int t = strlen(s);
+                    while (s[t - 1] == ' ') t--;
+                    write_code_block(stream, s, t, 4);
                     k = c->len;
                     while (k > 0) {
                         k--;
