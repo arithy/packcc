@@ -2,9 +2,9 @@
 
 ## How to run the tests
 
-For running the tests, we assume you have `bats-core`.
+For running the tests, we assume you have `bats-core` and `uncrustify`.
 
-If you don't have it installed, you can do so using your package manager or from its tarball:
+If you do not have `bats-core` installed, you can do it using your package manager or from its tarball:
 ```
 $ curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz &&
   tar zxvf bats-core-1.2.1.tar.gz &&
@@ -12,7 +12,18 @@ $ curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archi
   sudo ./install.sh /usr/local
 ```
 
-After installing `bats-core-1.2.1`, you can run the tests using `tests/test.sh` script:
+If you do not have `uncrustify` installed, you can do it using your package manager or from its repository:
+```
+$ git clone https://github.com/uncrustify/uncrustify &&
+  cd uncrustify &&
+  mkdir -p build &&
+  cd build &&
+  cmake .. &&
+  make &&
+  sudo make install
+```
+
+After installing `bats-core-1.2.1` and `uncrustify`, you can run the tests using `tests/test.sh` script:
 ```
 $ ./test.sh
  ✓ Testing basic.d - generation
@@ -52,7 +63,7 @@ Each test automatically performs three or more test cases:
 
 ## How to write a customized test
 
-Sometimes the auto-generated test is not exactly what you need. In such a case, you can simply create a custmized test on your own:
+Sometimes the auto-generated test is not exactly what you need. In this case, you can simply create a customized test on your own:
 
 1. Create a directory with a suitable name, e.g.: `tests/sequence.d`.
 2. Create one or more `*.bats` files in this directory.
