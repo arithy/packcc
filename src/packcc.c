@@ -583,7 +583,7 @@ static size_t utf8_to_utf32(const char *seq, int *out) { /* without checking UTF
     return n;
 }
 
-static bool_t unescape_string(char *str) {
+static bool_t unescape_string(char *str, bool_t cls) { /* cls: TRUE if used for character class matching */
     bool_t b = TRUE;
     size_t i, j;
     for (j = 0, i = 0; str[i]; i++) {
@@ -591,7 +591,8 @@ static bool_t unescape_string(char *str) {
             i++;
             switch (str[i]) {
             case '\0': str[j++] = '\\'; str[j] = '\0'; return FALSE;
-            case '\\': str[j++] = '\\'; break;
+            case '\'': str[j++] = '\''; break;
+            case '\"': str[j++] = '\"'; break;
             case '0': str[j++] = '\x00'; break;
             case 'a': str[j++] = '\x07'; break;
             case 'b': str[j++] = '\x08'; break;
@@ -706,6 +707,10 @@ static bool_t unescape_string(char *str) {
                 break;
             case '\n': break;
             case '\r': if (str[i + 1] == '\n') i++; break;
+            case '\\':
+                if (cls) str[j++] = '\\'; /* left for character class matching (ex. considering [\^\]\\]) */
+                str[j++] = '\\';
+                break;
             default: str[j++] = '\\'; str[j++] = str[i];
             }
         }
@@ -1955,7 +1960,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         match_spaces(ctx);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
-        if (!unescape_string(n_p->data.charclass.value)) {
+        if (!unescape_string(n_p->data.charclass.value, TRUE)) {
             print_error("%s:%lu:%lu: Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
@@ -1972,7 +1977,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         match_spaces(ctx);
         n_p = create_node(NODE_STRING);
         n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
-        if (!unescape_string(n_p->data.string.value)) {
+        if (!unescape_string(n_p->data.string.value, FALSE)) {
             print_error("%s:%lu:%lu: Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
@@ -2238,7 +2243,7 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
             q = ctx->bufpos;
             match_spaces(ctx);
             s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
-            if (!unescape_string(s)) {
+            if (!unescape_string(s, FALSE)) {
                 print_error("%s:%lu:%lu: Illegal escape sequence\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
             }
