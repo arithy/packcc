@@ -591,6 +591,7 @@ static bool_t unescape_string(char *str) {
             i++;
             switch (str[i]) {
             case '\0': str[j++] = '\\'; str[j] = '\0'; return FALSE;
+            case '\\': str[j++] = '\\'; break;
             case '0': str[j++] = '\x00'; break;
             case 'a': str[j++] = '\x07'; break;
             case 'b': str[j++] = '\x08'; break;
