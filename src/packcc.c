@@ -46,14 +46,16 @@
 
 #ifndef _MSC_VER
 #if defined __GNUC__ && defined _WIN32 /* MinGW */
+#ifndef PCC_USE_SYSTEM_STRNLEN
 #define strnlen(str, maxlen) strnlen_(str, maxlen)
 static size_t strnlen_(const char *str, size_t maxlen) {
     size_t i;
     for (i = 0; i < maxlen && str[i]; i++);
     return i;
 }
-#endif
-#endif
+#endif /* !PCC_USE_SYSTEM_STRNLEN */
+#endif /* defined __GNUC__ && defined _WIN32 */
+#endif /* !_MSC_VER */
 
 #ifdef _MSC_VER
 #define snprintf _snprintf
@@ -2298,12 +2300,14 @@ static bool_t parse(context_t *ctx) {
             "\n"
             "#ifndef _MSC_VER\n"
             "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
+            "#ifndef PCC_USE_SYSTEM_STRNLEN\n"
             "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
             "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
             "}\n"
+            "#endif /* !PCC_USE_SYSTEM_STRNLEN */\n"
             "#endif /* defined __GNUC__ && defined _WIN32 */\n"
             "#endif /* !_MSC_VER */\n"
             "\n"
