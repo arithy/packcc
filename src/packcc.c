@@ -4273,12 +4273,12 @@ static bool_t generate(context_t *ctx) {
                         );
                         fprintf_e(
                             stream,
-                            "#define _%lus ((const size_t)__pcc_in->data.leaf.capts.buf[%lu]->range.start)\n",
+                            "#define _%lus ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.start))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         fprintf_e(
                             stream,
-                            "#define _%lue ((const size_t)__pcc_in->data.leaf.capts.buf[%lu]->range.end)\n",
+                            "#define _%lue ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.end))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         k++;
