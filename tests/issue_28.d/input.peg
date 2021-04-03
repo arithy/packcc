@@ -1,0 +1,3 @@
+top <- rule+ { PRINT($0); }
+rule <- "A;" / _
+_ <- [ \n]*

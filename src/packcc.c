@@ -37,7 +37,6 @@
 #endif
 #endif
 
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -47,14 +46,16 @@
 
 #ifndef _MSC_VER
 #if defined __GNUC__ && defined _WIN32 /* MinGW */
+#ifndef PCC_USE_SYSTEM_STRNLEN
 #define strnlen(str, maxlen) strnlen_(str, maxlen)
 static size_t strnlen_(const char *str, size_t maxlen) {
     size_t i;
     for (i = 0; i < maxlen && str[i]; i++);
     return i;
 }
-#endif
-#endif
+#endif /* !PCC_USE_SYSTEM_STRNLEN */
+#endif /* defined __GNUC__ && defined _WIN32 */
+#endif /* !_MSC_VER */
 
 #ifdef _MSC_VER
 #define snprintf _snprintf
@@ -67,7 +68,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #define __attribute__(x)
 #endif
 
-#define VERSION "1.4.0"
+#define VERSION "1.5.0"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -240,8 +241,9 @@ typedef struct context_tag {
     code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
-    ptrdiff_t linepos;   /* the beginning position of the current line in the character buffer; can be negative when not left in the buffer */
-    size_t bufpos;       /* the current parsing position in the character buffer */
+    size_t linepos;      /* the beginning position in the PEG file of the current line */
+    size_t bufpos;       /* the position in the PEG file of the first character currently buffered */
+    size_t bufcur;       /* the current parsing position in the character buffer */
     char_array_t buffer; /* the character buffer */
     node_array_t rules;  /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
@@ -268,12 +270,6 @@ typedef enum code_reach_tag {
 } code_reach_t;
 
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
-
-static ptrdiff_t subtract_size_t(size_t a, size_t b) {
-    assert((ptrdiff_t)a >= 0);
-    assert((ptrdiff_t)b >= 0);
-    return (ptrdiff_t)a - (ptrdiff_t)b;
-}
 
 static int print_error(const char *format, ...) __attribute__((format(printf, 1, 2))) {
     int n;
@@ -909,10 +905,9 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
-static size_t column_number(const context_t *ctx) {
-    assert((ptrdiff_t)ctx->bufpos >= 0);
-    assert((ptrdiff_t)ctx->bufpos >= ctx->linepos);
-    return (size_t)((ptrdiff_t)ctx->bufpos - ctx->linepos);
+static size_t column_number(const context_t *ctx) { /* 0-based */
+    assert(ctx->bufpos + ctx->bufcur >= ctx->linepos);
+    return ctx->bufpos + ctx->bufcur - ctx->linepos;
 }
 
 static void char_array__init(char_array_t *array, size_t max) {
@@ -1021,6 +1016,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->linenum = 0;
     ctx->linepos = 0;
     ctx->bufpos = 0;
+    ctx->bufcur = 0;
     char_array__init(&ctx->buffer, BUFFER_INIT_SIZE);
     node_array__init(&ctx->rules, ARRAY_INIT_SIZE);
     ctx->rulehash.mod = 0;
@@ -1568,23 +1564,21 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
 }
 
 static size_t refill_buffer(context_t *ctx, size_t num) {
-    const size_t n = ctx->buffer.len - ctx->bufpos;
-    assert(ctx->buffer.len >= ctx->bufpos);
-    if (n >= num) return n;
-    while (ctx->buffer.len < ctx->bufpos + num) {
+    if (ctx->buffer.len >= ctx->bufcur + num) return ctx->buffer.len - ctx->bufcur;
+    while (ctx->buffer.len < ctx->bufcur + num) {
         const int c = fgetc_e(ctx->ifile);
         if (c == EOF) break;
         char_array__add(&ctx->buffer, (char)c);
     }
-    return ctx->buffer.len - ctx->bufpos;
+    return ctx->buffer.len - ctx->bufcur;
 }
 
 static void commit_buffer(context_t *ctx) {
-    assert(ctx->buffer.len >= ctx->bufpos);
-    ctx->linepos -= (ptrdiff_t)ctx->bufpos;
-    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufpos, ctx->buffer.len - ctx->bufpos);
-    ctx->buffer.len -= ctx->bufpos;
-    ctx->bufpos = 0;
+    assert(ctx->buffer.len >= ctx->bufcur);
+    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufcur, ctx->buffer.len - ctx->bufcur);
+    ctx->buffer.len -= ctx->bufcur;
+    ctx->bufpos += ctx->bufcur;
+    ctx->bufcur = 0;
 }
 
 static bool_t match_eof(context_t *ctx) {
@@ -1593,19 +1587,19 @@ static bool_t match_eof(context_t *ctx) {
 
 static bool_t match_eol(context_t *ctx) {
     if (refill_buffer(ctx, 1) >= 1) {
-        switch (ctx->buffer.buf[ctx->bufpos]) {
+        switch (ctx->buffer.buf[ctx->bufcur]) {
         case '\n':
-            ctx->bufpos++;
+            ctx->bufcur++;
             ctx->linenum++;
-            ctx->linepos = (ptrdiff_t)ctx->bufpos;
+            ctx->linepos = ctx->bufpos + ctx->bufcur;
             return TRUE;
         case '\r':
-            ctx->bufpos++;
+            ctx->bufcur++;
             if (refill_buffer(ctx, 1) >= 1) {
-                if (ctx->buffer.buf[ctx->bufpos] == '\n') ctx->bufpos++;
+                if (ctx->buffer.buf[ctx->bufcur] == '\n') ctx->bufcur++;
             }
             ctx->linenum++;
-            ctx->linepos = (ptrdiff_t)ctx->bufpos;
+            ctx->linepos = ctx->bufpos + ctx->bufcur;
             return TRUE;
         }
     }
@@ -1614,8 +1608,8 @@ static bool_t match_eol(context_t *ctx) {
 
 static bool_t match_character(context_t *ctx, char ch) {
     if (refill_buffer(ctx, 1) >= 1) {
-        if (ctx->buffer.buf[ctx->bufpos] == ch) {
-            ctx->bufpos++;
+        if (ctx->buffer.buf[ctx->bufcur] == ch) {
+            ctx->bufcur++;
             return TRUE;
         }
     }
@@ -1624,9 +1618,9 @@ static bool_t match_character(context_t *ctx, char ch) {
 
 static bool_t match_character_range(context_t *ctx, char min, char max) {
     if (refill_buffer(ctx, 1) >= 1) {
-        const char c = ctx->buffer.buf[ctx->bufpos];
+        const char c = ctx->buffer.buf[ctx->bufcur];
         if (c >= min && c <= max) {
-            ctx->bufpos++;
+            ctx->bufcur++;
             return TRUE;
         }
     }
@@ -1635,11 +1629,11 @@ static bool_t match_character_range(context_t *ctx, char min, char max) {
 
 static bool_t match_character_set(context_t *ctx, const char *chs) {
     if (refill_buffer(ctx, 1) >= 1) {
-        const char c = ctx->buffer.buf[ctx->bufpos];
+        const char c = ctx->buffer.buf[ctx->bufcur];
         size_t i;
         for (i = 0; chs[i]; i++) {
             if (c == chs[i]) {
-                ctx->bufpos++;
+                ctx->bufcur++;
                 return TRUE;
             }
         }
@@ -1649,7 +1643,7 @@ static bool_t match_character_set(context_t *ctx, const char *chs) {
 
 static bool_t match_character_any(context_t *ctx) {
     if (refill_buffer(ctx, 1) >= 1) {
-        ctx->bufpos++;
+        ctx->bufcur++;
         return TRUE;
     }
     return FALSE;
@@ -1658,8 +1652,8 @@ static bool_t match_character_any(context_t *ctx) {
 static bool_t match_string(context_t *ctx, const char *str) {
     const size_t n = strlen(str);
     if (refill_buffer(ctx, n) >= n) {
-        if (strncmp(ctx->buffer.buf + ctx->bufpos, str, n) == 0) {
-            ctx->bufpos += n;
+        if (strncmp(ctx->buffer.buf + ctx->bufcur, str, n) == 0) {
+            ctx->bufcur += n;
             return TRUE;
         }
     }
@@ -1681,7 +1675,7 @@ static bool_t match_section_line_(context_t *ctx, const char *head) {
 static bool_t match_section_line_continuable_(context_t *ctx, const char *head) {
     if (match_string(ctx, head)) {
         while (!match_eof(ctx)) {
-            const size_t p = ctx->bufpos;
+            const size_t p = ctx->bufcur;
             if (match_eol(ctx)) {
                 if (ctx->buffer.buf[p - 1] != '\\') break;
             }
@@ -1825,7 +1819,7 @@ static bool_t match_code_block(context_t *ctx) {
             else {
                 if (!match_eol(ctx)) {
                     if (match_character(ctx, '$')) {
-                        ctx->buffer.buf[ctx->bufpos - 1] = '_';
+                        ctx->buffer.buf[ctx->bufcur - 1] = '_';
                     }
                     else {
                         match_character_any(ctx);
@@ -1845,19 +1839,19 @@ static bool_t match_footer_start(context_t *ctx) {
 static node_t *parse_expression(context_t *ctx, node_t *rule);
 
 static node_t *parse_primary(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     node_t *n_p = NULL;
     if (match_identifier(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         size_t r = VOID_VALUE, s = VOID_VALUE;
         match_spaces(ctx);
         if (match_character(ctx, ':')) {
             match_spaces(ctx);
-            r = ctx->bufpos;
+            r = ctx->bufcur;
             if (!match_identifier(ctx)) goto EXCEPTION;
-            s = ctx->bufpos;
+            s = ctx->bufcur;
             match_spaces(ctx);
         }
         if (match_string(ctx, "<-")) goto EXCEPTION;
@@ -1914,9 +1908,9 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
     else if (match_character(ctx, '$')) {
         size_t p;
         match_spaces(ctx);
-        p = ctx->bufpos;
+        p = ctx->bufcur;
         if (match_number(ctx)) {
-            const size_t q = ctx->bufpos;
+            const size_t q = ctx->bufcur;
             char *s;
             match_spaces(ctx);
             n_p = create_node(NODE_EXPAND);
@@ -1956,7 +1950,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         }
     }
     else if (match_character_class(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
@@ -1973,7 +1967,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         }
     }
     else if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_STRING);
         n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
@@ -1987,7 +1981,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         }
     }
     else if (match_code_block(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_ACTION);
         n_p->data.action.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
@@ -2001,14 +1995,14 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_p);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_term(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     node_t *n_p = NULL;
@@ -2060,9 +2054,9 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
     if (match_character(ctx, '~')) {
         size_t p;
         match_spaces(ctx);
-        p = ctx->bufpos;
+        p = ctx->bufcur;
         if (match_code_block(ctx)) {
-            const size_t q = ctx->bufpos;
+            const size_t q = ctx->bufcur;
             match_spaces(ctx);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
@@ -2081,14 +2075,14 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_r);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_sequence(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     node_array_t *a_t = NULL;
@@ -2113,14 +2107,14 @@ static node_t *parse_sequence(context_t *ctx, node_t *rule) {
     return n_s;
 
 EXCEPTION:;
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_expression(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     size_t q;
@@ -2129,9 +2123,9 @@ static node_t *parse_expression(context_t *ctx, node_t *rule) {
     node_t *n_e = NULL;
     n_s = parse_sequence(ctx, rule);
     if (n_s == NULL) goto EXCEPTION;
-    q = ctx->bufpos;
+    q = ctx->bufcur;
     if (match_character(ctx, '/')) {
-        ctx->bufpos = q;
+        ctx->bufcur = q;
         n_e = create_node(NODE_ALTERNATE);
         a_s = &n_e->data.alternate.nodes;
         node_array__add(a_s, n_s);
@@ -2149,20 +2143,20 @@ static node_t *parse_expression(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_e);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_rule(context_t *ctx) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     size_t q;
     node_t *n_r = NULL;
     if (!match_identifier(ctx)) goto EXCEPTION;
-    q = ctx->bufpos;
+    q = ctx->bufcur;
     match_spaces(ctx);
     if (!match_string(ctx, "<-")) goto EXCEPTION;
     match_spaces(ctx);
@@ -2177,9 +2171,9 @@ static node_t *parse_rule(context_t *ctx) {
 
 EXCEPTION:;
     destroy_node(n_r);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
@@ -2207,9 +2201,9 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *o
     if (!match_string(ctx, name)) return FALSE;
     match_spaces(ctx);
     {
-        const size_t p = ctx->bufpos;
+        const size_t p = ctx->bufcur;
         if (match_code_block(ctx)) {
-            const size_t q = ctx->bufpos;
+            const size_t q = ctx->bufcur;
             match_spaces(ctx);
             if (output1 != NULL) {
                 write_code_block(output1, ctx->buffer.buf + p + 1, q - p - 2, 0);
@@ -2235,12 +2229,12 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
     match_spaces(ctx);
     {
         char *s = NULL;
-        const size_t p = ctx->bufpos;
+        const size_t p = ctx->bufcur;
         const size_t lv = ctx->linenum;
         const size_t mv = column_number(ctx);
         size_t q;
         if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
-            q = ctx->bufpos;
+            q = ctx->bufcur;
             match_spaces(ctx);
             s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             if (!unescape_string(s, FALSE)) {
@@ -2306,12 +2300,14 @@ static bool_t parse(context_t *ctx) {
             "\n"
             "#ifndef _MSC_VER\n"
             "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
+            "#ifndef PCC_USE_SYSTEM_STRNLEN\n"
             "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
             "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < maxlen && str[i]; i++);\n"
             "    return i;\n"
             "}\n"
+            "#endif /* !PCC_USE_SYSTEM_STRNLEN */\n"
             "#endif /* defined __GNUC__ && defined _WIN32 */\n"
             "#endif /* !_MSC_VER */\n"
             "\n"
@@ -2343,7 +2339,7 @@ static bool_t parse(context_t *ctx) {
         for (;;) {
             size_t p, l, m;
             if (match_eof(ctx) || match_footer_start(ctx)) break;
-            p = ctx->bufpos;
+            p = ctx->bufcur;
             l = ctx->linenum;
             m = column_number(ctx);
             if (
@@ -2372,7 +2368,7 @@ static bool_t parse(context_t *ctx) {
                         b = FALSE;
                     }
                     ctx->linenum = l;
-                    ctx->linepos = subtract_size_t(p, m);
+                    ctx->linepos = ctx->bufpos + p - m;
                     if (!match_identifier(ctx) && !match_spaces(ctx)) match_character_any(ctx);
                     continue;
                 }
@@ -2435,14 +2431,14 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             fprintf_e(gen->stream, "pcc_refill_buffer(ctx, %lu) < %lu ||\n", (ulong_t)n, (ulong_t)n);
             for (i = 0; i < n - 1; i++) {
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->pos)[%lu] != '%s' ||\n", (ulong_t)i, escape_character(value[i], &s));
+                fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->cur)[%lu] != '%s' ||\n", (ulong_t)i, escape_character(value[i], &s));
             }
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->pos)[%lu] != '%s'\n", (ulong_t)i, escape_character(value[i], &s));
+            fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->cur)[%lu] != '%s'\n", (ulong_t)i, escape_character(value[i], &s));
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fprintf_e(gen->stream, "ctx->pos += %lu;\n", (ulong_t)n);
+            fprintf_e(gen->stream, "ctx->cur += %lu;\n", (ulong_t)n);
             return CODE_REACH__BOTH;
         }
         else {
@@ -2451,11 +2447,11 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             write_characters(gen->stream, ' ', indent + 4);
             fputs_e("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf_e(gen->stream, "ctx->buffer.buf[ctx->pos] != '%s'\n", escape_character(value[0], &s));
+            fprintf_e(gen->stream, "ctx->buffer.buf[ctx->cur] != '%s'\n", escape_character(value[0], &s));
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fputs_e("ctx->pos++;\n", gen->stream);
+            fputs_e("ctx->cur++;\n", gen->stream);
             return CODE_REACH__BOTH;
         }
     }
@@ -2480,11 +2476,11 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                     write_characters(gen->stream, ' ', indent + 4);
                     fputs_e("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
                     write_characters(gen->stream, ' ', indent + 4);
-                    fprintf_e(gen->stream, "ctx->buffer.buf[ctx->pos] == '%s'\n", escape_character(value[i], &s));
+                    fprintf_e(gen->stream, "ctx->buffer.buf[ctx->cur] == '%s'\n", escape_character(value[i], &s));
                     write_characters(gen->stream, ' ', indent);
                     fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
                     write_characters(gen->stream, ' ', indent);
-                    fputs_e("ctx->pos++;\n", gen->stream);
+                    fputs_e("ctx->cur++;\n", gen->stream);
                     return CODE_REACH__BOTH;
                 }
                 else {
@@ -2498,7 +2494,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                     write_characters(gen->stream, ' ', indent);
                     fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
                     write_characters(gen->stream, ' ', indent);
-                    fputs_e("c = ctx->buffer.buf[ctx->pos];\n", gen->stream);
+                    fputs_e("c = ctx->buffer.buf[ctx->cur];\n", gen->stream);
                     if (i + 3 == n && value[i] != '\\' && value[i + 1] == '-') {
                         write_characters(gen->stream, ' ', indent);
                         fprintf_e(gen->stream,
@@ -2526,7 +2522,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                         fprintf_e(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
                     }
                     write_characters(gen->stream, ' ', indent);
-                    fputs_e("ctx->pos++;\n", gen->stream);
+                    fputs_e("ctx->cur++;\n", gen->stream);
                     if (!bare) {
                         indent -= 4;
                         write_characters(gen->stream, ' ', indent);
@@ -2541,11 +2537,11 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                 write_characters(gen->stream, ' ', indent + 4);
                 fputs_e("pcc_refill_buffer(ctx, 1) < 1 ||\n", gen->stream);
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf_e(gen->stream, "ctx->buffer.buf[ctx->pos] != '%s'\n", escape_character(value[0], &s));
+                fprintf_e(gen->stream, "ctx->buffer.buf[ctx->cur] != '%s'\n", escape_character(value[0], &s));
                 write_characters(gen->stream, ' ', indent);
                 fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
                 write_characters(gen->stream, ' ', indent);
-                fputs_e("ctx->pos++;\n", gen->stream);
+                fputs_e("ctx->cur++;\n", gen->stream);
                 return CODE_REACH__BOTH;
             }
         }
@@ -2559,7 +2555,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
         write_characters(gen->stream, ' ', indent);
         fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
         write_characters(gen->stream, ' ', indent);
-        fputs_e("ctx->pos++;\n", gen->stream);
+        fputs_e("ctx->cur++;\n", gen->stream);
         return CODE_REACH__BOTH;
     }
 }
@@ -2612,7 +2608,7 @@ static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const
             fprintf_e(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
         }
         write_characters(gen->stream, ' ', indent);
-        fputs_e("ctx->pos += n;\n", gen->stream);
+        fputs_e("ctx->cur += n;\n", gen->stream);
         if (!bare) {
             indent -= 4;
             write_characters(gen->stream, ' ', indent);
@@ -2639,7 +2635,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         }
         if (min > 0) {
             write_characters(gen->stream, ' ', indent);
-            fputs_e("const size_t p0 = ctx->pos;\n", gen->stream);
+            fputs_e("const size_t p0 = ctx->cur;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fputs_e("const size_t n0 = chunk->thunks.len;\n", gen->stream);
         }
@@ -2651,21 +2647,21 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         else
             fprintf_e(gen->stream, "for (i = 0; i < %d; i++) {\n", max);
         write_characters(gen->stream, ' ', indent + 4);
-        fputs_e("const size_t p = ctx->pos;\n", gen->stream);
+        fputs_e("const size_t p = ctx->cur;\n", gen->stream);
         write_characters(gen->stream, ' ', indent + 4);
         fputs_e("const size_t n = chunk->thunks.len;\n", gen->stream);
         {
             const int l = ++gen->label;
             r = generate_code(gen, expr, l, indent + 4, FALSE);
             write_characters(gen->stream, ' ', indent + 4);
-            fputs_e("if (ctx->pos == p) break;\n", gen->stream);
+            fputs_e("if (ctx->cur == p) break;\n", gen->stream);
             if (r != CODE_REACH__ALWAYS_SUCCEED) {
                 write_characters(gen->stream, ' ', indent + 4);
                 fputs_e("continue;\n", gen->stream);
                 write_characters(gen->stream, ' ', indent);
                 fprintf_e(gen->stream, "L%04d:;\n", l);
                 write_characters(gen->stream, ' ', indent + 4);
-                fputs_e("ctx->pos = p;\n", gen->stream);
+                fputs_e("ctx->cur = p;\n", gen->stream);
                 write_characters(gen->stream, ' ', indent + 4);
                 fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
                 write_characters(gen->stream, ' ', indent + 4);
@@ -2678,7 +2674,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "if (i < %d) {\n", min);
             write_characters(gen->stream, ' ', indent + 4);
-            fputs_e("ctx->pos = p0;\n", gen->stream);
+            fputs_e("ctx->cur = p0;\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
             fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n0);\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
@@ -2704,7 +2700,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 indent += 4;
             }
             write_characters(gen->stream, ' ', indent);
-            fputs_e("const size_t p = ctx->pos;\n", gen->stream);
+            fputs_e("const size_t p = ctx->cur;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fputs_e("const size_t n = chunk->thunks.len;\n", gen->stream);
             {
@@ -2716,7 +2712,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                     if (indent > 4) write_characters(gen->stream, ' ', indent - 4);
                     fprintf_e(gen->stream, "L%04d:;\n", l);
                     write_characters(gen->stream, ' ', indent);
-                    fputs_e("ctx->pos = p;\n", gen->stream);
+                    fputs_e("ctx->cur = p;\n", gen->stream);
                     write_characters(gen->stream, ' ', indent);
                     fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
                     if (indent > 4) write_characters(gen->stream, ' ', indent - 4);
@@ -2745,7 +2741,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fputs_e("const size_t p = ctx->pos;\n", gen->stream);
+    fputs_e("const size_t p = ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
     fputs_e("const size_t n = chunk->thunks.len;\n", gen->stream);
     if (neg) {
@@ -2753,7 +2749,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         r = generate_code(gen, expr, l, indent, FALSE);
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
-            fputs_e("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->cur = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
@@ -2763,7 +2759,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             if (indent > 4) write_characters(gen->stream, ' ', indent - 4);
             fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
-            fputs_e("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->cur = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         }
@@ -2779,7 +2775,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         r = generate_code(gen, expr, l, indent, FALSE);
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
-            fputs_e("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->cur = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         }
@@ -2791,7 +2787,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             if (indent > 4) write_characters(gen->stream, ' ', indent - 4);
             fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
-            fputs_e("ctx->pos = p;\n", gen->stream);
+            fputs_e("ctx->cur = p;\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
@@ -2840,7 +2836,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fputs_e("const size_t p = ctx->pos;\n", gen->stream);
+    fputs_e("const size_t p = ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
     fputs_e("const size_t n = chunk->thunks.len;\n", gen->stream);
     for (i = 0; i < nodes->len; i++) {
@@ -2872,7 +2868,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         if (indent > 4) write_characters(gen->stream, ' ', indent - 4);
         fprintf_e(gen->stream, "L%04d:;\n", l);
         write_characters(gen->stream, ' ', indent);
-        fputs_e("ctx->pos = p;\n", gen->stream);
+        fputs_e("ctx->cur = p;\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
         fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         if (!c) {
@@ -2900,12 +2896,12 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fputs_e("const size_t p = ctx->pos;\n", gen->stream);
+    fputs_e("const size_t p = ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
     fputs_e("size_t q;\n", gen->stream);
     r = generate_code(gen, expr, onfail, indent, FALSE);
     write_characters(gen->stream, ' ', indent);
-    fputs_e("q = ctx->pos;\n", gen->stream);
+    fputs_e("q = ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
     fprintf_e(gen->stream, "chunk->capts.buf[%lu].range.start = p;\n", (ulong_t)index);
     write_characters(gen->stream, ' ', indent);
@@ -2931,7 +2927,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
     write_characters(gen->stream, ' ', indent);
     fputs_e("if (n > 0) {\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs_e("const char *const p = ctx->buffer.buf + ctx->pos;\n", gen->stream);
+    fputs_e("const char *const p = ctx->buffer.buf + ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
     fprintf_e(gen->stream, "const char *const q = ctx->buffer.buf + chunk->capts.buf[%lu].range.start;\n", (ulong_t)index);
     write_characters(gen->stream, ' ', indent + 4);
@@ -2943,7 +2939,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
     write_characters(gen->stream, ' ', indent + 4);
     fputs_e("}\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fputs_e("ctx->pos += n;\n", gen->stream);
+    fputs_e("ctx->cur += n;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
     fputs_e("}\n", gen->stream);
     if (!bare) {
@@ -2987,7 +2983,7 @@ static code_reach_t generate_thunking_action_code(
         write_characters(gen->stream, ' ', indent);
         fputs_e("thunk->data.leaf.capt0.range.start = chunk->pos;\n", gen->stream);
         write_characters(gen->stream, ' ', indent);
-        fputs_e("thunk->data.leaf.capt0.range.end = ctx->pos;\n", gen->stream);
+        fputs_e("thunk->data.leaf.capt0.range.end = ctx->cur;\n", gen->stream);
     }
     if (error) {
         write_characters(gen->stream, ' ', indent);
@@ -3218,7 +3214,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_value_table_t values;\n"
             "    pcc_capture_table_t capts;\n"
             "    pcc_thunk_array_t thunks;\n"
-            "    size_t pos;\n"
+            "    size_t pos; /* the starting position in the character buffer */\n"
             "} pcc_thunk_chunk_t;\n"
             "\n"
             "typedef struct pcc_lr_entry_tag pcc_lr_entry_t;\n"
@@ -3238,7 +3234,7 @@ static bool_t generate(context_t *ctx) {
             "struct pcc_lr_answer_tag {\n"
             "    pcc_lr_answer_type_t type;\n"
             "    pcc_lr_answer_data_t data;\n"
-            "    size_t pos;\n"
+            "    size_t pos; /* the absolute position in the input */\n"
             "    pcc_lr_answer_t *hold;\n"
             "};\n"
             "\n",
@@ -3307,7 +3303,8 @@ static bool_t generate(context_t *ctx) {
         fprintf_e(
             stream,
             "struct %s_context_tag {\n"
-            "    size_t pos;\n"
+            "    size_t pos; /* the position in the input of the first character currently buffered */\n"
+            "    size_t cur; /* the current parsing position in the character buffer */\n"
             "    size_t level;\n"
             "    pcc_char_array_t buffer;\n"
             "    pcc_lr_table_t lrtable;\n"
@@ -3956,6 +3953,7 @@ static bool_t generate(context_t *ctx) {
         );
         fputs_e(
             "    ctx->pos = 0;\n"
+            "    ctx->cur = 0;\n"
             "    ctx->level = 0;\n"
             "    pcc_char_array__init(auxil, &ctx->buffer, PCC_BUFFERSIZE);\n"
             "    pcc_lr_table__init(auxil, &ctx->lrtable, PCC_BUFFERSIZE);\n"
@@ -3987,14 +3985,13 @@ static bool_t generate(context_t *ctx) {
             get_prefix(ctx)
         );
         fputs_e(
-            "    const size_t n = ctx->buffer.len - ctx->pos;\n"
-            "    if (n >= num) return n;\n"
-            "    while (ctx->buffer.len < ctx->pos + num) {\n"
+            "    if (ctx->buffer.len >= ctx->cur + num) return ctx->buffer.len - ctx->cur;\n"
+            "    while (ctx->buffer.len < ctx->cur + num) {\n"
             "        const int c = PCC_GETCHAR(ctx->auxil);\n"
             "        if (c == EOF) break;\n"
             "        pcc_char_array__add(ctx->auxil, &ctx->buffer, (char)c);\n"
             "    }\n"
-            "    return ctx->buffer.len - ctx->pos;\n"
+            "    return ctx->buffer.len - ctx->cur;\n"
             "}\n"
             "\n",
             stream
@@ -4005,10 +4002,11 @@ static bool_t generate(context_t *ctx) {
             get_prefix(ctx)
         );
         fputs_e(
-            "    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->pos, ctx->buffer.len - ctx->pos);\n"
-            "    ctx->buffer.len -= ctx->pos;\n"
-            "    pcc_lr_table__shift(ctx->auxil, &ctx->lrtable, ctx->pos);\n"
-            "    ctx->pos = 0;\n"
+            "    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->cur, ctx->buffer.len - ctx->cur);\n"
+            "    ctx->buffer.len -= ctx->cur;\n"
+            "    ctx->pos += ctx->cur;\n"
+            "    pcc_lr_table__shift(ctx->auxil, &ctx->lrtable, ctx->cur);\n"
+            "    ctx->cur = 0;\n"
             "}\n"
             "\n",
             stream
@@ -4037,7 +4035,7 @@ static bool_t generate(context_t *ctx) {
                 "    int c, u;\n"
                 "    size_t n;\n"
                 "    if (pcc_refill_buffer(ctx, 1) < 1) return 0;\n"
-                "    c = (int)(unsigned char)ctx->buffer.buf[ctx->pos];\n"
+                "    c = (int)(unsigned char)ctx->buffer.buf[ctx->cur];\n"
                 "    n = (c < 0x80) ? 1 :\n"
                 "        ((c & 0xe0) == 0xc0) ? 2 :\n"
                 "        ((c & 0xf0) == 0xe0) ? 3 :\n"
@@ -4050,30 +4048,30 @@ static bool_t generate(context_t *ctx) {
                 "        break;\n"
                 "    case 2:\n"
                 "        u = c & 0x1f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->cur + 1];\n"
                 "        if ((c & 0xc0) != 0x80) return 0;\n"
                 "        u <<= 6; u |= c & 0x3f;\n"
                 "        if (u < 0x80) return 0;\n"
                 "        break;\n"
                 "    case 3:\n"
                 "        u = c & 0x0f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->cur + 1];\n"
                 "        if ((c & 0xc0) != 0x80) return 0;\n"
                 "        u <<= 6; u |= c & 0x3f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->cur + 2];\n"
                 "        if ((c & 0xc0) != 0x80) return 0;\n"
                 "        u <<= 6; u |= c & 0x3f;\n"
                 "        if (u < 0x800) return 0;\n"
                 "        break;\n"
                 "    case 4:\n"
                 "        u = c & 0x07;\n"
-                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 1];\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->cur + 1];\n"
                 "        if ((c & 0xc0) != 0x80) return 0;\n"
                 "        u <<= 6; u |= c & 0x3f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 2];\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->cur + 2];\n"
                 "        if ((c & 0xc0) != 0x80) return 0;\n"
                 "        u <<= 6; u |= c & 0x3f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->pos + 3];\n"
+                "        c = (int)(unsigned char)ctx->buffer.buf[ctx->cur + 3];\n"
                 "        if ((c & 0xc0) != 0x80) return 0;\n"
                 "        u <<= 6; u |= c & 0x3f;\n"
                 "        if (u < 0x10000 || u > 0x10ffff) return 0;\n"
@@ -4096,7 +4094,7 @@ static bool_t generate(context_t *ctx) {
         fputs_e(
             "    static pcc_value_t null;\n"
             "    pcc_thunk_chunk_t *c = NULL;\n"
-            "    const size_t p = ctx->pos;\n"
+            "    const size_t p = ctx->pos + ctx->cur;\n"
             "    pcc_bool_t b = PCC_TRUE;\n"
             "    pcc_lr_answer_t *a = pcc_lr_table__get_answer(ctx->auxil, &ctx->lrtable, p, rule);\n"
             "    pcc_lr_head_t *h = pcc_lr_table__get_head(ctx->auxil, &ctx->lrtable, p);\n"
@@ -4108,14 +4106,14 @@ static bool_t generate(context_t *ctx) {
             "        else if (pcc_rule_set__remove(ctx->auxil, &h->eval, rule)) {\n"
             "            b = PCC_FALSE;\n"
             "            c = rule(ctx);\n"
-            "            a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_CHUNK, ctx->pos);\n"
+            "            a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_CHUNK, ctx->pos + ctx->cur);\n"
             "            a->data.chunk = c;\n"
             "            pcc_lr_table__hold_answer(ctx->auxil, &ctx->lrtable, p, a);\n"
             "        }\n"
             "    }\n"
             "    if (b) {\n"
             "        if (a != NULL) {\n"
-            "            ctx->pos = a->pos;\n"
+            "            ctx->cur = a->pos - ctx->pos;\n"
             "            switch (a->type) {\n"
             "            case PCC_LR_ANSWER_LR:\n"
             "                if (a->data.lr->head == NULL) {\n"
@@ -4148,7 +4146,7 @@ static bool_t generate(context_t *ctx) {
             "            pcc_lr_table__set_answer(ctx->auxil, &ctx->lrtable, p, rule, a);\n"
             "            c = rule(ctx);\n"
             "            pcc_lr_stack__pop(ctx->auxil, &ctx->lrstack);\n"
-            "            a->pos = ctx->pos;\n"
+            "            a->pos = ctx->pos + ctx->cur;\n"
             "            if (e->head == NULL) {\n"
             "                pcc_lr_answer__set_chunk(ctx->auxil, a, c);\n"
             "            }\n"
@@ -4157,7 +4155,7 @@ static bool_t generate(context_t *ctx) {
             "                h = a->data.lr->head;\n"
             "                if (h->rule != rule) {\n"
             "                    c = a->data.lr->seed;\n"
-            "                    a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_CHUNK, ctx->pos);\n"
+            "                    a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_CHUNK, ctx->pos + ctx->cur);\n"
             "                    a->data.chunk = c;\n"
             "                    pcc_lr_table__hold_answer(ctx->auxil, &ctx->lrtable, p, a);\n"
             "                }\n"
@@ -4169,16 +4167,16 @@ static bool_t generate(context_t *ctx) {
             "                    else {\n"
             "                        pcc_lr_table__set_head(ctx->auxil, &ctx->lrtable, p, h);\n"
             "                        for (;;) {\n"
-            "                            ctx->pos = p;\n"
+            "                            ctx->cur = p - ctx->pos;\n"
             "                            pcc_rule_set__copy(ctx->auxil, &h->eval, &h->invol);\n"
             "                            c = rule(ctx);\n"
-            "                            if (c == NULL || ctx->pos <= a->pos) break;\n"
+            "                            if (c == NULL || ctx->pos + ctx->cur <= a->pos) break;\n"
             "                            pcc_lr_answer__set_chunk(ctx->auxil, a, c);\n"
-            "                            a->pos = ctx->pos;\n"
+            "                            a->pos = ctx->pos + ctx->cur;\n"
             "                        }\n"
             "                        pcc_thunk_chunk__destroy(ctx->auxil, c);\n"
             "                        pcc_lr_table__set_head(ctx->auxil, &ctx->lrtable, p, NULL);\n"
-            "                        ctx->pos = a->pos;\n"
+            "                        ctx->cur = a->pos - ctx->pos;\n"
             "                        c = a->data.chunk;\n"
             "                    }\n"
             "                }\n"
@@ -4279,12 +4277,12 @@ static bool_t generate(context_t *ctx) {
                         );
                         fprintf_e(
                             stream,
-                            "#define _%lus ((const size_t)__pcc_in->data.leaf.capts.buf[%lu]->range.start)\n",
+                            "#define _%lus ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.start))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         fprintf_e(
                             stream,
-                            "#define _%lue ((const size_t)__pcc_in->data.leaf.capts.buf[%lu]->range.end)\n",
+                            "#define _%lue ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.end))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         k++;
@@ -4367,7 +4365,7 @@ static bool_t generate(context_t *ctx) {
                 fprintf_e(
                     stream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
-                    "    chunk->pos = ctx->pos;\n"
+                    "    chunk->pos = ctx->cur;\n"
                     "    PCC_DEBUG(PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
                     "    ctx->level++;\n",
                     ctx->rules.buf[i]->data.rule.name
@@ -4386,7 +4384,7 @@ static bool_t generate(context_t *ctx) {
                 fprintf_e(
                     stream,
                     "    ctx->level--;\n"
-                    "    PCC_DEBUG(PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->pos - chunk->pos));\n"
+                    "    PCC_DEBUG(PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                     "    return chunk;\n",
                     ctx->rules.buf[i]->data.rule.name
                 );
@@ -4395,7 +4393,7 @@ static bool_t generate(context_t *ctx) {
                         stream,
                         "L0000:;\n"
                         "    ctx->level--;\n"
-                        "    PCC_DEBUG(PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->pos - chunk->pos));\n"
+                        "    PCC_DEBUG(PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx->auxil, chunk);\n"
                         "    return NULL;\n",
                         ctx->rules.buf[i]->data.rule.name
@@ -4515,7 +4513,7 @@ static bool_t generate(context_t *ctx) {
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = (ctx->buffer.len > 0 && ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
             write_text(stream, ctx->buffer.buf, n);
-            ctx->bufpos = n;
+            ctx->bufcur = n;
             commit_buffer(ctx);
         }
     }
