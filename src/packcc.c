@@ -37,7 +37,6 @@
 #endif
 #endif
 
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -67,7 +66,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #define __attribute__(x)
 #endif
 
-#define VERSION "1.4.0"
+#define VERSION "1.5.0"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -240,8 +239,9 @@ typedef struct context_tag {
     code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
-    ptrdiff_t linepos;   /* the beginning position of the current line in the character buffer; can be negative when not left in the buffer */
-    size_t bufpos;       /* the current parsing position in the character buffer */
+    size_t linepos;      /* the beginning position of the current line in the PEG file */
+    size_t bufpos;       /* the current position of the first buffered character in the PEG file */
+    size_t bufcur;       /* the current parsing position in the character buffer */
     char_array_t buffer; /* the character buffer */
     node_array_t rules;  /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
@@ -268,12 +268,6 @@ typedef enum code_reach_tag {
 } code_reach_t;
 
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
-
-static ptrdiff_t subtract_size_t(size_t a, size_t b) {
-    assert((ptrdiff_t)a >= 0);
-    assert((ptrdiff_t)b >= 0);
-    return (ptrdiff_t)a - (ptrdiff_t)b;
-}
 
 static int print_error(const char *format, ...) __attribute__((format(printf, 1, 2))) {
     int n;
@@ -909,10 +903,9 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
-static size_t column_number(const context_t *ctx) {
-    assert((ptrdiff_t)ctx->bufpos >= 0);
-    assert((ptrdiff_t)ctx->bufpos >= ctx->linepos);
-    return (size_t)((ptrdiff_t)ctx->bufpos - ctx->linepos);
+static size_t column_number(const context_t *ctx) { /* 0-based */
+    assert(ctx->bufpos + ctx->bufcur >= ctx->linepos);
+    return ctx->bufpos + ctx->bufcur - ctx->linepos;
 }
 
 static void char_array__init(char_array_t *array, size_t max) {
@@ -1021,6 +1014,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->linenum = 0;
     ctx->linepos = 0;
     ctx->bufpos = 0;
+    ctx->bufcur = 0;
     char_array__init(&ctx->buffer, BUFFER_INIT_SIZE);
     node_array__init(&ctx->rules, ARRAY_INIT_SIZE);
     ctx->rulehash.mod = 0;
@@ -1568,23 +1562,21 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
 }
 
 static size_t refill_buffer(context_t *ctx, size_t num) {
-    const size_t n = ctx->buffer.len - ctx->bufpos;
-    assert(ctx->buffer.len >= ctx->bufpos);
-    if (n >= num) return n;
-    while (ctx->buffer.len < ctx->bufpos + num) {
+    if (ctx->buffer.len >= ctx->bufcur + num) return ctx->buffer.len - ctx->bufcur;
+    while (ctx->buffer.len < ctx->bufcur + num) {
         const int c = fgetc_e(ctx->ifile);
         if (c == EOF) break;
         char_array__add(&ctx->buffer, (char)c);
     }
-    return ctx->buffer.len - ctx->bufpos;
+    return ctx->buffer.len - ctx->bufcur;
 }
 
 static void commit_buffer(context_t *ctx) {
-    assert(ctx->buffer.len >= ctx->bufpos);
-    ctx->linepos -= (ptrdiff_t)ctx->bufpos;
-    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufpos, ctx->buffer.len - ctx->bufpos);
-    ctx->buffer.len -= ctx->bufpos;
-    ctx->bufpos = 0;
+    assert(ctx->buffer.len >= ctx->bufcur);
+    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufcur, ctx->buffer.len - ctx->bufcur);
+    ctx->buffer.len -= ctx->bufcur;
+    ctx->bufpos += ctx->bufcur;
+    ctx->bufcur = 0;
 }
 
 static bool_t match_eof(context_t *ctx) {
@@ -1593,19 +1585,19 @@ static bool_t match_eof(context_t *ctx) {
 
 static bool_t match_eol(context_t *ctx) {
     if (refill_buffer(ctx, 1) >= 1) {
-        switch (ctx->buffer.buf[ctx->bufpos]) {
+        switch (ctx->buffer.buf[ctx->bufcur]) {
         case '\n':
-            ctx->bufpos++;
+            ctx->bufcur++;
             ctx->linenum++;
-            ctx->linepos = (ptrdiff_t)ctx->bufpos;
+            ctx->linepos = ctx->bufpos + ctx->bufcur;
             return TRUE;
         case '\r':
-            ctx->bufpos++;
+            ctx->bufcur++;
             if (refill_buffer(ctx, 1) >= 1) {
-                if (ctx->buffer.buf[ctx->bufpos] == '\n') ctx->bufpos++;
+                if (ctx->buffer.buf[ctx->bufcur] == '\n') ctx->bufcur++;
             }
             ctx->linenum++;
-            ctx->linepos = (ptrdiff_t)ctx->bufpos;
+            ctx->linepos = ctx->bufpos + ctx->bufcur;
             return TRUE;
         }
     }
@@ -1614,8 +1606,8 @@ static bool_t match_eol(context_t *ctx) {
 
 static bool_t match_character(context_t *ctx, char ch) {
     if (refill_buffer(ctx, 1) >= 1) {
-        if (ctx->buffer.buf[ctx->bufpos] == ch) {
-            ctx->bufpos++;
+        if (ctx->buffer.buf[ctx->bufcur] == ch) {
+            ctx->bufcur++;
             return TRUE;
         }
     }
@@ -1624,9 +1616,9 @@ static bool_t match_character(context_t *ctx, char ch) {
 
 static bool_t match_character_range(context_t *ctx, char min, char max) {
     if (refill_buffer(ctx, 1) >= 1) {
-        const char c = ctx->buffer.buf[ctx->bufpos];
+        const char c = ctx->buffer.buf[ctx->bufcur];
         if (c >= min && c <= max) {
-            ctx->bufpos++;
+            ctx->bufcur++;
             return TRUE;
         }
     }
@@ -1635,11 +1627,11 @@ static bool_t match_character_range(context_t *ctx, char min, char max) {
 
 static bool_t match_character_set(context_t *ctx, const char *chs) {
     if (refill_buffer(ctx, 1) >= 1) {
-        const char c = ctx->buffer.buf[ctx->bufpos];
+        const char c = ctx->buffer.buf[ctx->bufcur];
         size_t i;
         for (i = 0; chs[i]; i++) {
             if (c == chs[i]) {
-                ctx->bufpos++;
+                ctx->bufcur++;
                 return TRUE;
             }
         }
@@ -1649,7 +1641,7 @@ static bool_t match_character_set(context_t *ctx, const char *chs) {
 
 static bool_t match_character_any(context_t *ctx) {
     if (refill_buffer(ctx, 1) >= 1) {
-        ctx->bufpos++;
+        ctx->bufcur++;
         return TRUE;
     }
     return FALSE;
@@ -1658,8 +1650,8 @@ static bool_t match_character_any(context_t *ctx) {
 static bool_t match_string(context_t *ctx, const char *str) {
     const size_t n = strlen(str);
     if (refill_buffer(ctx, n) >= n) {
-        if (strncmp(ctx->buffer.buf + ctx->bufpos, str, n) == 0) {
-            ctx->bufpos += n;
+        if (strncmp(ctx->buffer.buf + ctx->bufcur, str, n) == 0) {
+            ctx->bufcur += n;
             return TRUE;
         }
     }
@@ -1681,7 +1673,7 @@ static bool_t match_section_line_(context_t *ctx, const char *head) {
 static bool_t match_section_line_continuable_(context_t *ctx, const char *head) {
     if (match_string(ctx, head)) {
         while (!match_eof(ctx)) {
-            const size_t p = ctx->bufpos;
+            const size_t p = ctx->bufcur;
             if (match_eol(ctx)) {
                 if (ctx->buffer.buf[p - 1] != '\\') break;
             }
@@ -1825,7 +1817,7 @@ static bool_t match_code_block(context_t *ctx) {
             else {
                 if (!match_eol(ctx)) {
                     if (match_character(ctx, '$')) {
-                        ctx->buffer.buf[ctx->bufpos - 1] = '_';
+                        ctx->buffer.buf[ctx->bufcur - 1] = '_';
                     }
                     else {
                         match_character_any(ctx);
@@ -1845,19 +1837,19 @@ static bool_t match_footer_start(context_t *ctx) {
 static node_t *parse_expression(context_t *ctx, node_t *rule);
 
 static node_t *parse_primary(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     node_t *n_p = NULL;
     if (match_identifier(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         size_t r = VOID_VALUE, s = VOID_VALUE;
         match_spaces(ctx);
         if (match_character(ctx, ':')) {
             match_spaces(ctx);
-            r = ctx->bufpos;
+            r = ctx->bufcur;
             if (!match_identifier(ctx)) goto EXCEPTION;
-            s = ctx->bufpos;
+            s = ctx->bufcur;
             match_spaces(ctx);
         }
         if (match_string(ctx, "<-")) goto EXCEPTION;
@@ -1914,9 +1906,9 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
     else if (match_character(ctx, '$')) {
         size_t p;
         match_spaces(ctx);
-        p = ctx->bufpos;
+        p = ctx->bufcur;
         if (match_number(ctx)) {
-            const size_t q = ctx->bufpos;
+            const size_t q = ctx->bufcur;
             char *s;
             match_spaces(ctx);
             n_p = create_node(NODE_EXPAND);
@@ -1956,7 +1948,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         }
     }
     else if (match_character_class(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
@@ -1973,7 +1965,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         }
     }
     else if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_STRING);
         n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
@@ -1987,7 +1979,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         }
     }
     else if (match_code_block(ctx)) {
-        const size_t q = ctx->bufpos;
+        const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_ACTION);
         n_p->data.action.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
@@ -2001,14 +1993,14 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_p);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_term(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     node_t *n_p = NULL;
@@ -2060,9 +2052,9 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
     if (match_character(ctx, '~')) {
         size_t p;
         match_spaces(ctx);
-        p = ctx->bufpos;
+        p = ctx->bufcur;
         if (match_code_block(ctx)) {
-            const size_t q = ctx->bufpos;
+            const size_t q = ctx->bufcur;
             match_spaces(ctx);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
@@ -2081,14 +2073,14 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_r);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_sequence(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     node_array_t *a_t = NULL;
@@ -2113,14 +2105,14 @@ static node_t *parse_sequence(context_t *ctx, node_t *rule) {
     return n_s;
 
 EXCEPTION:;
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_expression(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     size_t q;
@@ -2129,9 +2121,9 @@ static node_t *parse_expression(context_t *ctx, node_t *rule) {
     node_t *n_e = NULL;
     n_s = parse_sequence(ctx, rule);
     if (n_s == NULL) goto EXCEPTION;
-    q = ctx->bufpos;
+    q = ctx->bufcur;
     if (match_character(ctx, '/')) {
-        ctx->bufpos = q;
+        ctx->bufcur = q;
         n_e = create_node(NODE_ALTERNATE);
         a_s = &n_e->data.alternate.nodes;
         node_array__add(a_s, n_s);
@@ -2149,20 +2141,20 @@ static node_t *parse_expression(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_e);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
 static node_t *parse_rule(context_t *ctx) {
-    const size_t p = ctx->bufpos;
+    const size_t p = ctx->bufcur;
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     size_t q;
     node_t *n_r = NULL;
     if (!match_identifier(ctx)) goto EXCEPTION;
-    q = ctx->bufpos;
+    q = ctx->bufcur;
     match_spaces(ctx);
     if (!match_string(ctx, "<-")) goto EXCEPTION;
     match_spaces(ctx);
@@ -2177,9 +2169,9 @@ static node_t *parse_rule(context_t *ctx) {
 
 EXCEPTION:;
     destroy_node(n_r);
-    ctx->bufpos = p;
+    ctx->bufcur = p;
     ctx->linenum = l;
-    ctx->linepos = subtract_size_t(p, m);
+    ctx->linepos = ctx->bufpos + p - m;
     return NULL;
 }
 
@@ -2207,9 +2199,9 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *o
     if (!match_string(ctx, name)) return FALSE;
     match_spaces(ctx);
     {
-        const size_t p = ctx->bufpos;
+        const size_t p = ctx->bufcur;
         if (match_code_block(ctx)) {
-            const size_t q = ctx->bufpos;
+            const size_t q = ctx->bufcur;
             match_spaces(ctx);
             if (output1 != NULL) {
                 write_code_block(output1, ctx->buffer.buf + p + 1, q - p - 2, 0);
@@ -2235,12 +2227,12 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
     match_spaces(ctx);
     {
         char *s = NULL;
-        const size_t p = ctx->bufpos;
+        const size_t p = ctx->bufcur;
         const size_t lv = ctx->linenum;
         const size_t mv = column_number(ctx);
         size_t q;
         if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
-            q = ctx->bufpos;
+            q = ctx->bufcur;
             match_spaces(ctx);
             s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             if (!unescape_string(s, FALSE)) {
@@ -2343,7 +2335,7 @@ static bool_t parse(context_t *ctx) {
         for (;;) {
             size_t p, l, m;
             if (match_eof(ctx) || match_footer_start(ctx)) break;
-            p = ctx->bufpos;
+            p = ctx->bufcur;
             l = ctx->linenum;
             m = column_number(ctx);
             if (
@@ -2372,7 +2364,7 @@ static bool_t parse(context_t *ctx) {
                         b = FALSE;
                     }
                     ctx->linenum = l;
-                    ctx->linepos = subtract_size_t(p, m);
+                    ctx->linepos = ctx->bufpos + p - m;
                     if (!match_identifier(ctx) && !match_spaces(ctx)) match_character_any(ctx);
                     continue;
                 }
@@ -3987,8 +3979,7 @@ static bool_t generate(context_t *ctx) {
             get_prefix(ctx)
         );
         fputs_e(
-            "    const size_t n = ctx->buffer.len - ctx->pos;\n"
-            "    if (n >= num) return n;\n"
+            "    if (ctx->buffer.len >= ctx->pos + num) return ctx->buffer.len - ctx->pos;\n"
             "    while (ctx->buffer.len < ctx->pos + num) {\n"
             "        const int c = PCC_GETCHAR(ctx->auxil);\n"
             "        if (c == EOF) break;\n"
@@ -4515,7 +4506,7 @@ static bool_t generate(context_t *ctx) {
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = (ctx->buffer.len > 0 && ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
             write_text(stream, ctx->buffer.buf, n);
-            ctx->bufpos = n;
+            ctx->bufcur = n;
             commit_buffer(ctx);
         }
     }
