@@ -79,7 +79,16 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 
 #define VOID_VALUE (~(size_t)0)
 
-typedef unsigned long ulong_t; /* Mainly used to print size_t values safely (ex. printf("%lu", (ulong_t)value);) */
+#if defined _MSC_VER && !defined _M_IX86 /* MSVC && not for x86 (32-bit) */
+#define FMT_LU "%llu"
+typedef unsigned long long ulong_t;
+/* NOTE: "long long" and "%llu" are not C89-compliant, but they are required to deal with a 64-bit integer value in MSVC. */
+#else
+#define FMT_LU "%lu"
+typedef unsigned long ulong_t;
+#endif
+/* FMT_LU and ulong_t are used to print size_t values safely (ex. printf(FMT_LU "\n", (ulong_t)value);) */
+/* NOTE: Neither "%z" nor <stdint.h> is used since PackCC complies the C89 standard as much as possible. */
 
 typedef enum bool_tag {
     FALSE = 0,
@@ -1232,7 +1241,7 @@ static void link_references(context_t *ctx, node_t *node) {
     case NODE_REFERENCE:
         node->data.reference.rule = lookup_rulehash(ctx, node->data.reference.name);
         if (node->data.reference.rule == NULL) {
-            print_error("%s:%lu:%lu: No definition of rule '%s'\n",
+            print_error("%s:" FMT_LU ":" FMT_LU ": No definition of rule '%s'\n",
                 ctx->iname, (ulong_t)(node->data.reference.line + 1), (ulong_t)(node->data.reference.col + 1),
                 node->data.reference.name);
             ctx->errnum++;
@@ -1424,7 +1433,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
                 if (node->data.expand.index == capts->buf[i]->data.capture.index) break;
             }
             if (i >= capts->len && node->data.expand.index != VOID_VALUE) {
-                print_error("%s:%lu:%lu: Capture %d not available at this position\n",
+                print_error("%s:" FMT_LU ":" FMT_LU ": Capture %d not available at this position\n",
                     ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), node->data.expand.index + 1);
                 ctx->errnum++;
             }
@@ -1463,7 +1472,7 @@ static void dump_void_value(size_t value) {
         fprintf(stdout, "void");
     }
     else {
-        fprintf(stdout, "%lu", (ulong_t)value);
+        fprintf(stdout, FMT_LU, (ulong_t)value);
     }
 }
 
@@ -1471,7 +1480,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     if (node == NULL) return;
     switch (node->type) {
     case NODE_RULE:
-        fprintf(stdout, "%*sRule(name:'%s', ref:%d, vars.len:%lu, capts.len:%lu, codes.len:%lu) {\n",
+        fprintf(stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ") {\n",
             indent, "", node->data.rule.name, node->data.rule.ref,
             (ulong_t)node->data.rule.vars.len, (ulong_t)node->data.rule.capts.len, (ulong_t)node->data.rule.codes.len);
         dump_node(ctx, node->data.rule.expr, indent + 2);
@@ -1504,7 +1513,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_SEQUENCE:
-        fprintf(stdout, "%*sSequence(max:%lu, len:%lu) {\n",
+        fprintf(stdout, "%*sSequence(max:" FMT_LU ", len:" FMT_LU ") {\n",
             indent, "", (ulong_t)node->data.sequence.nodes.max, (ulong_t)node->data.sequence.nodes.len);
         {
             size_t i;
@@ -1515,7 +1524,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_ALTERNATE:
-        fprintf(stdout, "%*sAlternate(max:%lu, len:%lu) {\n",
+        fprintf(stdout, "%*sAlternate(max:" FMT_LU ", len:" FMT_LU ") {\n",
             indent, "", (ulong_t)node->data.alternate.nodes.max, (ulong_t)node->data.alternate.nodes.len);
         {
             size_t i;
@@ -1550,7 +1559,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
                 fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.action.vars.buf[i]->data.reference.var);
             }
             for (i = 0; i < node->data.action.capts.len; i++) {
-                fprintf(stdout, "%*s$%lu\n", indent + 2, "", (ulong_t)(node->data.action.capts.buf[i]->data.capture.index + 1));
+                fprintf(stdout, "%*s$" FMT_LU "\n", indent + 2, "", (ulong_t)(node->data.action.capts.buf[i]->data.capture.index + 1));
             }
             fprintf(stdout, "%*s)\n", indent, "");
         }
@@ -1570,7 +1579,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
                 fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.error.vars.buf[i]->data.reference.var);
             }
             for (i = 0; i < node->data.error.capts.len; i++) {
-                fprintf(stdout, "%*s$%lu\n", indent + 2, "", (ulong_t)(node->data.error.capts.buf[i]->data.capture.index + 1));
+                fprintf(stdout, "%*s$" FMT_LU "\n", indent + 2, "", (ulong_t)(node->data.error.capts.buf[i]->data.capture.index + 1));
             }
         }
         fprintf(stdout, "%*s) {\n", indent, "");
@@ -1714,7 +1723,7 @@ static bool_t match_section_block_(context_t *ctx, const char *left, const char 
     if (match_string(ctx, left)) {
         while (!match_string(ctx, right)) {
             if (match_eof(ctx)) {
-                print_error("%s:%lu:%lu: Premature EOF in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 ctx->errnum++;
                 break;
             }
@@ -1731,7 +1740,7 @@ static bool_t match_quotation_(context_t *ctx, const char *left, const char *rig
     if (match_string(ctx, left)) {
         while (!match_string(ctx, right)) {
             if (match_eof(ctx)) {
-                print_error("%s:%lu:%lu: Premature EOF in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 ctx->errnum++;
                 break;
             }
@@ -1740,7 +1749,7 @@ static bool_t match_quotation_(context_t *ctx, const char *left, const char *rig
             }
             else {
                 if (match_eol(ctx)) {
-                    print_error("%s:%lu:%lu: Premature EOL in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                     ctx->errnum++;
                     break;
                 }
@@ -1818,7 +1827,7 @@ static bool_t match_code_block(context_t *ctx) {
         int d = 1;
         for (;;) {
             if (match_eof(ctx)) {
-                print_error("%s:%lu:%lu: Premature EOF in code block\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
                 break;
             }
@@ -1887,7 +1896,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             assert(q >= p);
             n_p->data.reference.var = strndup_e(ctx->buffer.buf + p, q - p);
             if (n_p->data.reference.var[0] == '_') {
-                print_error("%s:%lu:%lu: Leading underscore in variable name '%s'\n",
+                print_error("%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
                     ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var);
                 ctx->errnum++;
             }
@@ -1938,15 +1947,15 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             s = strndup_e(ctx->buffer.buf + p, q - p);
             n_p->data.expand.index = string_to_size_t(s);
             if (n_p->data.expand.index == VOID_VALUE) {
-                print_error("%s:%lu:%lu: Invalid unsigned number '%s'\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
                 ctx->errnum++;
             }
             else if (n_p->data.expand.index == 0) {
-                print_error("%s:%lu:%lu: 0 not allowed\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
             }
             else if (s[0] == '0') {
-                print_error("%s:%lu:%lu: 0-prefixed number not allowed\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
                 n_p->data.expand.index = 0;
             }
@@ -1975,11 +1984,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.charclass.value, TRUE)) {
-            print_error("%s:%lu:%lu: Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
         if (!ctx->ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
-            print_error("%s:%lu:%lu: Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
         if (!ctx->ascii && n_p->data.charclass.value[0] != '\0') {
@@ -1992,11 +2001,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p = create_node(NODE_STRING);
         n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.string.value, FALSE)) {
-            print_error("%s:%lu:%lu: Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
         if (!ctx->ascii && !is_valid_utf8_string(n_p->data.string.value)) {
-            print_error("%s:%lu:%lu: Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
     }
@@ -2235,7 +2244,7 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, char_ar
             }
         }
         else {
-            print_error("%s:%lu:%lu: Illegal %s syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
             ctx->errnum++;
         }
     }
@@ -2258,12 +2267,12 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
             match_spaces(ctx);
             s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             if (!unescape_string(s, FALSE)) {
-                print_error("%s:%lu:%lu: Illegal escape sequence\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
             }
         }
         else {
-            print_error("%s:%lu:%lu: Illegal %s syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
             ctx->errnum++;
         }
         if (s != NULL) {
@@ -2273,24 +2282,24 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
             remove_trailing_blank(s);
             assert((mode & ~7) == 0);
             if ((mode & STRING_FLAG__NOTEMPTY) && !is_filled_string(s)) {
-                print_error("%s:%lu:%lu: Empty string\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
                 f |= STRING_FLAG__NOTEMPTY;
             }
             if ((mode & STRING_FLAG__NOTVOID) && strcmp(s, "void") == 0) {
-                print_error("%s:%lu:%lu: 'void' not allowed\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": 'void' not allowed\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
                 f |= STRING_FLAG__NOTVOID;
             }
             if ((mode & STRING_FLAG__IDENTIFIER) && !is_identifier_string(s)) {
                 if (!(f & STRING_FLAG__NOTEMPTY)) {
-                    print_error("%s:%lu:%lu: Invalid identifier\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Invalid identifier\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                     ctx->errnum++;
                 }
                 f |= STRING_FLAG__IDENTIFIER;
             }
             if (*output != NULL) {
-                print_error("%s:%lu:%lu: Multiple %s definition\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple %s definition\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 ctx->errnum++;
                 b = FALSE;
             }
@@ -2329,7 +2338,7 @@ static bool_t parse(context_t *ctx) {
                 b = TRUE;
             }
             else if (match_character(ctx, '%')) {
-                print_error("%s:%lu:%lu: Invalid directive\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid directive\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
                 match_identifier(ctx);
                 match_spaces(ctx);
@@ -2339,7 +2348,7 @@ static bool_t parse(context_t *ctx) {
                 node_t *const n_r = parse_rule(ctx);
                 if (n_r == NULL) {
                     if (b) {
-                        print_error("%s:%lu:%lu: Illegal rule syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                        print_error("%s:" FMT_LU ":" FMT_LU ": Illegal rule syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
                         ctx->errnum++;
                         b = FALSE;
                     }
@@ -2363,14 +2372,14 @@ static bool_t parse(context_t *ctx) {
         }
         for (i = 1; i < ctx->rules.len; i++) {
             if (ctx->rules.buf[i]->data.rule.ref == 0) {
-                print_error("%s:%lu:%lu: Never used rule '%s'\n",
+                print_error("%s:" FMT_LU ":" FMT_LU ": Never used rule '%s'\n",
                     ctx->iname,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
                     ctx->rules.buf[i]->data.rule.name);
                 ctx->errnum++;
             }
             else if (ctx->rules.buf[i]->data.rule.ref < 0) {
-                print_error("%s:%lu:%lu: Multiple definition of rule '%s'\n",
+                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple definition of rule '%s'\n",
                     ctx->iname,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
                     ctx->rules.buf[i]->data.rule.name);
@@ -2404,17 +2413,17 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             write_characters(gen->stream, ' ', indent);
             fputs_e("if (\n", gen->stream);
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf_e(gen->stream, "pcc_refill_buffer(ctx, %lu) < %lu ||\n", (ulong_t)n, (ulong_t)n);
+            fprintf_e(gen->stream, "pcc_refill_buffer(ctx, " FMT_LU ") < " FMT_LU " ||\n", (ulong_t)n, (ulong_t)n);
             for (i = 0; i < n - 1; i++) {
                 write_characters(gen->stream, ' ', indent + 4);
-                fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->cur)[%lu] != '%s' ||\n", (ulong_t)i, escape_character(value[i], &s));
+                fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->cur)[" FMT_LU "] != '%s' ||\n", (ulong_t)i, escape_character(value[i], &s));
             }
             write_characters(gen->stream, ' ', indent + 4);
-            fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->cur)[%lu] != '%s'\n", (ulong_t)i, escape_character(value[i], &s));
+            fprintf_e(gen->stream, "(ctx->buffer.buf + ctx->cur)[" FMT_LU "] != '%s'\n", (ulong_t)i, escape_character(value[i], &s));
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, ") goto L%04d;\n", onfail);
             write_characters(gen->stream, ' ', indent);
-            fprintf_e(gen->stream, "ctx->cur += %lu;\n", (ulong_t)n);
+            fprintf_e(gen->stream, "ctx->cur += " FMT_LU ";\n", (ulong_t)n);
             return CODE_REACH__BOTH;
         }
         else {
@@ -2879,9 +2888,9 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     write_characters(gen->stream, ' ', indent);
     fputs_e("q = ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent);
-    fprintf_e(gen->stream, "chunk->capts.buf[%lu].range.start = p;\n", (ulong_t)index);
+    fprintf_e(gen->stream, "chunk->capts.buf[" FMT_LU "].range.start = p;\n", (ulong_t)index);
     write_characters(gen->stream, ' ', indent);
-    fprintf_e(gen->stream, "chunk->capts.buf[%lu].range.end = q;\n", (ulong_t)index);
+    fprintf_e(gen->stream, "chunk->capts.buf[" FMT_LU "].range.end = q;\n", (ulong_t)index);
     if (!bare) {
         indent -= 4;
         write_characters(gen->stream, ' ', indent);
@@ -2897,7 +2906,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
         indent += 4;
     }
     write_characters(gen->stream, ' ', indent);
-    fprintf_e(gen->stream, "const size_t n = chunk->capts.buf[%lu].range.end - chunk->capts.buf[%lu].range.start;\n", (ulong_t)index, (ulong_t)index);
+    fprintf_e(gen->stream, "const size_t n = chunk->capts.buf[" FMT_LU "].range.end - chunk->capts.buf[" FMT_LU "].range.start;\n", (ulong_t)index, (ulong_t)index);
     write_characters(gen->stream, ' ', indent);
     fprintf_e(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
     write_characters(gen->stream, ' ', indent);
@@ -2905,7 +2914,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
     write_characters(gen->stream, ' ', indent + 4);
     fputs_e("const char *const p = ctx->buffer.buf + ctx->cur;\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
-    fprintf_e(gen->stream, "const char *const q = ctx->buffer.buf + chunk->capts.buf[%lu].range.start;\n", (ulong_t)index);
+    fprintf_e(gen->stream, "const char *const q = ctx->buffer.buf + chunk->capts.buf[" FMT_LU "].range.start;\n", (ulong_t)index);
     write_characters(gen->stream, ' ', indent + 4);
     fputs_e("size_t i;\n", gen->stream);
     write_characters(gen->stream, ' ', indent + 4);
@@ -2940,20 +2949,20 @@ static code_reach_t generate_thunking_action_code(
         fputs_e("pcc_value_t null;\n", gen->stream);
     }
     write_characters(gen->stream, ' ', indent);
-    fprintf_e(gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_%lu, %lu, %lu);\n",
+    fprintf_e(gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_" FMT_LU ", " FMT_LU ", " FMT_LU ");\n",
         gen->rule->data.rule.name, (ulong_t)index, (ulong_t)gen->rule->data.rule.vars.len, (ulong_t)gen->rule->data.rule.capts.len);
     {
         size_t i;
         for (i = 0; i < vars->len; i++) {
             assert(vars->buf[i]->type == NODE_REFERENCE);
             write_characters(gen->stream, ' ', indent);
-            fprintf_e(gen->stream, "thunk->data.leaf.values.buf[%lu] = &(chunk->values.buf[%lu]);\n",
+            fprintf_e(gen->stream, "thunk->data.leaf.values.buf[" FMT_LU "] = &(chunk->values.buf[" FMT_LU "]);\n",
                 (ulong_t)vars->buf[i]->data.reference.index, (ulong_t)vars->buf[i]->data.reference.index);
         }
         for (i = 0; i < capts->len; i++) {
             assert(capts->buf[i]->type == NODE_CAPTURE);
             write_characters(gen->stream, ' ', indent);
-            fprintf_e(gen->stream, "thunk->data.leaf.capts.buf[%lu] = &(chunk->capts.buf[%lu]);\n",
+            fprintf_e(gen->stream, "thunk->data.leaf.capts.buf[" FMT_LU "] = &(chunk->capts.buf[" FMT_LU "]);\n",
                 (ulong_t)capts->buf[i]->data.capture.index, (ulong_t)capts->buf[i]->data.capture.index);
         }
         write_characters(gen->stream, ' ', indent);
@@ -3023,7 +3032,7 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
     case NODE_REFERENCE:
         write_characters(gen->stream, ' ', indent);
         if (node->data.reference.index != VOID_VALUE) {
-            fprintf_e(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[%lu]))) goto L%04d;\n",
+            fprintf_e(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) goto L%04d;\n",
                 node->data.reference.name, (ulong_t)node->data.reference.index, onfail);
         }
         else {
@@ -4284,7 +4293,7 @@ static bool_t generate(context_t *ctx) {
                         assert(v->buf[k]->type == NODE_REFERENCE);
                         fprintf_e(
                             sstream,
-                            "#define %s (*__pcc_in->data.leaf.values.buf[%lu])\n",
+                            "#define %s (*__pcc_in->data.leaf.values.buf[" FMT_LU "])\n",
                             v->buf[k]->data.reference.var, (ulong_t)v->buf[k]->data.reference.index
                         );
                         k++;
@@ -4300,17 +4309,17 @@ static bool_t generate(context_t *ctx) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf_e(
                             sstream,
-                            "#define _%lu pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.buf[%lu])\n",
+                            "#define _" FMT_LU " pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.buf[" FMT_LU "])\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         fprintf_e(
                             sstream,
-                            "#define _%lus ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.start))\n",
+                            "#define _" FMT_LU "s ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[" FMT_LU "]->range.start))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         fprintf_e(
                             sstream,
-                            "#define _%lue ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.end))\n",
+                            "#define _" FMT_LU "e ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[" FMT_LU "]->range.end))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         k++;
@@ -4322,17 +4331,17 @@ static bool_t generate(context_t *ctx) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf_e(
                             sstream,
-                            "#undef _%lue\n",
+                            "#undef _" FMT_LU "e\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1)
                         );
                         fprintf_e(
                             sstream,
-                            "#undef _%lus\n",
+                            "#undef _" FMT_LU "s\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1)
                         );
                         fprintf_e(
                             sstream,
-                            "#undef _%lu\n",
+                            "#undef _" FMT_LU "\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1)
                         );
                     }
@@ -4400,12 +4409,12 @@ static bool_t generate(context_t *ctx) {
                 );
                 fprintf_e(
                     sstream,
-                    "    pcc_value_table__resize(ctx->auxil, &chunk->values, %lu);\n",
+                    "    pcc_value_table__resize(ctx->auxil, &chunk->values, " FMT_LU ");\n",
                     (ulong_t)ctx->rules.buf[i]->data.rule.vars.len
                 );
                 fprintf_e(
                     sstream,
-                    "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, %lu);\n",
+                    "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, " FMT_LU ");\n",
                     (ulong_t)ctx->rules.buf[i]->data.rule.capts.len
                 );
                 r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
