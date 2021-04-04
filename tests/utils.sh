@@ -5,7 +5,7 @@ test_generate () {
 test_compile() {
     local dir="$1"
     shift
-    "${CC:-cc}" -I "$dir" "main.c" -o "$dir/parser" "$@"
+    ${CC:-cc} -I "$dir" "main.c" -o "$dir/parser" "$@"
 }
 
 run_for_input() {

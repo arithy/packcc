@@ -40,7 +40,7 @@ EOF
 build() {
     if [ -z "$PACKCC" ]; then
         export PACKCC="$TESTDIR/packcc"
-        "${CC:-cc}" -o "$PACKCC" $ROOTDIR/src/packcc.c
+        ${CC:-cc} -o "$PACKCC" $ROOTDIR/src/packcc.c
     fi
 }
 

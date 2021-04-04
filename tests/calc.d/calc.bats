@@ -8,7 +8,7 @@ load $TESTDIR/utils.sh
 }
 
 @test "Testing calc.d - compilation" {
-    "${CC:-cc}" calc.d/parser.c -o calc.d/parser
+    ${CC:-cc} calc.d/parser.c -o calc.d/parser
 }
 
 @test "Testing calc.d - run" {
