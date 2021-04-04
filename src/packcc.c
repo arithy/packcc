@@ -220,13 +220,6 @@ struct node_tag {
     node_data_t data;
 };
 
-typedef struct codeblocks_tag {
-    char_array_t header;
-    char_array_t source;
-    char_array_t earlyheader;
-    char_array_t earlysource;
-} codeblocks_t;
-
 typedef enum code_flag_tag {
     CODE_FLAG__NONE = 0,
     CODE_FLAG__UTF8_CHARCLASS_USED = 1
@@ -252,7 +245,10 @@ typedef struct context_tag {
     char_array_t buffer; /* the character buffer */
     node_array_t rules;  /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
-    codeblocks_t codeblocks;    /* code blocks from directives to be added into the generated files */
+    char_array_t esource; /* the code blocks from %earlysource and %earlycommon directives to be added into the generated source file */
+    char_array_t eheader; /* the code blocks from %earlyheader and %earlycommon directives to be added into the generated header file */
+    char_array_t source;  /* the code blocks from %source and %common directives to be added into the generated source file */
+    char_array_t header;  /* the code blocks from %header and %common directives to be added into the generated header file */
 } context_t;
 
 typedef struct generate_tag {
@@ -935,7 +931,7 @@ static void char_array__add(char_array_t *array, char ch) {
     array->buf[array->len++] = ch;
 }
 
-static void char_array__append(char_array_t *array, const char *s, size_t len) {
+static void char_array__append(char_array_t *array, const char *str, size_t len) {
     if (array->max < array->len + len) {
         const size_t n = array->len + len;
         size_t m = array->max;
@@ -945,26 +941,12 @@ static void char_array__append(char_array_t *array, const char *s, size_t len) {
         array->buf = (char *)realloc_e(array->buf, m);
         array->max = m;
     }
-    memcpy(array->buf + array->len, s, len);
+    memcpy(array->buf + array->len, str, len);
     array->len += len;
 }
 
 static void char_array__term(char_array_t *array) {
     free(array->buf);
-}
-
-static void codeblocks__init(codeblocks_t *cb, size_t max) {
-    char_array__init(&cb->header, max);
-    char_array__init(&cb->source, max);
-    char_array__init(&cb->earlyheader, max);
-    char_array__init(&cb->earlysource, max);
-}
-
-static void codeblocks__term(codeblocks_t *cb) {
-    char_array__term(&cb->header);
-    char_array__term(&cb->source);
-    char_array__term(&cb->earlyheader);
-    char_array__term(&cb->earlysource);
 }
 
 static void node_array__init(node_array_t *array, size_t max) {
@@ -1054,7 +1036,10 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
     ctx->rulehash.buf = NULL;
-    codeblocks__init(&ctx->codeblocks, BUFFER_INIT_SIZE);
+    char_array__init(&ctx->esource, BUFFER_INIT_SIZE);
+    char_array__init(&ctx->eheader, BUFFER_INIT_SIZE);
+    char_array__init(&ctx->source, BUFFER_INIT_SIZE);
+    char_array__init(&ctx->header, BUFFER_INIT_SIZE);
     return ctx;
 }
 
@@ -1186,6 +1171,10 @@ static void destroy_node(node_t *node) {
 
 static void destroy_context(context_t *ctx) {
     if (ctx == NULL) return;
+    char_array__term(&ctx->header);
+    char_array__term(&ctx->source);
+    char_array__term(&ctx->eheader);
+    char_array__term(&ctx->esource);
     free((node_t **)ctx->rulehash.buf);
     node_array__term(&ctx->rules);
     char_array__term(&ctx->buffer);
@@ -1197,7 +1186,6 @@ static void destroy_context(context_t *ctx) {
     free(ctx->hname);
     free(ctx->sname);
     free(ctx->iname);
-    codeblocks__term(&ctx->codeblocks);
     free(ctx);
 }
 
@@ -2328,12 +2316,12 @@ static bool_t parse(context_t *ctx) {
             l = ctx->linenum;
             m = column_number(ctx);
             if (
-                parse_directive_include_(ctx, "%earlysource", &ctx->codeblocks.earlysource, NULL) ||
-                parse_directive_include_(ctx, "%earlyheader", &ctx->codeblocks.earlyheader, NULL) ||
-                parse_directive_include_(ctx, "%earlycommon", &ctx->codeblocks.earlysource, &ctx->codeblocks.earlyheader) ||
-                parse_directive_include_(ctx, "%source", &ctx->codeblocks.source, NULL) ||
-                parse_directive_include_(ctx, "%header", &ctx->codeblocks.header, NULL) ||
-                parse_directive_include_(ctx, "%common", &ctx->codeblocks.source, &ctx->codeblocks.header) ||
+                parse_directive_include_(ctx, "%earlysource", &ctx->esource, NULL) ||
+                parse_directive_include_(ctx, "%earlyheader", &ctx->eheader, NULL) ||
+                parse_directive_include_(ctx, "%earlycommon", &ctx->esource, &ctx->eheader) ||
+                parse_directive_include_(ctx, "%source", &ctx->source, NULL) ||
+                parse_directive_include_(ctx, "%header", &ctx->header, NULL) ||
+                parse_directive_include_(ctx, "%common", &ctx->source, &ctx->header) ||
                 parse_directive_string_(ctx, "%value", &ctx->vtype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
                 parse_directive_string_(ctx, "%auxil", &ctx->atype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
                 parse_directive_string_(ctx, "%prefix", &ctx->prefix, STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)
@@ -3080,13 +3068,12 @@ static bool_t generate(context_t *ctx) {
     const char *const at = get_auxil_type(ctx);
     const bool_t vp = is_pointer_type(vt);
     const bool_t ap = is_pointer_type(at);
-    FILE *const stream = fopen_wt_e(ctx->sname);
+    FILE *const sstream = fopen_wt_e(ctx->sname);
     FILE *const hstream = fopen_wt_e(ctx->hname);
-
-    fprintf_e(stream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
+    fprintf_e(sstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     fprintf_e(hstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     {
-        write_code_block(hstream, ctx->codeblocks.earlyheader.buf, ctx->codeblocks.earlyheader.len, 0);
+        write_code_block(hstream, ctx->eheader.buf, ctx->eheader.len, 0);
         fprintf_e(
             hstream,
             "#ifndef PCC_INCLUDED_%s\n"
@@ -3094,10 +3081,10 @@ static bool_t generate(context_t *ctx) {
             "\n",
             ctx->hid, ctx->hid
         );
-        write_code_block(hstream, ctx->codeblocks.header.buf, ctx->codeblocks.header.len, 0);
+        write_code_block(hstream, ctx->header.buf, ctx->header.len, 0);
     }
     {
-        write_code_block(stream, ctx->codeblocks.earlysource.buf, ctx->codeblocks.earlysource.len, 0);
+        write_code_block(sstream, ctx->esource.buf, ctx->esource.len, 0);
         fputs_e(
             "#ifdef _MSC_VER\n"
             "#undef _CRT_SECURE_NO_WARNINGS\n"
@@ -3124,15 +3111,15 @@ static bool_t generate(context_t *ctx) {
             "#define PCC_DBG_MATCH    1\n"
             "#define PCC_DBG_NOMATCH  2\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "#include \"%s\"\n"
             "\n",
             ctx->hname
         );
-        write_code_block(stream, ctx->codeblocks.source.buf, ctx->codeblocks.source.len, 0);
+        write_code_block(sstream, ctx->source.buf, ctx->source.len, 0);
     }
     {
         fputs_e(
@@ -3162,16 +3149,16 @@ static bool_t generate(context_t *ctx) {
             "    size_t end;\n"
             "} pcc_range_t;\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "typedef %s%spcc_value_t;\n"
             "\n",
             vt, vp ? "" : " "
         );
         fprintf_e(
-            stream,
+            sstream,
             "typedef %s%spcc_auxil_t;\n"
             "\n",
             at, ap ? "" : " "
@@ -3209,10 +3196,10 @@ static bool_t generate(context_t *ctx) {
             "typedef struct pcc_thunk_tag pcc_thunk_t;\n"
             "typedef struct pcc_thunk_array_tag pcc_thunk_array_t;\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "typedef void (*pcc_action_t)(%s_context_t *, pcc_thunk_t *, pcc_value_t *);\n"
             "\n",
             get_prefix(ctx)
@@ -3279,10 +3266,10 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_answer_t *hold;\n"
             "};\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "typedef pcc_thunk_chunk_t *(*pcc_rule_t)(%s_context_t *);\n"
             "\n",
             get_prefix(ctx)
@@ -3339,10 +3326,10 @@ static bool_t generate(context_t *ctx) {
             "    size_t len;\n"
             "} pcc_lr_stack_t;\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "struct %s_context_tag {\n"
             "    size_t pos; /* the position in the input of the first character currently buffered */\n"
             "    size_t cur; /* the current parsing position in the character buffer */\n"
@@ -3418,7 +3405,7 @@ static bool_t generate(context_t *ctx) {
             "    return s;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_char_array__init(pcc_auxil_t auxil, pcc_char_array_t *array, size_t max) {\n"
@@ -3444,7 +3431,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, array->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_value_table__init(pcc_auxil_t auxil, pcc_value_table_t *table, size_t max) {\n"
@@ -3469,7 +3456,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_value_refer_table__init(pcc_auxil_t auxil, pcc_value_refer_table_t *table, size_t max) {\n"
@@ -3496,7 +3483,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_capture_table__init(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t max) {\n"
@@ -3532,7 +3519,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_capture_const_table__init(pcc_auxil_t auxil, pcc_capture_const_table_t *table, size_t max) {\n"
@@ -3559,7 +3546,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, size_t valuec, size_t captc) {\n"
@@ -3600,7 +3587,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, thunk);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_thunk_array__init(pcc_auxil_t auxil, pcc_thunk_array_t *array, size_t max) {\n"
@@ -3637,7 +3624,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, array->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_auxil_t auxil) {\n"
@@ -3657,7 +3644,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, chunk);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_rule_set__init(pcc_auxil_t auxil, pcc_rule_set_t *set, size_t max) {\n"
@@ -3713,7 +3700,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, set->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static pcc_lr_head_t *pcc_lr_head__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
@@ -3733,7 +3720,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, head);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr);\n"
@@ -3791,7 +3778,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, answer);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, size_t max) {\n"
@@ -3843,7 +3830,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, map->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_auxil_t auxil) {\n"
@@ -3863,7 +3850,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, entry);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_lr_table__init(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t max) {\n"
@@ -3939,7 +3926,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
@@ -3954,7 +3941,7 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, lr);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fputs_e(
             "static void pcc_lr_stack__init(pcc_auxil_t auxil, pcc_lr_stack_t *stack, size_t max) {\n"
@@ -3984,10 +3971,10 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(auxil, stack->buf);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "static %s_context_t *pcc_context__create(pcc_auxil_t auxil) {\n"
             "    %s_context_t *const ctx = (%s_context_t *)PCC_MALLOC(auxil, sizeof(%s_context_t));\n",
             get_prefix(ctx), get_prefix(ctx), get_prefix(ctx), get_prefix(ctx)
@@ -4003,10 +3990,10 @@ static bool_t generate(context_t *ctx) {
             "    return ctx;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "static void pcc_context__destroy(%s_context_t *ctx) {\n",
             get_prefix(ctx)
         );
@@ -4018,10 +4005,10 @@ static bool_t generate(context_t *ctx) {
             "    PCC_FREE(ctx->auxil, ctx);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "static size_t pcc_refill_buffer(%s_context_t *ctx, size_t num) {\n",
             get_prefix(ctx)
         );
@@ -4035,10 +4022,10 @@ static bool_t generate(context_t *ctx) {
             "    return ctx->buffer.len - ctx->cur;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "static void pcc_commit_buffer(%s_context_t *ctx) {\n",
             get_prefix(ctx)
         );
@@ -4050,10 +4037,10 @@ static bool_t generate(context_t *ctx) {
             "    ctx->cur = 0;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "static const char *pcc_get_capture_string(%s_context_t *ctx, const pcc_capture_t *capt) {\n",
             get_prefix(ctx)
         );
@@ -4064,11 +4051,11 @@ static bool_t generate(context_t *ctx) {
             "    return capt->string;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         if (ctx->flags & CODE_FLAG__UTF8_CHARCLASS_USED) {
             fprintf_e(
-                stream,
+                sstream,
                 "static size_t pcc_get_char_as_utf32(%s_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n",
                 get_prefix(ctx)
             );
@@ -4124,11 +4111,11 @@ static bool_t generate(context_t *ctx) {
                 "    return n;\n"
                 "}\n"
                 "\n",
-                stream
+                sstream
             );
         }
         fprintf_e(
-            stream,
+            sstream,
             "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
@@ -4231,10 +4218,10 @@ static bool_t generate(context_t *ctx) {
             "    return PCC_TRUE;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "static void pcc_do_action(%s_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
@@ -4255,7 +4242,7 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         {
             size_t i, j, k;
@@ -4283,20 +4270,20 @@ static bool_t generate(context_t *ctx) {
                         exit(-1);
                     }
                     fprintf_e(
-                        stream,
+                        sstream,
                         "static void pcc_action_%s_%d(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
                         r->name, d, get_prefix(ctx)
                     );
                     fputs_e(
                         "#define auxil (__pcc_ctx->auxil)\n"
                         "#define __ (*__pcc_out)\n",
-                        stream
+                        sstream
                     );
                     k = 0;
                     while (k < v->len) {
                         assert(v->buf[k]->type == NODE_REFERENCE);
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#define %s (*__pcc_in->data.leaf.values.buf[%lu])\n",
                             v->buf[k]->data.reference.var, (ulong_t)v->buf[k]->data.reference.index
                         );
@@ -4306,45 +4293,45 @@ static bool_t generate(context_t *ctx) {
                         "#define _0 pcc_get_capture_string(__pcc_ctx, &__pcc_in->data.leaf.capt0)\n"
                         "#define _0s ((const size_t)__pcc_in->data.leaf.capt0.range.start)\n"
                         "#define _0e ((const size_t)__pcc_in->data.leaf.capt0.range.end)\n",
-                        stream
+                        sstream
                     );
                     k = 0;
                     while (k < c->len) {
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#define _%lu pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.buf[%lu])\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#define _%lus ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.start))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#define _%lue ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.buf[%lu]->range.end))\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1), (ulong_t)c->buf[k]->data.capture.index
                         );
                         k++;
                     }
-                    write_code_block(stream, s, strlen(s), 4);
+                    write_code_block(sstream, s, strlen(s), 4);
                     k = c->len;
                     while (k > 0) {
                         k--;
                         assert(c->buf[k]->type == NODE_CAPTURE);
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#undef _%lue\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1)
                         );
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#undef _%lus\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1)
                         );
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#undef _%lu\n",
                             (ulong_t)(c->buf[k]->data.capture.index + 1)
                         );
@@ -4353,14 +4340,14 @@ static bool_t generate(context_t *ctx) {
                         "#undef _0e\n"
                         "#undef _0s\n"
                         "#undef _0\n",
-                        stream
+                        sstream
                     );
                     k = v->len;
                     while (k > 0) {
                         k--;
                         assert(v->buf[k]->type == NODE_REFERENCE);
                         fprintf_e(
-                            stream,
+                            sstream,
                             "#undef %s\n",
                             v->buf[k]->data.reference.var
                         );
@@ -4368,12 +4355,12 @@ static bool_t generate(context_t *ctx) {
                     fputs_e(
                         "#undef __\n"
                         "#undef auxil\n",
-                        stream
+                        sstream
                     );
                     fputs_e(
                         "}\n"
                         "\n",
-                        stream
+                        sstream
                     );
                 }
             }
@@ -4382,29 +4369,29 @@ static bool_t generate(context_t *ctx) {
             size_t i;
             for (i = 0; i < ctx->rules.len; i++) {
                 fprintf_e(
-                    stream,
+                    sstream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx);\n",
                     ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
                 );
             }
             fputs_e(
                 "\n",
-                stream
+                sstream
             );
             for (i = 0; i < ctx->rules.len; i++) {
                 code_reach_t r;
                 generate_t g;
-                g.stream = stream;
+                g.stream = sstream;
                 g.rule = ctx->rules.buf[i];
                 g.label = 0;
                 g.ascii = ctx->ascii;
                 fprintf_e(
-                    stream,
+                    sstream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
                     ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
                 );
                 fprintf_e(
-                    stream,
+                    sstream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
                     "    chunk->pos = ctx->cur;\n"
                     "    PCC_DEBUG(PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
@@ -4412,18 +4399,18 @@ static bool_t generate(context_t *ctx) {
                     ctx->rules.buf[i]->data.rule.name
                 );
                 fprintf_e(
-                    stream,
+                    sstream,
                     "    pcc_value_table__resize(ctx->auxil, &chunk->values, %lu);\n",
                     (ulong_t)ctx->rules.buf[i]->data.rule.vars.len
                 );
                 fprintf_e(
-                    stream,
+                    sstream,
                     "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, %lu);\n",
                     (ulong_t)ctx->rules.buf[i]->data.rule.capts.len
                 );
                 r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
                 fprintf_e(
-                    stream,
+                    sstream,
                     "    ctx->level--;\n"
                     "    PCC_DEBUG(PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                     "    return chunk;\n",
@@ -4431,7 +4418,7 @@ static bool_t generate(context_t *ctx) {
                 );
                 if (r != CODE_REACH__ALWAYS_SUCCEED) {
                     fprintf_e(
-                        stream,
+                        sstream,
                         "L0000:;\n"
                         "    ctx->level--;\n"
                         "    PCC_DEBUG(PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
@@ -4443,12 +4430,12 @@ static bool_t generate(context_t *ctx) {
                 fputs_e(
                     "}\n"
                     "\n",
-                    stream
+                    sstream
                 );
             }
         }
         fprintf_e(
-            stream,
+            sstream,
             "%s_context_t *%s_create(%s%sauxil) {\n",
             get_prefix(ctx), get_prefix(ctx),
             at, ap ? "" : " "
@@ -4457,10 +4444,10 @@ static bool_t generate(context_t *ctx) {
             "    return pcc_context__create(auxil);\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "int %s_parse(%s_context_t *ctx, %s%s*ret) {\n",
             get_prefix(ctx), get_prefix(ctx),
             vt, vp ? "" : " "
@@ -4468,11 +4455,11 @@ static bool_t generate(context_t *ctx) {
         fputs_e(
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_thunk_array__init(ctx->auxil, &thunks, PCC_ARRAYSIZE);\n",
-            stream
+            sstream
         );
         if (ctx->rules.len > 0) {
             fprintf_e(
-                stream,
+                sstream,
                 "    if (pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &thunks, ret))\n",
                 ctx->rules.buf[0]->data.rule.name
             );
@@ -4481,7 +4468,7 @@ static bool_t generate(context_t *ctx) {
                 "    else\n"
                 "        PCC_ERROR(ctx->auxil);\n"
                 "    pcc_commit_buffer(ctx);\n",
-                stream
+                sstream
             );
         }
         fputs_e(
@@ -4489,17 +4476,17 @@ static bool_t generate(context_t *ctx) {
             "    return pcc_refill_buffer(ctx, 1) >= 1;\n"
             "}\n"
             "\n",
-            stream
+            sstream
         );
         fprintf_e(
-            stream,
+            sstream,
             "void %s_destroy(%s_context_t *ctx) {\n",
             get_prefix(ctx), get_prefix(ctx)
         );
         fputs_e(
             "    pcc_context__destroy(ctx);\n"
             "}\n",
-            stream
+            sstream
         );
     }
     {
@@ -4549,20 +4536,20 @@ static bool_t generate(context_t *ctx) {
     }
     {
         match_eol(ctx);
-        if (!match_eof(ctx)) fputc_e('\n', stream);
+        if (!match_eof(ctx)) fputc_e('\n', sstream);
         commit_buffer(ctx);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = (ctx->buffer.len > 0 && ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
-            write_text(stream, ctx->buffer.buf, n);
+            write_text(sstream, ctx->buffer.buf, n);
             ctx->bufcur = n;
             commit_buffer(ctx);
         }
     }
-    fclose_e(stream);
     fclose_e(hstream);
+    fclose_e(sstream);
     if (ctx->errnum) {
-        unlink(ctx->sname);
         unlink(ctx->hname);
+        unlink(ctx->sname);
         return FALSE;
     }
     return TRUE;
