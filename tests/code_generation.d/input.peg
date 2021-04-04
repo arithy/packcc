@@ -10,6 +10,14 @@
     /* HEADER AND SOURCE */
 }
 
+%earlyheader { /* EARLY HEADER ONLY */ }
+
+%earlysource { /* EARLY SOURCE ONLY */ }
+
+%earlycommon {
+    /* EARLY HEADER AND SOURCE */
+}
+
 %value "double"
 
 %auxil "long"

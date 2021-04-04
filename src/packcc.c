@@ -220,6 +220,13 @@ struct node_tag {
     node_data_t data;
 };
 
+typedef struct codeblocks_tag {
+    char_array_t header;
+    char_array_t source;
+    char_array_t earlyheader;
+    char_array_t earlysource;
+} codeblocks_t;
+
 typedef enum code_flag_tag {
     CODE_FLAG__NONE = 0,
     CODE_FLAG__UTF8_CHARCLASS_USED = 1
@@ -230,8 +237,6 @@ typedef struct context_tag {
     char *sname;  /* the path name of the C source file being generated */
     char *hname;  /* the path name of the C header file being generated */
     FILE *ifile;  /* the input stream of the PEG file */
-    FILE *sfile;  /* the output stream of the C source file */
-    FILE *hfile;  /* the output stream of the C header file */
     char *hid;    /* the macro name for the include guard of the C header file */
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
@@ -247,6 +252,7 @@ typedef struct context_tag {
     char_array_t buffer; /* the character buffer */
     node_array_t rules;  /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
+    codeblocks_t codeblocks;    /* code blocks from directives to be added into the generated files */
 } context_t;
 
 typedef struct generate_tag {
@@ -929,8 +935,36 @@ static void char_array__add(char_array_t *array, char ch) {
     array->buf[array->len++] = ch;
 }
 
+static void char_array__append(char_array_t *array, const char *s, size_t len) {
+    if (array->max < array->len + len) {
+        const size_t n = array->len + len;
+        size_t m = array->max;
+        if (m == 0) m = 1;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n; /* in case of shift overflow */
+        array->buf = (char *)realloc_e(array->buf, m);
+        array->max = m;
+    }
+    memcpy(array->buf + array->len, s, len);
+    array->len += len;
+}
+
 static void char_array__term(char_array_t *array) {
     free(array->buf);
+}
+
+static void codeblocks__init(codeblocks_t *cb, size_t max) {
+    char_array__init(&cb->header, max);
+    char_array__init(&cb->source, max);
+    char_array__init(&cb->earlyheader, max);
+    char_array__init(&cb->earlysource, max);
+}
+
+static void codeblocks__term(codeblocks_t *cb) {
+    char_array__term(&cb->header);
+    char_array__term(&cb->source);
+    char_array__term(&cb->earlyheader);
+    char_array__term(&cb->earlysource);
 }
 
 static void node_array__init(node_array_t *array, size_t max) {
@@ -1003,8 +1037,6 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->sname = (oname && oname[0]) ? add_fileext(oname, "c") : replace_fileext(ctx->iname, "c");
     ctx->hname = (oname && oname[0]) ? add_fileext(oname, "h") : replace_fileext(ctx->iname, "h");
     ctx->ifile = (iname && iname[0]) ? fopen_rb_e(ctx->iname) : stdin;
-    ctx->sfile = fopen_wt_e(ctx->sname);
-    ctx->hfile = fopen_wt_e(ctx->hname);
     ctx->hid = strdup_e(ctx->hname); make_header_identifier(ctx->hid);
     ctx->vtype = NULL;
     ctx->atype = NULL;
@@ -1022,6 +1054,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
     ctx->rulehash.buf = NULL;
+    codeblocks__init(&ctx->codeblocks, BUFFER_INIT_SIZE);
     return ctx;
 }
 
@@ -1160,12 +1193,11 @@ static void destroy_context(context_t *ctx) {
     free(ctx->atype);
     free(ctx->vtype);
     free(ctx->hid);
-    fclose_e(ctx->hfile); if (ctx->errnum) unlink(ctx->hname);
-    fclose_e(ctx->sfile); if (ctx->errnum) unlink(ctx->sname);
     fclose_e(ctx->ifile);
     free(ctx->hname);
     free(ctx->sname);
     free(ctx->iname);
+    codeblocks__term(&ctx->codeblocks);
     free(ctx);
 }
 
@@ -2195,7 +2227,7 @@ static void dump_options(context_t *ctx) {
     fprintf(stdout, "prefix: '%s'\n", get_prefix(ctx));
 }
 
-static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *output1, FILE *output2) {
+static bool_t parse_directive_include_(context_t *ctx, const char *name, char_array_t *output1, char_array_t *output2) {
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     if (!match_string(ctx, name)) return FALSE;
@@ -2206,12 +2238,12 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, FILE *o
             const size_t q = ctx->bufcur;
             match_spaces(ctx);
             if (output1 != NULL) {
-                write_code_block(output1, ctx->buffer.buf + p + 1, q - p - 2, 0);
-                fputc_e('\n', output1);
+                char_array__append(output1, ctx->buffer.buf + p + 1, q - p - 2);
+                char_array__add(output1, '\n');
             }
             if (output2 != NULL) {
-                write_code_block(output2, ctx->buffer.buf + p + 1, q - p - 2, 0);
-                fputc_e('\n', output2);
+                char_array__append(output2, ctx->buffer.buf + p + 1, q - p - 2);
+                char_array__add(output2, '\n');
             }
         }
         else {
@@ -2286,53 +2318,6 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
 }
 
 static bool_t parse(context_t *ctx) {
-    fprintf_e(ctx->sfile, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
-    fprintf_e(ctx->hfile, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
-    {
-        fputs_e(
-            "#ifdef _MSC_VER\n"
-            "#undef _CRT_SECURE_NO_WARNINGS\n"
-            "#define _CRT_SECURE_NO_WARNINGS\n"
-            "#endif /* _MSC_VER */\n"
-            "#include <stdio.h>\n"
-            "#include <stdlib.h>\n"
-            "#include <string.h>\n"
-            "\n"
-            "#ifndef _MSC_VER\n"
-            "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
-            "#ifndef PCC_USE_SYSTEM_STRNLEN\n"
-            "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
-            "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
-            "    size_t i;\n"
-            "    for (i = 0; i < maxlen && str[i]; i++);\n"
-            "    return i;\n"
-            "}\n"
-            "#endif /* !PCC_USE_SYSTEM_STRNLEN */\n"
-            "#endif /* defined __GNUC__ && defined _WIN32 */\n"
-            "#endif /* !_MSC_VER */\n"
-            "\n"
-            "#define PCC_DBG_EVALUATE 0\n"
-            "#define PCC_DBG_MATCH    1\n"
-            "#define PCC_DBG_NOMATCH  2\n"
-            "\n",
-            ctx->sfile
-        );
-        fprintf_e(
-            ctx->sfile,
-            "#include \"%s\"\n"
-            "\n",
-            ctx->hname
-        );
-    }
-    {
-        fprintf_e(
-            ctx->hfile,
-            "#ifndef PCC_INCLUDED_%s\n"
-            "#define PCC_INCLUDED_%s\n"
-            "\n",
-            ctx->hid, ctx->hid
-        );
-    }
     {
         bool_t b = TRUE;
         match_spaces(ctx);
@@ -2343,9 +2328,12 @@ static bool_t parse(context_t *ctx) {
             l = ctx->linenum;
             m = column_number(ctx);
             if (
-                parse_directive_include_(ctx, "%source", ctx->sfile, NULL) ||
-                parse_directive_include_(ctx, "%header", ctx->hfile, NULL) ||
-                parse_directive_include_(ctx, "%common", ctx->sfile, ctx->hfile) ||
+                parse_directive_include_(ctx, "%earlysource", &ctx->codeblocks.earlysource, NULL) ||
+                parse_directive_include_(ctx, "%earlyheader", &ctx->codeblocks.earlyheader, NULL) ||
+                parse_directive_include_(ctx, "%earlycommon", &ctx->codeblocks.earlysource, &ctx->codeblocks.earlyheader) ||
+                parse_directive_include_(ctx, "%source", &ctx->codeblocks.source, NULL) ||
+                parse_directive_include_(ctx, "%header", &ctx->codeblocks.header, NULL) ||
+                parse_directive_include_(ctx, "%common", &ctx->codeblocks.source, &ctx->codeblocks.header) ||
                 parse_directive_string_(ctx, "%value", &ctx->vtype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
                 parse_directive_string_(ctx, "%auxil", &ctx->atype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
                 parse_directive_string_(ctx, "%prefix", &ctx->prefix, STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)
@@ -3092,7 +3080,60 @@ static bool_t generate(context_t *ctx) {
     const char *const at = get_auxil_type(ctx);
     const bool_t vp = is_pointer_type(vt);
     const bool_t ap = is_pointer_type(at);
-    FILE *const stream = ctx->sfile;
+    FILE *const stream = fopen_wt_e(ctx->sname);
+    FILE *const hstream = fopen_wt_e(ctx->hname);
+
+    fprintf_e(stream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
+    fprintf_e(hstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
+    {
+        write_code_block(hstream, ctx->codeblocks.earlyheader.buf, ctx->codeblocks.earlyheader.len, 0);
+        fprintf_e(
+            hstream,
+            "#ifndef PCC_INCLUDED_%s\n"
+            "#define PCC_INCLUDED_%s\n"
+            "\n",
+            ctx->hid, ctx->hid
+        );
+        write_code_block(hstream, ctx->codeblocks.header.buf, ctx->codeblocks.header.len, 0);
+    }
+    {
+        write_code_block(stream, ctx->codeblocks.earlysource.buf, ctx->codeblocks.earlysource.len, 0);
+        fputs_e(
+            "#ifdef _MSC_VER\n"
+            "#undef _CRT_SECURE_NO_WARNINGS\n"
+            "#define _CRT_SECURE_NO_WARNINGS\n"
+            "#endif /* _MSC_VER */\n"
+            "#include <stdio.h>\n"
+            "#include <stdlib.h>\n"
+            "#include <string.h>\n"
+            "\n"
+            "#ifndef _MSC_VER\n"
+            "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
+            "#ifndef PCC_USE_SYSTEM_STRNLEN\n"
+            "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
+            "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
+            "    size_t i;\n"
+            "    for (i = 0; i < maxlen && str[i]; i++);\n"
+            "    return i;\n"
+            "}\n"
+            "#endif /* !PCC_USE_SYSTEM_STRNLEN */\n"
+            "#endif /* defined __GNUC__ && defined _WIN32 */\n"
+            "#endif /* !_MSC_VER */\n"
+            "\n"
+            "#define PCC_DBG_EVALUATE 0\n"
+            "#define PCC_DBG_MATCH    1\n"
+            "#define PCC_DBG_NOMATCH  2\n"
+            "\n",
+            stream
+        );
+        fprintf_e(
+            stream,
+            "#include \"%s\"\n"
+            "\n",
+            ctx->hname
+        );
+        write_code_block(stream, ctx->codeblocks.source.buf, ctx->codeblocks.source.len, 0);
+    }
     {
         fputs_e(
             "#ifndef PCC_BUFFERSIZE\n"
@@ -4467,28 +4508,28 @@ static bool_t generate(context_t *ctx) {
             "extern \"C\" {\n"
             "#endif\n"
             "\n",
-            ctx->hfile
+            hstream
         );
         fprintf_e(
-            ctx->hfile,
+            hstream,
             "typedef struct %s_context_tag %s_context_t;\n"
             "\n",
             get_prefix(ctx), get_prefix(ctx)
         );
         fprintf_e(
-            ctx->hfile,
+            hstream,
             "%s_context_t *%s_create(%s%sauxil);\n",
             get_prefix(ctx), get_prefix(ctx),
             at, ap ? "" : " "
         );
         fprintf_e(
-            ctx->hfile,
+            hstream,
             "int %s_parse(%s_context_t *ctx, %s%s*ret);\n",
             get_prefix(ctx), get_prefix(ctx),
             vt, vp ? "" : " "
         );
         fprintf_e(
-            ctx->hfile,
+            hstream,
             "void %s_destroy(%s_context_t *ctx);\n",
             get_prefix(ctx), get_prefix(ctx)
         );
@@ -4497,10 +4538,10 @@ static bool_t generate(context_t *ctx) {
             "#ifdef __cplusplus\n"
             "}\n"
             "#endif\n",
-            ctx->hfile
+            hstream
         );
         fprintf_e(
-            ctx->hfile,
+            hstream,
             "\n"
             "#endif /* !PCC_INCLUDED_%s */\n",
             ctx->hid
@@ -4517,7 +4558,14 @@ static bool_t generate(context_t *ctx) {
             commit_buffer(ctx);
         }
     }
-    return (ctx->errnum == 0) ? TRUE : FALSE;
+    fclose_e(stream);
+    fclose_e(hstream);
+    if (ctx->errnum) {
+        unlink(ctx->sname);
+        unlink(ctx->hname);
+        return FALSE;
+    }
+    return TRUE;
 }
 
 static void print_version(FILE *output) {
