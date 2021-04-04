@@ -40,12 +40,12 @@ EOF
 build() {
     if [ -z "$PACKCC" ]; then
         export PACKCC="$TESTDIR/packcc"
-        ${CC:-cc} -o "$PACKCC" $ROOTDIR/src/packcc.c
+        ${CC:-cc} --coverage -O0 -o "$PACKCC" $ROOTDIR/src/packcc.c
     fi
 }
 
 clean() {
-    rm -f packcc *.d/test.bats *.d/parser{,.c,.h}
+    rm -f packcc{,.gcda,.gcno,.c.gcov} *.d/test.bats *.d/parser{,.c,.h}
 }
 
 main() {
@@ -65,6 +65,10 @@ main() {
     done
 
     bats "$@" ./*.d
+
+    if [ -f "packcc.gcda" ]; then
+        echo "$(gcov packcc | grep "Lines executed") (see $TESTDIR/packcc.c.gcov for details)"
+    fi
 }
 
 main "$@"
