@@ -2,4 +2,5 @@ packcc
 */parser.c
 */parser.h
 */parser
+*/parser.exe
 */test.bats

@@ -79,16 +79,16 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 
 #define VOID_VALUE (~(size_t)0)
 
-#if defined _MSC_VER && !defined _M_IX86 /* MSVC && not for x86 (32-bit) */
+#ifdef _WIN64 /* 64-bit Windows including MSVC and MINGW-w64 */
 #define FMT_LU "%llu"
 typedef unsigned long long ulong_t;
-/* NOTE: "long long" and "%llu" are not C89-compliant, but they are required to deal with a 64-bit integer value in MSVC. */
+/* NOTE: "%llu" and "long long" are not C89-compliant, but they are required to deal with a 64-bit integer value in 64-bit Windows. */
 #else
 #define FMT_LU "%lu"
 typedef unsigned long ulong_t;
 #endif
 /* FMT_LU and ulong_t are used to print size_t values safely (ex. printf(FMT_LU "\n", (ulong_t)value);) */
-/* NOTE: Neither "%z" nor <stdint.h> is used since PackCC complies the C89 standard as much as possible. */
+/* NOTE: Neither "%z" nor <inttypes.h> is used since PackCC complies with the C89 standard as much as possible. */
 
 typedef enum bool_tag {
     FALSE = 0,
