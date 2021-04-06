@@ -39,6 +39,7 @@ For convenience, the build environments using GCC, Clang, and Microsoft Visual S
 ```
 cd build/gcc
 make
+make check
 ```
 
 `packcc` in the directory `build/gcc/release/bin` is suitable for practical use.
@@ -50,6 +51,7 @@ make
 ```
 cd build/clang
 make
+make check
 ```
 
 `packcc` in the directory `build/clang/release/bin` is suitable for practical use.

@@ -18,7 +18,7 @@ test_style() {
     else
         run uncrustify -q -c "$TESTDIR/uncrustify.cfg" -f "$1"
         [ "$status" -eq 0 ]
-        diff -uN "$1" --label "$1" <(echo "$output") --label "formatted"
+        diff --strip-trailing-cr -uN "$1" --label "$1" <(echo "$output") --label "formatted"
     fi
 }
 
@@ -29,7 +29,8 @@ test_style() {
 }
 
 @test "Testing style.d - generated" {
-    test_generate "style.d" "calc.peg"
+    cp -f ../src/examples/calc.peg style.d/parser.peg  ## NOTE: Copy is adopted instead of using a link, considering MinGW.
+    test_generate "style.d" "parser.peg"
     test_style "style.d/parser.h"
     test_style "style.d/parser.c"
 }

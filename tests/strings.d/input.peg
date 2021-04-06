@@ -3,5 +3,5 @@ TOKEN <- (HELLO / WORLD / SMILEY / ESCAPES) { PRINT($0); }
 HELLO <- "Hello"
 WORLD <- 'world'
 SMILEY <- "😊"
-ESCAPES <- '\\\'\"\a\b\f\t\v\x3d\u20AC\r\n'
-_ <- ' ' / '\n'
+ESCAPES <- '\\\'\"\a\b\f\t\v\x3d\u20AC'
+_ <- ' ' / '\r\n' / '\n'

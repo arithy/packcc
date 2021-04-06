@@ -10,5 +10,5 @@ test_compile() {
 
 run_for_input() {
     run timeout 5s "$(dirname "$1")/parser" < "$1"
-    diff -uN "${1/input/expected}" --label "${1/input/expected}" <(echo "$output") --label "output"
+    diff --strip-trailing-cr -uN "${1/input/expected}" --label "${1/input/expected}" <(echo "$output") --label "output"
 }

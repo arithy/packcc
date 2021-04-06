@@ -79,7 +79,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 
 #define VOID_VALUE (~(size_t)0)
 
-#ifdef _WIN64 /* 64-bit Windows including MSVC and MINGW-w64 */
+#ifdef _WIN64 /* 64-bit Windows including MSVC and MinGW-w64 */
 #define FMT_LU "%llu"
 typedef unsigned long long ulong_t;
 /* NOTE: "%llu" and "long long" are not C89-compliant, but they are required to deal with a 64-bit integer value in 64-bit Windows. */

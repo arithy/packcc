@@ -1,2 +1,3 @@
-Syntax error
 A;
+
+Syntax error

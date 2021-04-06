@@ -7,6 +7,7 @@ Evaluating rule TOP @0 []
 ]
 Matched rule TOP @0 [Aaa
 ]
+A: Aaa
 Evaluating rule TOP @0 [B]
   Evaluating rule RULE_A @0 [B]
   Abandoning rule RULE_A @0 []
@@ -53,7 +54,6 @@ Evaluating rule TOP @0 [B]
 ]
 Matched rule TOP @0 [BBCccbbCCBbbb
 ]
-A: Aaa
 B2: Bbbb
 B: Bbbb
 C: CCBbbb

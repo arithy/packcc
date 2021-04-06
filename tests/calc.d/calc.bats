@@ -3,7 +3,8 @@
 load $TESTDIR/utils.sh
 
 @test "Testing calc.d - generation" {
-    test_generate calc.d
+    cp -f ../src/examples/calc.peg calc.d/parser.peg  ## NOTE: Copy is adopted instead of using a link, considering MinGW.
+    test_generate calc.d parser.peg
 }
 
 @test "Testing calc.d - compilation" {

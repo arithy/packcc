@@ -1,7 +1,8 @@
 %source {
 static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning rule" };
 #define PCC_DEBUG(event, rule, level, pos, buffer, length) \
-    fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str[event], rule, pos, length, buffer)
+    fprintf(stdout, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str[event], rule, pos, length, buffer)
+    /* NOTE: To guarantee the output order, stderr, which can lead a race condition with stdout, is not used. */
 }
 
 TOP <- (RULE_A / RULE_B) EOL

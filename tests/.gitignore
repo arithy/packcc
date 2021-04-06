@@ -1,4 +1,6 @@
 packcc
+packcc.exe
+*/parser.peg
 */parser.c
 */parser.h
 */parser

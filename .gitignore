@@ -1,4 +1,5 @@
 *.o
+*.obj
 /build/**/tmp/
 /build/**/bin/
 /build/msvc/**/x86/

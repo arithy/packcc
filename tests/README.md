@@ -23,6 +23,8 @@ $ git clone https://github.com/uncrustify/uncrustify &&
   sudo make install
 ```
 
+When you use MinGW-w64, `cmake` requires the options `-G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=/usr/local`.
+
 After installing `bats-core-1.2.1` and `uncrustify`, you can run the tests using `tests/test.sh` script:
 ```
 $ ./test.sh
