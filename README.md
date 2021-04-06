@@ -39,7 +39,7 @@ For convenience, the build environments using GCC, Clang, and Microsoft Visual S
 ```
 cd build/gcc
 make
-make check
+make check  # bats-core and uncrustify are required (see tests/README.md)
 ```
 
 `packcc` in the directory `build/gcc/release/bin` is suitable for practical use.
@@ -51,7 +51,7 @@ make check
 ```
 cd build/clang
 make
-make check
+make check  # bats-core and uncrustify are required (see tests/README.md)
 ```
 
 `packcc` in the directory `build/clang/release/bin` is suitable for practical use.
