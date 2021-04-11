@@ -8,7 +8,11 @@ test_compile() {
     ${CC:-cc} -I "$dir" "main.c" -o "$dir/parser" "$@"
 }
 
+check_output() {
+    diff --strip-trailing-cr -uN "${1/input/expected}" --label "${1/input/expected}" <(echo "$output") --label "output"
+}
+
 run_for_input() {
     run timeout 5s "$(dirname "$1")/parser" < "$1"
-    diff --strip-trailing-cr -uN "${1/input/expected}" --label "${1/input/expected}" <(echo "$output") --label "output"
+    check_output "$1"
 }
