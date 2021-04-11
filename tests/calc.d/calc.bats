@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-load $TESTDIR/utils.sh
+load "$TESTDIR/utils.sh"
 
 @test "Testing calc.d - generation" {
     test_generate "$ROOTDIR/src/examples/calc.peg"

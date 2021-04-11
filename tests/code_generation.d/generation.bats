@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-load $TESTDIR/utils.sh
+load "$TESTDIR/utils.sh"
 
 @test "Testing code_generation.d - generation" {
     test_generate

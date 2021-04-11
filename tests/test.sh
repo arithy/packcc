@@ -8,7 +8,7 @@ generate_bats() {
     cat <<EOF
 #!/usr/bin/env bats
 
-load $TESTDIR/utils.sh
+load "\$TESTDIR/utils.sh"
 
 @test "Testing $1 - generation" {
     ${skip_all}test_generate
