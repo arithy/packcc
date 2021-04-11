@@ -2,24 +2,12 @@
 
 load $TESTDIR/utils.sh
 
-in_header() {
-    grep -Fq "$1" "code_generation.d/parser.h"
-}
-
-in_source() {
-    grep -Fq "$1" "code_generation.d/parser.c"
-}
-
-get_line() {
-    sed -n "/$1/=" "code_generation.d/$2" | tail -n1
-}
-
 @test "Testing code_generation.d - generation" {
-    test_generate "code_generation.d"
+    test_generate
 }
 
 @test "Testing code_generation.d - compilation" {
-    test_compile "code_generation.d" \
+    test_compile \
         -D pcc_create=my_create \
         -D pcc_destroy=my_destroy \
         -D pcc_parse=my_parse \

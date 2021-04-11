@@ -11,11 +11,11 @@ generate_bats() {
 load $TESTDIR/utils.sh
 
 @test "Testing $1 - generation" {
-    ${skip_all}test_generate "$1"
+    ${skip_all}test_generate
 }
 
 @test "Testing $1 - compilation" {
-    ${skip_all}test_compile "$1"
+    ${skip_all}test_compile
 }
 EOF
     for input in "$1"/input*.txt; do
