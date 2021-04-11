@@ -29,8 +29,7 @@ test_style() {
 }
 
 @test "Testing style.d - generated" {
-    cp -f ../src/examples/calc.peg style.d/parser.peg  ## NOTE: Copy is adopted instead of using a link, considering MinGW.
-    test_generate "style.d" "parser.peg"
+    test_generate "style.d" "$ROOTDIR/src/examples/calc.peg"
     test_style "style.d/parser.h"
     test_style "style.d/parser.c"
 }
