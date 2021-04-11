@@ -10,7 +10,6 @@ check_uncrustify_version() {
 }
 
 test_style() {
-    check_uncrustify_version
     if ! command -v "uncrustify" &> /dev/null; then
         skip "uncrustify is not installed"
     elif ! check_uncrustify_version &> /dev/null; then
