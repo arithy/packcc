@@ -910,7 +910,7 @@ static size_t populate_bits(size_t x) {
     x |= x >>  4;
     x |= x >>  8;
     x |= x >> 16;
-#ifndef _M_IX86 /* not Windows for x86 (32-bit) */
+#if (defined __SIZEOF_SIZE_T__ && __SIZEOF_SIZE_T__ == 8) /* gcc or clang */ || !defined _M_IX86 /* MSVC (x86 32-bit) */
     x |= x >> 32;
 #endif
     return x;
