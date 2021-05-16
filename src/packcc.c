@@ -234,6 +234,12 @@ typedef enum code_flag_tag {
     CODE_FLAG__UTF8_CHARCLASS_USED = 1
 } code_flag_t;
 
+typedef enum optimize_flag_tag {
+    OPTIMIZE_FLAG__NONE = 0,
+    OPTIMIZE_FLAG__INLINE = 1,
+    OPTIMIZE_FLAG__CONCAT = 2
+} optimize_flag_t;
+
 typedef struct context_tag {
     char *iname;  /* the path name of the PEG file being parsed */
     char *sname;  /* the path name of the C source file being generated */
@@ -245,7 +251,9 @@ typedef struct context_tag {
     char *prefix; /* the prefix of the API function names (NULL means the default) */
     bool_t ascii; /* UTF-8 support disabled if true  */
     bool_t debug; /* debug information is output if true */
+    int optimize_flags;     /* attempt to generate faster code */
     code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
+    size_t optnum;       /* the current number of PEG optimizations */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
     size_t linepos;      /* the beginning position in the PEG file of the current line */
@@ -1022,7 +1030,7 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
-static context_t *create_context(const char *iname, const char *oname, bool_t ascii, bool_t debug) {
+static context_t *create_context(const char *iname, const char *oname, bool_t ascii, bool_t debug, bool_t optimize_flags) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
     ctx->iname = strdup_e((iname && iname[0]) ? iname : "-");
     ctx->sname = (oname && oname[0]) ? add_fileext(oname, "c") : replace_fileext(ctx->iname, "c");
@@ -1034,7 +1042,9 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->prefix = NULL;
     ctx->ascii = ascii;
     ctx->debug = debug;
+    ctx->optimize_flags = optimize_flags;
     ctx->flags = CODE_FLAG__NONE;
+    ctx->optnum = 0;
     ctx->errnum = 0;
     ctx->linenum = 0;
     ctx->linepos = 0;
@@ -1173,6 +1183,7 @@ static void destroy_node(node_t *node) {
         break;
     default:
         print_error("Internal error [%d]\n", __LINE__);
+        printf("ERR: node=%p, type=%d\n", node, node->type);
         exit(-1);
     }
     free(node);
@@ -1291,6 +1302,167 @@ static void link_references(context_t *ctx, node_t *node) {
         print_error("Internal error [%d]\n", __LINE__);
         exit(-1);
     }
+}
+
+//TODO
+static void dump_node(context_t *ctx, const node_t *node, const int indent);
+
+static bool_t is_simple_rule(const node_rule_t *rule) {
+    return (rule->ref == 1
+           && rule->vars.len == 0
+           && rule->capts.len == 0
+           && rule->codes.len == 0);
+}
+
+static node_t *copy_node(node_t *src) {
+    node_t *n = create_node(src->type);
+    switch (n->type) {
+    case NODE_RULE:
+        n->data.rule.name = strdup_e(src->data.rule.name);
+        n->data.rule.col = src->data.rule.col;
+        n->data.rule.line = src->data.rule.line;
+        n->data.rule.ref = src->data.rule.ref;
+        node_const_array__copy(&n->data.rule.vars, &src->data.rule.vars);
+        node_const_array__copy(&n->data.rule.capts, &src->data.rule.capts);
+        node_const_array__copy(&n->data.rule.codes, &src->data.rule.codes);
+        break;
+    case NODE_REFERENCE:
+        if (src->data.reference.var != NULL) {
+            n->data.reference.var = strdup_e(src->data.reference.var);
+        }
+        n->data.reference.name = strdup_e(src->data.reference.name);
+        n->data.reference.index = src->data.reference.index;
+        n->data.reference.line = src->data.reference.line;
+        n->data.reference.col = src->data.reference.col;
+        break;
+    case NODE_STRING:
+        n->data.string.value = strdup_e(src->data.string.value);
+        break;
+    case NODE_CHARCLASS:
+        if (src->data.charclass.value != NULL) {
+            n->data.charclass.value = strdup_e(src->data.charclass.value);
+        }
+        break;
+    case NODE_EXPAND:
+        n->data.expand.col = src->data.expand.col;
+        n->data.expand.line = src->data.expand.line;
+        n->data.expand.index = src->data.expand.index;
+        break;
+    case NODE_ACTION:
+        n->data.action.value = strdup_e(src->data.action.value);
+        n->data.action.index = src->data.action.index;
+        node_const_array__copy(&n->data.action.vars, &src->data.action.vars);
+        node_const_array__copy(&n->data.action.capts, &src->data.action.capts);
+        break;
+    case NODE_ERROR:
+        n->data.error.value = strdup_e(src->data.error.value);
+        n->data.error.index = src->data.error.index;
+        node_const_array__copy(&n->data.error.vars, &src->data.error.vars);
+        node_const_array__copy(&n->data.error.capts, &src->data.error.capts);
+        break;
+    case NODE_SEQUENCE:
+        node_array__init(&n->data.sequence.nodes, src->data.sequence.nodes.len);
+        break;
+    case NODE_ALTERNATE:
+        node_array__init(&n->data.alternate.nodes, src->data.alternate.nodes.len);
+        break;
+    case NODE_QUANTITY:
+        n->data.quantity.min = src->data.quantity.min;
+        n->data.quantity.max = src->data.quantity.max;
+        break;
+    case NODE_PREDICATE:
+        n->data.predicate.neg = src->data.predicate.neg;
+        break;
+    case NODE_CAPTURE:
+        n->data.capture.index = src->data.capture.index;
+        break;
+    default:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
+    }
+    return n;
+}
+
+static node_t *optimize_expression(context_t *ctx, node_t *node) {
+    node_t *n;
+    switch (node->type) {
+    case NODE_RULE:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
+    case NODE_REFERENCE:
+        {
+            const node_t *r = lookup_rulehash(ctx, node->data.reference.name);
+            if (is_simple_rule(&r->data.rule) && (ctx->optimize_flags & OPTIMIZE_FLAG__INLINE)) {
+                n = optimize_expression(ctx, r->data.rule.expr);
+                ctx->optnum++;
+            } else {
+                n = copy_node(node);
+            }
+        }
+        break;
+    case NODE_SEQUENCE:
+        {
+            n = copy_node(node);
+            size_t i;
+            for (i = 0; i < node->data.sequence.nodes.len; i++) {
+                if ((ctx->optimize_flags & OPTIMIZE_FLAG__CONCAT)
+                    && i+1 < node->data.sequence.nodes.len
+                    && node->data.sequence.nodes.buf[i]->type == NODE_STRING
+                    && node->data.sequence.nodes.buf[i+1]->type == NODE_STRING
+                ) {
+                    node_t *nn = create_node(NODE_STRING);
+                    char *s1 = node->data.sequence.nodes.buf[i]->data.string.value;
+                    size_t l1 = strlen(s1);
+                    char *s2 = node->data.sequence.nodes.buf[++i]->data.string.value;
+                    size_t l2 = strlen(s2);
+                    nn->data.string.value = (char *)malloc_e(l1 + l2 + 1);
+                    memcpy(nn->data.string.value, s1, l1);
+                    memcpy(nn->data.string.value + l1, s2, l2);
+                    nn->data.string.value[l1 + l2] = '\0';
+                    node_array__add(&n->data.sequence.nodes, nn);
+                    ctx->optnum++;
+                } else {
+                    node_array__add(&n->data.sequence.nodes, optimize_expression(ctx, node->data.sequence.nodes.buf[i]));
+                }
+            }
+        }
+        break;
+    case NODE_ALTERNATE:
+        {
+            n = copy_node(node);
+            size_t i;
+            for (i = 0; i < node->data.alternate.nodes.len; i++) {
+                node_array__add(&n->data.alternate.nodes, optimize_expression(ctx, node->data.alternate.nodes.buf[i]));
+            }
+        }
+        break;
+    case NODE_QUANTITY:
+        n = copy_node(node);
+        n->data.quantity.expr = optimize_expression(ctx, node->data.quantity.expr);
+        break;
+    case NODE_PREDICATE:
+        n = copy_node(node);
+        n->data.predicate.expr = optimize_expression(ctx, node->data.predicate.expr);
+        break;
+    case NODE_CAPTURE:
+        n = copy_node(node);
+        n->data.capture.expr = optimize_expression(ctx, node->data.capture.expr);
+        break;
+    case NODE_ERROR:
+        n = copy_node(node);
+        n->data.error.expr = optimize_expression(ctx, node->data.error.expr);
+        break;
+    case NODE_STRING:
+    case NODE_CHARCLASS:
+    case NODE_EXPAND:
+    case NODE_ACTION:
+        n = copy_node(node);
+        break;
+    default:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
+    }
+    return n;
 }
 
 static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *vars) {
@@ -1478,6 +1650,7 @@ static void dump_void_value(size_t value) {
 
 static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     if (node == NULL) return;
+    //~ fprintf(stdout, "[%p|%d]", node, node->type);
     switch (node->type) {
     case NODE_RULE:
         fprintf(stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ") {\n",
@@ -2394,13 +2567,46 @@ static bool_t parse(context_t *ctx) {
             verify_captures(ctx, ctx->rules.buf[i]->data.rule.expr, NULL);
         }
     }
-    if (ctx->debug) {
-        size_t i;
-        for (i = 0; i < ctx->rules.len; i++) {
-            dump_node(ctx, ctx->rules.buf[i], 0);
-        }
-        dump_options(ctx);
+    return (ctx->errnum == 0) ? TRUE : FALSE;
+}
+
+static bool_t optimize(context_t *ctx) {
+    if (ctx->optimize_flags == OPTIMIZE_FLAG__NONE) {
+        return TRUE;
     }
+    size_t last_optnum;
+    do {
+        last_optnum = ctx->optnum;
+        node_array_t rules;
+        node_array__init(&rules, ARRAY_INIT_SIZE);
+
+        for (size_t i = 0; i < ctx->rules.len; i++) {
+            node_t *rule = ctx->rules.buf[i];
+            //~ printf("DBG: optimizing %s\n", rule->data.rule.name);
+            //~ printf("DBG: simple=%d, inline=%d\n", is_simple_rule(&rule->data.rule), (ctx->optimize_flags & OPTIMIZE_FLAG__INLINE));
+            if (!(is_simple_rule(&rule->data.rule) && (ctx->optimize_flags & OPTIMIZE_FLAG__INLINE))) {
+                node_t *node = copy_node(rule);
+                node->data.rule.expr = optimize_expression(ctx, rule->data.rule.expr);
+                node_array__add(&rules, node);
+            }
+        }
+
+        free((node_t **)ctx->rulehash.buf);
+        //~ node_array__term(&ctx->rules);
+        ctx->rulehash.mod = 0;
+        ctx->rulehash.max = 0;
+        ctx->rulehash.buf = NULL;
+        ctx->rules = rules;
+
+        {
+            size_t i;
+            make_rulehash(ctx);
+            for (i = 0; i < ctx->rules.len; i++) {
+                link_references(ctx, ctx->rules.buf[i]->data.rule.expr);
+            }
+        }
+        //~ printf("DBG: optimizations so far: %d\n", ctx->optnum);
+    } while (ctx->optnum > last_optnum);
     return (ctx->errnum == 0) ? TRUE : FALSE;
 }
 
@@ -3022,8 +3228,9 @@ static code_reach_t generate_thunking_error_code(
 
 static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, size_t indent, bool_t bare) {
     if (node == NULL) {
-        print_error("Internal error [%d]\n", __LINE__);
-        exit(-1);
+        //~ print_error("Internal error [%d]\n", __LINE__);
+        //~ exit(-1);
+        return CODE_REACH__ALWAYS_SUCCEED;
     }
     switch (node->type) {
     case NODE_RULE:
@@ -3073,6 +3280,14 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
 }
 
 static bool_t generate(context_t *ctx) {
+    if (ctx->debug) {
+        size_t i;
+        for (i = 0; i < ctx->rules.len; i++) {
+            dump_node(ctx, ctx->rules.buf[i], 0);
+        }
+        dump_options(ctx);
+    }
+
     const char *const vt = get_value_type(ctx);
     const char *const at = get_auxil_type(ctx);
     const bool_t vp = is_pointer_type(vt);
@@ -4585,6 +4800,7 @@ int main(int argc, char **argv) {
     const char *oname = NULL;
     bool_t ascii = FALSE;
     bool_t debug = FALSE;
+    int optimize_flags = OPTIMIZE_FLAG__NONE;
 #ifdef _MSC_VER
 #ifdef _DEBUG
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -4598,6 +4814,7 @@ int main(int argc, char **argv) {
         const char *opt_o = NULL;
         bool_t opt_a = FALSE;
         bool_t opt_d = FALSE;
+        int opt_O = OPTIMIZE_FLAG__NONE;
         bool_t opt_h = FALSE;
         bool_t opt_v = FALSE;
         int i;
@@ -4629,6 +4846,17 @@ int main(int argc, char **argv) {
             }
             else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
                 opt_d = TRUE;
+            }
+            else if (strcmp(argv[i], "-O") == 0 || strcmp(argv[i], "--optimize") == 0) {
+                // TODO: make this more user friendly
+                const char *const flags = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
+                if (flags == NULL) {
+                    print_error("Argument missing after -O\n");
+                    fprintf(stderr, "\n");
+                    print_usage(stderr);
+                    exit(1);
+                }
+                opt_O |= atoi(flags);
             }
             else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
                 opt_h = TRUE;
@@ -4665,10 +4893,11 @@ int main(int argc, char **argv) {
         oname = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
         ascii = opt_a;
         debug = opt_d;
+        optimize_flags = opt_O;
     }
     {
-        context_t *const ctx = create_context(iname, oname, ascii, debug);
-        const int b = parse(ctx) && generate(ctx);
+        context_t *const ctx = create_context(iname, oname, ascii, debug, optimize_flags);
+        const int b = parse(ctx) && optimize(ctx) && generate(ctx);
         destroy_context(ctx);
         if (!b) exit(10);
     }
