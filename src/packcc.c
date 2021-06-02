@@ -68,6 +68,9 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #define __attribute__(x)
 #endif
 
+#undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
+#undef FALSE
+
 #define VERSION "1.5.0"
 
 #ifndef BUFFER_INIT_SIZE
