@@ -71,7 +71,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.5.0"
+#define VERSION "1.5.1"
 
 #ifndef BUFFER_INIT_SIZE
 #define BUFFER_INIT_SIZE 256
@@ -2730,16 +2730,12 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
     }
     write_characters(gen->stream, ' ', indent);
     fputs_e("const size_t p = ctx->cur;\n", gen->stream);
-    write_characters(gen->stream, ' ', indent);
-    fputs_e("const size_t n = chunk->thunks.len;\n", gen->stream);
     if (neg) {
         const int l = ++gen->label;
         r = generate_code(gen, expr, l, indent, FALSE);
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->cur = p;\n", gen->stream);
-            write_characters(gen->stream, ' ', indent);
-            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
@@ -2748,8 +2744,6 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->cur = p;\n", gen->stream);
-            write_characters(gen->stream, ' ', indent);
-            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         }
         switch (r) {
         case CODE_REACH__ALWAYS_SUCCEED: r = CODE_REACH__ALWAYS_FAIL; break;
@@ -2764,8 +2758,6 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         if (r != CODE_REACH__ALWAYS_FAIL) {
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->cur = p;\n", gen->stream);
-            write_characters(gen->stream, ' ', indent);
-            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
         }
         if (r == CODE_REACH__BOTH) {
             write_characters(gen->stream, ' ', indent);
@@ -2776,8 +2768,6 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             fprintf_e(gen->stream, "L%04d:;\n", l);
             write_characters(gen->stream, ' ', indent);
             fputs_e("ctx->cur = p;\n", gen->stream);
-            write_characters(gen->stream, ' ', indent);
-            fputs_e("pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n", gen->stream);
             write_characters(gen->stream, ' ', indent);
             fprintf_e(gen->stream, "goto L%04d;\n", onfail);
         }
