@@ -431,7 +431,6 @@ A very simple implementation could look like this:
 static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning rule" };
 #define PCC_DEBUG(event, rule, level, pos, buffer, length) \
     fprintf(stderr, "%*s%s %s @%d [%.*s]\n", level * 2, "", dbg_str[event], rule, pos, length, buffer)
-}
 ```
 
 The default is to do nothing:
