@@ -285,7 +285,8 @@ typedef enum code_reach_tag {
 
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
 
-static int print_error(const char *format, ...) __attribute__((format(printf, 1, 2))) {
+__attribute__((format(printf, 1, 2)))
+static int print_error(const char *format, ...) {
     int n;
     va_list a;
     va_start(a, format);
@@ -352,7 +353,8 @@ static int fputs_e(const char *s, FILE *stream) {
     return r;
 }
 
-static int fprintf_e(FILE *stream, const char *format, ...) __attribute__((format(printf, 2, 3))) {
+__attribute__((format(printf, 2, 3)))
+static int fprintf_e(FILE *stream, const char *format, ...) {
     int n;
     va_list a;
     va_start(a, format);
