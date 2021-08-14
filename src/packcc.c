@@ -64,7 +64,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #include <unistd.h> /* for unlink() */
 #endif
 
-#ifndef __attribute__
+#ifndef __has_attribute
 #define __attribute__(x)
 #endif
 
