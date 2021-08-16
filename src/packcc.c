@@ -1439,7 +1439,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
             }
             if (i >= capts->len && node->data.expand.index != VOID_VALUE) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
-                    ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), node->data.expand.index + 1);
+                    ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), (ulong_t)(node->data.expand.index + 1));
                 ctx->errnum++;
             }
         }
