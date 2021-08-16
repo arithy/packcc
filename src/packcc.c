@@ -1438,7 +1438,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
                 if (node->data.expand.index == capts->buf[i]->data.capture.index) break;
             }
             if (i >= capts->len && node->data.expand.index != VOID_VALUE) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Capture %d not available at this position\n",
+                print_error("%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
                     ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), node->data.expand.index + 1);
                 ctx->errnum++;
             }
@@ -4275,8 +4275,8 @@ static bool_t generate(context_t *ctx) {
                     }
                     fprintf_e(
                         sstream,
-                        "static void pcc_action_%s_%d(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
-                        r->name, d, get_prefix(ctx)
+                        "static void pcc_action_%s_" FMT_LU "(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
+                        r->name, (ulong_t)d, get_prefix(ctx)
                     );
                     fputs_e(
                         "#define auxil (__pcc_ctx->auxil)\n"
