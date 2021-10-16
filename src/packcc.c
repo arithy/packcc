@@ -71,13 +71,13 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.5.2"
+#define VERSION "1.6.0"
 
-#ifndef BUFFER_INIT_SIZE
-#define BUFFER_INIT_SIZE 256
+#ifndef BUFFER_MIN_SIZE
+#define BUFFER_MIN_SIZE 256
 #endif
-#ifndef ARRAY_INIT_SIZE
-#define ARRAY_INIT_SIZE 2
+#ifndef ARRAY_MIN_SIZE
+#define ARRAY_MIN_SIZE 2
 #endif
 
 #define VOID_VALUE (~(size_t)0)
@@ -926,17 +926,17 @@ static size_t column_number(const context_t *ctx) { /* 0-based */
     return ctx->bufpos + ctx->bufcur - ctx->linepos;
 }
 
-static void char_array__init(char_array_t *array, size_t max) {
+static void char_array__init(char_array_t *array) {
     array->len = 0;
-    array->max = max;
-    array->buf = (char *)malloc_e(array->max);
+    array->max = 0;
+    array->buf = NULL;
 }
 
 static void char_array__add(char_array_t *array, char ch) {
     if (array->max <= array->len) {
         const size_t n = array->len + 1;
         size_t m = array->max;
-        if (m == 0) m = 1;
+        if (m == 0) m = BUFFER_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         array->buf = (char *)realloc_e(array->buf, m);
@@ -949,7 +949,7 @@ static void char_array__append(char_array_t *array, const char *str, size_t len)
     if (array->max < array->len + len) {
         const size_t n = array->len + len;
         size_t m = array->max;
-        if (m == 0) m = 1;
+        if (m == 0) m = BUFFER_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         array->buf = (char *)realloc_e(array->buf, m);
@@ -963,17 +963,17 @@ static void char_array__term(char_array_t *array) {
     free(array->buf);
 }
 
-static void node_array__init(node_array_t *array, size_t max) {
+static void node_array__init(node_array_t *array) {
     array->len = 0;
-    array->max = max;
-    array->buf = (node_t **)malloc_e(sizeof(node_t *) * array->max);
+    array->max = 0;
+    array->buf = NULL;
 }
 
 static void node_array__add(node_array_t *array, node_t *node) {
     if (array->max <= array->len) {
         const size_t n = array->len + 1;
         size_t m = array->max;
-        if (m == 0) m = 1;
+        if (m == 0) m = ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         array->buf = (node_t **)realloc_e(array->buf, sizeof(node_t *) * m);
@@ -992,17 +992,17 @@ static void node_array__term(node_array_t *array) {
     free(array->buf);
 }
 
-static void node_const_array__init(node_const_array_t *array, size_t max) {
+static void node_const_array__init(node_const_array_t *array) {
     array->len = 0;
-    array->max = max;
-    array->buf = (const node_t **)malloc_e(sizeof(const node_t *) * array->max);
+    array->max = 0;
+    array->buf = NULL;
 }
 
 static void node_const_array__add(node_const_array_t *array, const node_t *node) {
     if (array->max <= array->len) {
         const size_t n = array->len + 1;
         size_t m = array->max;
-        if (m == 0) m = 1;
+        if (m == 0) m = ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         array->buf = (const node_t **)realloc_e((node_t **)array->buf, sizeof(const node_t *) * m);
@@ -1045,15 +1045,15 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->linepos = 0;
     ctx->bufpos = 0;
     ctx->bufcur = 0;
-    char_array__init(&ctx->buffer, BUFFER_INIT_SIZE);
-    node_array__init(&ctx->rules, ARRAY_INIT_SIZE);
+    char_array__init(&ctx->buffer);
+    node_array__init(&ctx->rules);
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
     ctx->rulehash.buf = NULL;
-    char_array__init(&ctx->esource, BUFFER_INIT_SIZE);
-    char_array__init(&ctx->eheader, BUFFER_INIT_SIZE);
-    char_array__init(&ctx->source, BUFFER_INIT_SIZE);
-    char_array__init(&ctx->header, BUFFER_INIT_SIZE);
+    char_array__init(&ctx->esource);
+    char_array__init(&ctx->eheader);
+    char_array__init(&ctx->source);
+    char_array__init(&ctx->header);
     return ctx;
 }
 
@@ -1065,9 +1065,9 @@ static node_t *create_node(node_type_t type) {
         node->data.rule.name = NULL;
         node->data.rule.expr = NULL;
         node->data.rule.ref = 0;
-        node_const_array__init(&node->data.rule.vars, ARRAY_INIT_SIZE);
-        node_const_array__init(&node->data.rule.capts, ARRAY_INIT_SIZE);
-        node_const_array__init(&node->data.rule.codes, ARRAY_INIT_SIZE);
+        node_const_array__init(&node->data.rule.vars);
+        node_const_array__init(&node->data.rule.capts);
+        node_const_array__init(&node->data.rule.codes);
         node->data.rule.line = VOID_VALUE;
         node->data.rule.col = VOID_VALUE;
         break;
@@ -1094,10 +1094,10 @@ static node_t *create_node(node_type_t type) {
         node->data.predicate.expr = NULL;
         break;
     case NODE_SEQUENCE:
-        node_array__init(&node->data.sequence.nodes, ARRAY_INIT_SIZE);
+        node_array__init(&node->data.sequence.nodes);
         break;
     case NODE_ALTERNATE:
-        node_array__init(&node->data.alternate.nodes, ARRAY_INIT_SIZE);
+        node_array__init(&node->data.alternate.nodes);
         break;
     case NODE_CAPTURE:
         node->data.capture.expr = NULL;
@@ -1111,15 +1111,15 @@ static node_t *create_node(node_type_t type) {
     case NODE_ACTION:
         node->data.action.value = NULL;
         node->data.action.index = VOID_VALUE;
-        node_const_array__init(&node->data.action.vars, ARRAY_INIT_SIZE);
-        node_const_array__init(&node->data.action.capts, ARRAY_INIT_SIZE);
+        node_const_array__init(&node->data.action.vars);
+        node_const_array__init(&node->data.action.capts);
         break;
     case NODE_ERROR:
         node->data.error.expr = NULL;
         node->data.error.value = NULL;
         node->data.error.index = VOID_VALUE;
-        node_const_array__init(&node->data.error.vars, ARRAY_INIT_SIZE);
-        node_const_array__init(&node->data.error.capts, ARRAY_INIT_SIZE);
+        node_const_array__init(&node->data.error.vars);
+        node_const_array__init(&node->data.error.capts);
         break;
     default:
         print_error("Internal error [%d]\n", __LINE__);
@@ -1303,7 +1303,7 @@ static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *v
     const bool_t b = (vars == NULL) ? TRUE : FALSE;
     if (node == NULL) return;
     if (b) {
-        node_const_array__init(&a, ARRAY_INIT_SIZE);
+        node_const_array__init(&a);
         vars = &a;
     }
     switch (node->type) {
@@ -1342,7 +1342,7 @@ static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *v
         {
             size_t i, j, k, m = vars->len;
             node_const_array_t v;
-            node_const_array__init(&v, ARRAY_INIT_SIZE);
+            node_const_array__init(&v);
             node_const_array__copy(&v, vars);
             for (i = 0; i < node->data.alternate.nodes.len; i++) {
                 v.len = m;
@@ -1383,7 +1383,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     const bool_t b = (capts == NULL) ? TRUE : FALSE;
     if (node == NULL) return;
     if (b) {
-        node_const_array__init(&a, ARRAY_INIT_SIZE);
+        node_const_array__init(&a);
         capts = &a;
     }
     switch (node->type) {
@@ -1414,7 +1414,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
         {
             size_t i, j, m = capts->len;
             node_const_array_t v;
-            node_const_array__init(&v, ARRAY_INIT_SIZE);
+            node_const_array__init(&v);
             node_const_array__copy(&v, capts);
             for (i = 0; i < node->data.alternate.nodes.len; i++) {
                 v.len = m;
@@ -3414,17 +3414,17 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_char_array__init(pcc_auxil_t auxil, pcc_char_array_t *array, size_t max) {\n"
+            "static void pcc_char_array__init(pcc_auxil_t auxil, pcc_char_array_t *array) {\n"
             "    array->len = 0;\n"
-            "    array->max = max;\n"
-            "    array->buf = (char *)PCC_MALLOC(auxil, array->max);\n"
+            "    array->max = 0;\n"
+            "    array->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_char_array__add(pcc_auxil_t auxil, pcc_char_array_t *array, char ch) {\n"
             "    if (array->max <= array->len) {\n"
             "        const size_t n = array->len + 1;\n"
             "        size_t m = array->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_BUFFERSIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        array->buf = (char *)PCC_REALLOC(auxil, array->buf, m);\n"
@@ -3440,16 +3440,16 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_value_table__init(pcc_auxil_t auxil, pcc_value_table_t *table, size_t max) {\n"
+            "static void pcc_value_table__init(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
             "    table->len = 0;\n"
-            "    table->max = max;\n"
-            "    table->buf = (pcc_value_t *)PCC_MALLOC(auxil, sizeof(pcc_value_t) * table->max);\n"
+            "    table->max = 0;\n"
+            "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_value_table__resize(pcc_auxil_t auxil, pcc_value_table_t *table, size_t len) {\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_value_t *)PCC_REALLOC(auxil, table->buf, sizeof(pcc_value_t) * m);\n"
@@ -3465,17 +3465,17 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_value_refer_table__init(pcc_auxil_t auxil, pcc_value_refer_table_t *table, size_t max) {\n"
+            "static void pcc_value_refer_table__init(pcc_auxil_t auxil, pcc_value_refer_table_t *table) {\n"
             "    table->len = 0;\n"
-            "    table->max = max;\n"
-            "    table->buf = (pcc_value_t **)PCC_MALLOC(auxil, sizeof(pcc_value_t *) * table->max);\n"
+            "    table->max = 0;\n"
+            "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_value_refer_table__resize(pcc_auxil_t auxil, pcc_value_refer_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_value_t **)PCC_REALLOC(auxil, table->buf, sizeof(pcc_value_t *) * m);\n"
@@ -3492,10 +3492,10 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_capture_table__init(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t max) {\n"
+            "static void pcc_capture_table__init(pcc_auxil_t auxil, pcc_capture_table_t *table) {\n"
             "    table->len = 0;\n"
-            "    table->max = max;\n"
-            "    table->buf = (pcc_capture_t *)PCC_MALLOC(auxil, sizeof(pcc_capture_t) * table->max);\n"
+            "    table->max = 0;\n"
+            "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t len) {\n"
@@ -3503,7 +3503,7 @@ static bool_t generate(context_t *ctx) {
             "    for (i = len; i < table->len; i++) PCC_FREE(auxil, table->buf[i].string);\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_capture_t *)PCC_REALLOC(auxil, table->buf, sizeof(pcc_capture_t) * m);\n"
@@ -3528,17 +3528,17 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_capture_const_table__init(pcc_auxil_t auxil, pcc_capture_const_table_t *table, size_t max) {\n"
+            "static void pcc_capture_const_table__init(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
             "    table->len = 0;\n"
-            "    table->max = max;\n"
-            "    table->buf = (const pcc_capture_t **)PCC_MALLOC(auxil, sizeof(const pcc_capture_t *) * table->max);\n"
+            "    table->max = 0;\n"
+            "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_capture_const_table__resize(pcc_auxil_t auxil, pcc_capture_const_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (const pcc_capture_t **)PCC_REALLOC(auxil, (pcc_capture_t **)table->buf, sizeof(const pcc_capture_t *) * m);\n"
@@ -3558,9 +3558,9 @@ static bool_t generate(context_t *ctx) {
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, size_t valuec, size_t captc) {\n"
             "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
             "    thunk->type = PCC_THUNK_LEAF;\n"
-            "    pcc_value_refer_table__init(auxil, &thunk->data.leaf.values, valuec);\n"
+            "    pcc_value_refer_table__init(auxil, &thunk->data.leaf.values);\n"
             "    pcc_value_refer_table__resize(auxil, &thunk->data.leaf.values, valuec);\n"
-            "    pcc_capture_const_table__init(auxil, &thunk->data.leaf.capts, captc);\n"
+            "    pcc_capture_const_table__init(auxil, &thunk->data.leaf.capts);\n"
             "    pcc_capture_const_table__resize(auxil, &thunk->data.leaf.capts, captc);\n"
             "    thunk->data.leaf.capt0.range.start = 0;\n"
             "    thunk->data.leaf.capt0.range.end = 0;\n"
@@ -3596,17 +3596,17 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_thunk_array__init(pcc_auxil_t auxil, pcc_thunk_array_t *array, size_t max) {\n"
+            "static void pcc_thunk_array__init(pcc_auxil_t auxil, pcc_thunk_array_t *array) {\n"
             "    array->len = 0;\n"
-            "    array->max = max;\n"
-            "    array->buf = (pcc_thunk_t **)PCC_MALLOC(auxil, sizeof(pcc_thunk_t *) * array->max);\n"
+            "    array->max = 0;\n"
+            "    array->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_thunk_array__add(pcc_auxil_t auxil, pcc_thunk_array_t *array, pcc_thunk_t *thunk) {\n"
             "    if (array->max <= array->len) {\n"
             "        const size_t n = array->len + 1;\n"
             "        size_t m = array->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        array->buf = (pcc_thunk_t **)PCC_REALLOC(auxil, array->buf, sizeof(pcc_thunk_t *) * m);\n"
@@ -3635,9 +3635,9 @@ static bool_t generate(context_t *ctx) {
         fputs_e(
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_auxil_t auxil) {\n"
             "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_chunk_t));\n"
-            "    pcc_value_table__init(auxil, &chunk->values, PCC_ARRAYSIZE);\n"
-            "    pcc_capture_table__init(auxil, &chunk->capts, PCC_ARRAYSIZE);\n"
-            "    pcc_thunk_array__init(auxil, &chunk->thunks, PCC_ARRAYSIZE);\n"
+            "    pcc_value_table__init(auxil, &chunk->values);\n"
+            "    pcc_capture_table__init(auxil, &chunk->capts);\n"
+            "    pcc_thunk_array__init(auxil, &chunk->thunks);\n"
             "    chunk->pos = 0;\n"
             "    return chunk;\n"
             "}\n"
@@ -3653,10 +3653,10 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_rule_set__init(pcc_auxil_t auxil, pcc_rule_set_t *set, size_t max) {\n"
+            "static void pcc_rule_set__init(pcc_auxil_t auxil, pcc_rule_set_t *set) {\n"
             "    set->len = 0;\n"
-            "    set->max = max;\n"
-            "    set->buf = (pcc_rule_t *)PCC_MALLOC(auxil, sizeof(pcc_rule_t) * set->max);\n"
+            "    set->max = 0;\n"
+            "    set->buf = NULL;\n"
             "}\n"
             "\n"
             "static size_t pcc_rule_set__index(pcc_auxil_t auxil, const pcc_rule_set_t *set, pcc_rule_t rule) {\n"
@@ -3673,7 +3673,7 @@ static bool_t generate(context_t *ctx) {
             "    if (set->max <= set->len) {\n"
             "        const size_t n = set->len + 1;\n"
             "        size_t m = set->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        set->buf = (pcc_rule_t *)PCC_REALLOC(auxil, set->buf, sizeof(pcc_rule_t) * m);\n"
@@ -3712,8 +3712,8 @@ static bool_t generate(context_t *ctx) {
             "static pcc_lr_head_t *pcc_lr_head__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
             "    pcc_lr_head_t *const head = (pcc_lr_head_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_head_t));\n"
             "    head->rule = rule;\n"
-            "    pcc_rule_set__init(auxil, &head->invol, PCC_ARRAYSIZE);\n"
-            "    pcc_rule_set__init(auxil, &head->eval, PCC_ARRAYSIZE);\n"
+            "    pcc_rule_set__init(auxil, &head->invol);\n"
+            "    pcc_rule_set__init(auxil, &head->eval);\n"
             "    head->hold = NULL;\n"
             "    return head;\n"
             "}\n"
@@ -3787,10 +3787,10 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, size_t max) {\n"
+            "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map) {\n"
             "    map->len = 0;\n"
-            "    map->max = max;\n"
-            "    map->buf = (pcc_lr_memo_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_memo_t) * map->max);\n"
+            "    map->max = 0;\n"
+            "    map->buf = NULL;\n"
             "}\n"
             "\n"
             "static size_t pcc_lr_memo_map__index(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
@@ -3811,7 +3811,7 @@ static bool_t generate(context_t *ctx) {
             "        if (map->max <= map->len) {\n"
             "            const size_t n = map->len + 1;\n"
             "            size_t m = map->max;\n"
-            "            if (m == 0) m = 1;\n"
+            "            if (m == 0) m = PCC_ARRAYSIZE;\n"
             "            while (m < n && m != 0) m <<= 1;\n"
             "            if (m == 0) m = n;\n"
             "            map->buf = (pcc_lr_memo_t *)PCC_REALLOC(auxil, map->buf, sizeof(pcc_lr_memo_t) * m);\n"
@@ -3842,7 +3842,7 @@ static bool_t generate(context_t *ctx) {
             "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_auxil_t auxil) {\n"
             "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_table_entry_t));\n"
             "    entry->head = NULL;\n"
-            "    pcc_lr_memo_map__init(auxil, &entry->memos, PCC_ARRAYSIZE);\n"
+            "    pcc_lr_memo_map__init(auxil, &entry->memos);\n"
             "    entry->hold_a = NULL;\n"
             "    entry->hold_h = NULL;\n"
             "    return entry;\n"
@@ -3859,10 +3859,10 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_lr_table__init(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t max) {\n"
+            "static void pcc_lr_table__init(pcc_auxil_t auxil, pcc_lr_table_t *table) {\n"
             "    table->len = 0;\n"
-            "    table->max = max;\n"
-            "    table->buf = (pcc_lr_table_entry_t **)PCC_MALLOC(auxil, sizeof(pcc_lr_table_entry_t *) * table->max);\n"
+            "    table->max = 0;\n"
+            "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_lr_table__resize(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t len) {\n"
@@ -3870,7 +3870,7 @@ static bool_t generate(context_t *ctx) {
             "    for (i = len; i < table->len; i++) pcc_lr_table_entry__destroy(auxil, table->buf[i]);\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_lr_table_entry_t **)PCC_REALLOC(auxil, table->buf, sizeof(pcc_lr_table_entry_t *) * m);\n"
@@ -3950,17 +3950,17 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
-            "static void pcc_lr_stack__init(pcc_auxil_t auxil, pcc_lr_stack_t *stack, size_t max) {\n"
+            "static void pcc_lr_stack__init(pcc_auxil_t auxil, pcc_lr_stack_t *stack) {\n"
             "    stack->len = 0;\n"
-            "    stack->max = max;\n"
-            "    stack->buf = (pcc_lr_entry_t **)PCC_MALLOC(auxil, sizeof(pcc_lr_entry_t *) * stack->max);\n"
+            "    stack->max = 0;\n"
+            "    stack->buf = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_lr_stack__push(pcc_auxil_t auxil, pcc_lr_stack_t *stack, pcc_lr_entry_t *lr) {\n"
             "    if (stack->max <= stack->len) {\n"
             "        const size_t n = stack->len + 1;\n"
             "        size_t m = stack->max;\n"
-            "        if (m == 0) m = 1;\n"
+            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        stack->buf = (pcc_lr_entry_t **)PCC_REALLOC(auxil, stack->buf, sizeof(pcc_lr_entry_t *) * m);\n"
@@ -3989,9 +3989,9 @@ static bool_t generate(context_t *ctx) {
             "    ctx->pos = 0;\n"
             "    ctx->cur = 0;\n"
             "    ctx->level = 0;\n"
-            "    pcc_char_array__init(auxil, &ctx->buffer, PCC_BUFFERSIZE);\n"
-            "    pcc_lr_table__init(auxil, &ctx->lrtable, PCC_BUFFERSIZE);\n"
-            "    pcc_lr_stack__init(auxil, &ctx->lrstack, PCC_ARRAYSIZE);\n"
+            "    pcc_char_array__init(auxil, &ctx->buffer);\n"
+            "    pcc_lr_table__init(auxil, &ctx->lrtable);\n"
+            "    pcc_lr_stack__init(auxil, &ctx->lrstack);\n"
             "    ctx->auxil = auxil;\n"
             "    return ctx;\n"
             "}\n"
@@ -4460,7 +4460,7 @@ static bool_t generate(context_t *ctx) {
         );
         fputs_e(
             "    pcc_thunk_array_t thunks;\n"
-            "    pcc_thunk_array__init(ctx->auxil, &thunks, PCC_ARRAYSIZE);\n",
+            "    pcc_thunk_array__init(ctx->auxil, &thunks);\n",
             sstream
         );
         if (ctx->rules.len > 0) {
