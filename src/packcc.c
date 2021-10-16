@@ -1460,7 +1460,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-static void dump_escaped(const char *s) {
+static void dump_escaped_string(const char *s) {
     char buf[5];
     if (s == NULL) {
         fprintf(stdout, "null");
@@ -1472,7 +1472,7 @@ static void dump_escaped(const char *s) {
     }
 }
 
-static void dump_void_value(size_t value) {
+static void dump_integer_value(size_t value) {
     if (value == VOID_VALUE) {
         fprintf(stdout, "void");
     }
@@ -1493,18 +1493,18 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_REFERENCE:
         fprintf(stdout, "%*sReference(var:'%s', index:", indent, "", node->data.reference.var);
-        dump_void_value(node->data.reference.index);
+        dump_integer_value(node->data.reference.index);
         fprintf(stdout, ", name:'%s', rule:'%s')\n", node->data.reference.name,
             (node->data.reference.rule) ? node->data.reference.rule->data.rule.name : NULL);
         break;
     case NODE_STRING:
         fprintf(stdout, "%*sString(value:'", indent, "");
-        dump_escaped(node->data.string.value);
+        dump_escaped_string(node->data.string.value);
         fprintf(stdout, "')\n");
         break;
     case NODE_CHARCLASS:
         fprintf(stdout, "%*sCharclass(value:'", indent, "");
-        dump_escaped(node->data.charclass.value);
+        dump_escaped_string(node->data.charclass.value);
         fprintf(stdout, "')\n");
         break;
     case NODE_QUANTITY:
@@ -1541,21 +1541,21 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_CAPTURE:
         fprintf(stdout, "%*sCapture(index:", indent, "");
-        dump_void_value(node->data.capture.index);
+        dump_integer_value(node->data.capture.index);
         fprintf(stdout, ") {\n");
         dump_node(ctx, node->data.capture.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_EXPAND:
         fprintf(stdout, "%*sExpand(index:", indent, "");
-        dump_void_value(node->data.expand.index);
+        dump_integer_value(node->data.expand.index);
         fprintf(stdout, ")\n");
         break;
     case NODE_ACTION:
         fprintf(stdout, "%*sAction(index:", indent, "");
-        dump_void_value(node->data.action.index);
+        dump_integer_value(node->data.action.index);
         fprintf(stdout, ", value:{");
-        dump_escaped(node->data.action.value);
+        dump_escaped_string(node->data.action.value);
         fprintf(stdout, "}, vars:");
         if (node->data.action.vars.len + node->data.action.capts.len > 0) {
             size_t i;
@@ -1574,9 +1574,9 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_ERROR:
         fprintf(stdout, "%*sError(index:", indent, "");
-        dump_void_value(node->data.error.index);
+        dump_integer_value(node->data.error.index);
         fprintf(stdout, ", value:{");
-        dump_escaped(node->data.error.value);
+        dump_escaped_string(node->data.error.value);
         fprintf(stdout, "}, vars:\n");
         {
             size_t i;
