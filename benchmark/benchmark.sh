@@ -131,6 +131,9 @@ main() {
         exit 0
     fi
 
+    START_REF="$(git name-rev --name-only HEAD)"
+    trap "echo 'Returning to $START_REF...' && git checkout $START_REF" EXIT ERR INT
+
     cd "$BENCHDIR"
     clean
     mkdir "tmp"
