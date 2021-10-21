@@ -4035,7 +4035,7 @@ static bool_t generate(context_t *ctx) {
             "    if (ctx->buffer.len >= ctx->cur + num) return ctx->buffer.len - ctx->cur;\n"
             "    while (ctx->buffer.len < ctx->cur + num) {\n"
             "        const int c = PCC_GETCHAR(ctx->auxil);\n"
-            "        if (c == EOF) break;\n"
+            "        if (c < 0) break;\n"
             "        pcc_char_array__add(ctx->auxil, &ctx->buffer, (char)c);\n"
             "    }\n"
             "    return ctx->buffer.len - ctx->cur;\n"
