@@ -3125,6 +3125,16 @@ static bool_t generate(context_t *ctx) {
     }
     {
         fputs_e(
+            "#ifndef __has_attribute\n"
+            "#define __attribute__(x)\n"
+            "#endif\n"
+            "\n"
+            "#ifdef _MSC_VER\n"
+            "#define MARK_USED_FUNC __pragma(warning(suppress:4505))\n"
+            "#else\n"
+            "#define MARK_USED_FUNC __attribute__((__unused__))\n"
+            "#endif\n"
+            "\n"
             "#ifndef PCC_BUFFERSIZE\n"
             "#define PCC_BUFFERSIZE 256\n"
             "#endif /* !PCC_BUFFERSIZE */\n"
@@ -3352,6 +3362,7 @@ static bool_t generate(context_t *ctx) {
         fputs_e(
             "#ifndef PCC_ERROR\n"
             "#define PCC_ERROR(auxil) pcc_error()\n"
+            "MARK_USED_FUNC\n"
             "static void pcc_error(void) {\n"
             "    fprintf(stderr, \"Syntax error\\n\");\n"
             "    exit(1);\n"
@@ -3447,6 +3458,7 @@ static bool_t generate(context_t *ctx) {
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
+            "MARK_USED_FUNC\n"
             "static void pcc_value_table__resize(pcc_auxil_t auxil, pcc_value_table_t *table, size_t len) {\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
@@ -3499,6 +3511,7 @@ static bool_t generate(context_t *ctx) {
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
+            "MARK_USED_FUNC\n"
             "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    for (i = len; i < table->len; i++) PCC_FREE(auxil, table->buf[i].string);\n"
@@ -3550,12 +3563,13 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
             "static void pcc_capture_const_table__term(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
-            "    PCC_FREE(auxil, table->buf);\n"
+            "    PCC_FREE(auxil, (void *)table->buf);\n"
             "}\n"
             "\n",
             sstream
         );
         fputs_e(
+            "MARK_USED_FUNC\n"
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, size_t valuec, size_t captc) {\n"
             "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
             "    thunk->type = PCC_THUNK_LEAF;\n"
@@ -3616,6 +3630,7 @@ static bool_t generate(context_t *ctx) {
             "    array->buf[array->len++] = thunk;\n"
             "}\n"
             "\n"
+            "MARK_USED_FUNC\n"
             "static void pcc_thunk_array__revert(pcc_auxil_t auxil, pcc_thunk_array_t *array, size_t len) {\n"
             "    while (array->len > len) {\n"
             "        array->len--;\n"
@@ -3634,6 +3649,7 @@ static bool_t generate(context_t *ctx) {
             sstream
         );
         fputs_e(
+            "MARK_USED_FUNC\n"
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_auxil_t auxil) {\n"
             "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_chunk_t));\n"
             "    pcc_value_table__init(auxil, &chunk->values);\n"
@@ -4045,6 +4061,7 @@ static bool_t generate(context_t *ctx) {
         );
         fprintf_e(
             sstream,
+            "MARK_USED_FUNC\n"
             "static void pcc_commit_buffer(%s_context_t *ctx) {\n",
             get_prefix(ctx)
         );
@@ -4060,6 +4077,7 @@ static bool_t generate(context_t *ctx) {
         );
         fprintf_e(
             sstream,
+            "MARK_USED_FUNC\n"
             "static const char *pcc_get_capture_string(%s_context_t *ctx, const pcc_capture_t *capt) {\n",
             get_prefix(ctx)
         );
@@ -4135,6 +4153,7 @@ static bool_t generate(context_t *ctx) {
         }
         fprintf_e(
             sstream,
+            "MARK_USED_FUNC\n"
             "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
@@ -4241,6 +4260,7 @@ static bool_t generate(context_t *ctx) {
         );
         fprintf_e(
             sstream,
+            "MARK_USED_FUNC\n"
             "static void pcc_do_action(%s_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
