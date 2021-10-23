@@ -683,6 +683,6 @@ int main() {
 
 ### AST builder for Tiny-C ###
 
-You can find the more practical example in the directory [`src/examples/ast-tinyc`](src/examples/ast-tinyc).
+You can find the more practical example in the directory [`examples/ast-tinyc`](examples/ast-tinyc).
 It builds an AST (abstract syntax tree) from an input source file
 written in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) and dump the AST.
