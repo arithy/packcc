@@ -64,7 +64,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #include <unistd.h> /* for unlink() */
 #endif
 
-#ifndef __has_attribute
+#if !defined __has_attribute || defined _MSC_VER
 #define __attribute__(x)
 #endif
 
@@ -3125,7 +3125,7 @@ static bool_t generate(context_t *ctx) {
     }
     {
         fputs_e(
-            "#ifndef __has_attribute\n"
+            "#if !defined __has_attribute || defined _MSC_VER\n"
             "#define __attribute__(x)\n"
             "#endif\n"
             "\n"
