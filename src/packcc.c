@@ -3403,7 +3403,7 @@ static bool_t generate(context_t *ctx) {
             "#endif /* !PCC_FREE */\n"
             "\n"
             "#ifndef PCC_DEBUG\n"
-            "#define PCC_DEBUG(event, rule, level, pos, buffer, length) ((void)0)\n"
+            "#define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) ((void)0)\n"
             "#endif /* !PCC_DEBUG */\n"
             "\n"
             /* not used
@@ -4435,7 +4435,7 @@ static bool_t generate(context_t *ctx) {
                     sstream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
                     "    chunk->pos = ctx->cur;\n"
-                    "    PCC_DEBUG(PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
                     "    ctx->level++;\n",
                     ctx->rules.buf[i]->data.rule.name
                 );
@@ -4453,7 +4453,7 @@ static bool_t generate(context_t *ctx) {
                 fprintf_e(
                     sstream,
                     "    ctx->level--;\n"
-                    "    PCC_DEBUG(PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                     "    return chunk;\n",
                     ctx->rules.buf[i]->data.rule.name
                 );
@@ -4462,7 +4462,7 @@ static bool_t generate(context_t *ctx) {
                         sstream,
                         "L0000:;\n"
                         "    ctx->level--;\n"
-                        "    PCC_DEBUG(PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
+                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx->auxil, chunk);\n"
                         "    return NULL;\n",
                         ctx->rules.buf[i]->data.rule.name

@@ -193,7 +193,8 @@ Otherwise, the overall pattern matching fails.
 
 A character or string enclosed in single quotes is matched literally.
 The ANSI C escape sequences are recognized within the characters.
-The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs, if the command line option `-a` is not specified.
+The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs,
+if the command line option `-a` is not specified (version 1.4.0 or later).
 The example is shown below.
 
 ```
@@ -204,7 +205,8 @@ The example is shown below.
 
 A character or string enclosed in double quotes is matched literally.
 The ANSI C escape sequences are recognized within the characters.
-The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs, if the command line option `-a` is not specified.
+The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs,
+if the command line option `-a` is not specified (version 1.4.0 or later).
 The example is shown below.
 
 ```
@@ -215,7 +217,8 @@ The example is shown below.
 
 A set of characters enclosed in square brackets matches any single character from the set.
 The ANSI C escape sequences are recognized within the characters.
-The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs, if the command line option `-a` is not specified.
+The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs,
+if the command line option `-a` is not specified (version 1.4.0 or later).
 If the set begins with an up-arrow (`^`), the set is negated (the element matches any character not in the set).
 Any pair of characters separated with a dash (`-`) represents the range of characters from the first to the second, inclusive.
 The examples are shown below.
@@ -530,9 +533,9 @@ The default is defined as below.
 #define PCC_FREE(auxil, ptr) free(ptr)
 ```
 
-**`PCC_DEBUG(`**_event_**`,`**_rule_**`,`**_level_**`,`**_pos_**`,`**_buffer_**`,`**_length_**`)`**
+**`PCC_DEBUG(`**_auxil_**`,`**_event_**`,`**_rule_**`,`**_level_**`,`**_pos_**`,`**_buffer_**`,`**_length_**`)`**
 
-The function macro for debugging.
+The function macro for debugging (version 1.5.0 or later).
 Sometimes, especially for complex parsers, it is useful to see how exactly the parser processes the input.
 This macro is called on important *events* and allows to log or display the current state of the parser.
 The argument `rule` is a string that contains the name of the currently evaluated rule.
@@ -540,6 +543,9 @@ The non-negative integer `level` specifies how deep in the rule hierarchy the pa
 The argument `pos` holds the position from the start of the current context in bytes.
 In case of `event == PCC_DBG_MATCH`, the argument `buffer` holds the matched input and `length` is its size.
 For other events, `buffer` and `length` indicate a part of the currently loaded input, which is used to evaluate the current rule.
+
+**Caution:** Since version 1.6.0, the first argument _auxil_ is added to this macro.
+The user-defined data passed to the API function `pcc_create()` can be retrieved from this argument.
 
 There are currently three supported events:
  - `PCC_DBG_EVALUATE` (= 0) - called when the parser starts to evaluate `rule`
@@ -550,13 +556,14 @@ A very simple implementation could look like this:
 
 ```C
 static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning rule" };
-#define PCC_DEBUG(event, rule, level, pos, buffer, length) \
+#define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) \
     fprintf(stderr, "%*s%s %s @%zu [%.*s]\n", (int)((level) * 2), "", dbg_str[event], rule, pos, (int)(length), buffer)
 ```
 
 The default is to do nothing:
+
 ```C
-#define PCC_DEBUG(event, rule, level, pos, buffer, length) ((void)0)
+#define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) ((void)0)
 ```
 
 **`PCC_BUFFERSIZE`**
