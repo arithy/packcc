@@ -64,7 +64,7 @@ benchmark() {
     echo "  Repeated $GEN_REPEATS times in $(format $TIME)"
 
     echo "Building $GRAMMAR parser in $REF ($BUILD_REPEATS times)..."
-    measure "$BUILD_REPEATS" $CC -I ./ "$NAME".c -o "$NAME"
+    measure "$BUILD_REPEATS" $CC -I. "$NAME".c -o "$NAME"
     BUILD["$KEY"]=$TIME
     echo "  Built $BUILD_REPEATS times in $(format $TIME)"
 
