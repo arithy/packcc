@@ -58,7 +58,7 @@ and `/path/to/packcc` represents the path name of `packcc` command.
 If `packcc` command is installed in one of the directories specified in the environment variable `PATH`,
 the option `-DPACKCC=/path/to/packcc` is not necessary.
 
-The executable `ast` will be created in the directory `build`.
+The executable `ast.exe` will be created in the directory `build`.
 
 #### Using MinGW-w64 ####
 
@@ -77,7 +77,7 @@ and `/path/to/packcc` represents the path name of `packcc` command.
 If `packcc` command is installed in one of the directories specified in the environment variable `PATH`,
 the option `-DPACKCC=/path/to/packcc` is not necessary.
 
-The executable `ast` will be created in the directory `build`.
+The executable `ast.exe` will be created in the directory `build`.
 
 ## How to run this example ##
 
