@@ -3354,6 +3354,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_char_array_t buffer;\n"
             "    pcc_lr_table_t lrtable;\n"
             "    pcc_lr_stack_t lrstack;\n"
+            "    pcc_thunk_array_t thunks;\n"
             "    pcc_auxil_t auxil;\n"
             "};\n"
             "\n",
@@ -3630,7 +3631,6 @@ static bool_t generate(context_t *ctx) {
             "    array->buf[array->len++] = thunk;\n"
             "}\n"
             "\n"
-            "MARK_USED_FUNC\n"
             "static void pcc_thunk_array__revert(pcc_auxil_t auxil, pcc_thunk_array_t *array, size_t len) {\n"
             "    while (array->len > len) {\n"
             "        array->len--;\n"
@@ -4021,6 +4021,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_char_array__init(auxil, &ctx->buffer);\n"
             "    pcc_lr_table__init(auxil, &ctx->lrtable);\n"
             "    pcc_lr_stack__init(auxil, &ctx->lrstack);\n"
+            "    pcc_thunk_array__init(auxil, &ctx->thunks);\n"
             "    ctx->auxil = auxil;\n"
             "    return ctx;\n"
             "}\n"
@@ -4034,6 +4035,7 @@ static bool_t generate(context_t *ctx) {
         );
         fputs_e(
             "    if (ctx == NULL) return;\n"
+            "    pcc_thunk_array__term(ctx->auxil, &ctx->thunks);\n"
             "    pcc_lr_stack__term(ctx->auxil, &ctx->lrstack);\n"
             "    pcc_lr_table__term(ctx->auxil, &ctx->lrtable);\n"
             "    pcc_char_array__term(ctx->auxil, &ctx->buffer);\n"
@@ -4491,19 +4493,14 @@ static bool_t generate(context_t *ctx) {
             get_prefix(ctx), get_prefix(ctx),
             vt, vp ? "" : " "
         );
-        fputs_e(
-            "    pcc_thunk_array_t thunks;\n"
-            "    pcc_thunk_array__init(ctx->auxil, &thunks);\n",
-            sstream
-        );
         if (ctx->rules.len > 0) {
             fprintf_e(
                 sstream,
-                "    if (pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &thunks, ret))\n",
+                "    if (pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &ctx->thunks, ret))\n",
                 ctx->rules.buf[0]->data.rule.name
             );
             fputs_e(
-                "        pcc_do_action(ctx, &thunks, ret);\n"
+                "        pcc_do_action(ctx, &ctx->thunks, ret);\n"
                 "    else\n"
                 "        PCC_ERROR(ctx->auxil);\n"
                 "    pcc_commit_buffer(ctx);\n",
@@ -4511,7 +4508,7 @@ static bool_t generate(context_t *ctx) {
             );
         }
         fputs_e(
-            "    pcc_thunk_array__term(ctx->auxil, &thunks);\n"
+            "    pcc_thunk_array__revert(ctx->auxil, &ctx->thunks, 0);\n"
             "    return pcc_refill_buffer(ctx, 1) >= 1;\n"
             "}\n"
             "\n",
