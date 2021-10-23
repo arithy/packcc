@@ -636,7 +636,9 @@ pcc_destroy(ctx);
 
 ## Example ##
 
-A desktop calculator.
+### Desktop calculator ###
+
+A simple example which provides interactive four arithmetic operations of integers is shown here.
 Note that **left-recursive** grammar rules are defined in this example.
 
 ```
@@ -679,6 +681,8 @@ int main() {
 }
 ```
 
+### AST builder for Tiny-C ###
+
 You can find the more practical example in the directory [`src/examples/ast-tinyc`](src/examples/ast-tinyc).
 It builds an AST (abstract syntax tree) from an input source file
-in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) and dump the AST.
+written in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) and dump the AST.
