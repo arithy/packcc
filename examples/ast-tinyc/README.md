@@ -3,7 +3,7 @@
 ## Overview ##
 
 This example builds an AST (abstract syntax tree) from an input source file
-in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) with some extension shown below,
+written in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) with some extension shown below,
 and prints the AST in the standard output.
 If there are syntax errors, it shows them with line and column numbers.
 
@@ -19,18 +19,61 @@ So, you can use it freely without noticing the copyright of the original author.
 
 ## How to compile this example ##
 
+### For Unix-like OS ###
+
 You can get the executable by executing the following commands:
 
 ```
 cd /path/to/this_directory
-mkdir -p build
+mkdir build
 cd build
 cmake -DPACKCC=/path/to/packcc ..
 make
 ```
 
-Here, `/path/to/this_directory` stands for the path name of this directory,
-and `/path/to/packcc` stands for the path name of `packcc` command.
+Here, `/path/to/this_directory` represents the path name of this directory,
+and `/path/to/packcc` represents the path name of `packcc` command.
+If `packcc` command is installed in one of the directories specified in the environment variable `PATH`,
+the option `-DPACKCC=/path/to/packcc` is not necessary.
+
+The executable `ast` will be created in the directory `build`.
+
+### For Windows ###
+
+#### Using Visual Studio ####
+
+You must have [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2019) installed in your system.
+You can get the executable by executing the following commands using 'Developer Command Prompt for VS 2019' or 'Developer PowerShell for VS 2019':
+
+```
+cd /path/to/this_directory
+mkdir build
+cd build
+cmake -DPACKCC=/path/to/packcc ..
+MSBuild ALL_BUILD.vcxproj
+```
+
+Here, `/path/to/this_directory` represents the path name of this directory,
+and `/path/to/packcc` represents the path name of `packcc` command.
+If `packcc` command is installed in one of the directories specified in the environment variable `PATH`,
+the option `-DPACKCC=/path/to/packcc` is not necessary.
+
+The executable `ast` will be created in the directory `build`.
+
+#### Using MinGW-w64 ####
+
+You can get the executable by executing the following commands:
+
+```
+cd /path/to/this_directory
+mkdir build
+cd build
+cmake -G "MSYS Makefiles" -DPACKCC=/path/to/packcc ..
+make
+```
+
+Here, `/path/to/this_directory` represents the path name of this directory,
+and `/path/to/packcc` represents the path name of `packcc` command.
 If `packcc` command is installed in one of the directories specified in the environment variable `PATH`,
 the option `-DPACKCC=/path/to/packcc` is not necessary.
 
@@ -38,8 +81,8 @@ The executable `ast` will be created in the directory `build`.
 
 ## How to run this example ##
 
-Example input source files are prepared in [`input`](input) directory.
-These are taken from [grammars-v4](https://github.com/antlr/grammars-v4/) repository of [ANTLR project](https://github.com/antlr/) with thanks.
+Example input source files are prepared in [`inputs`](inputs) directory.
+Most of these are taken from [grammars-v4](https://github.com/antlr/grammars-v4/) repository of [ANTLR project](https://github.com/antlr/) with thanks.
 
 Here, it is assumed that you are in the directory `build`.
 If you want to print out the AST of the input source file [`inputs/example2.c`](inputs/example2.c), execute the following command:

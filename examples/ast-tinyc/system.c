@@ -14,6 +14,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef _MSC_VER
+#undef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS /* suppress the warning of fopen() use */
+#endif /* _MSC_VER */
+
 #include "system.h"
 
 #include <stdlib.h>

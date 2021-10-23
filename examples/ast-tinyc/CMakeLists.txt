@@ -14,4 +14,4 @@ add_custom_command(
 add_executable(ast main.c parser.c system.c utility.c)
 
 target_compile_features(ast PRIVATE c_std_99)
-target_include_directories(ast BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(ast BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
