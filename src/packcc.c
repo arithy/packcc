@@ -248,6 +248,7 @@ typedef struct context_tag {
     char *prefix; /* the prefix of the API function names (NULL means the default) */
     bool_t ascii; /* UTF-8 support is disabled if true  */
     bool_t debug; /* debug information is output if true */
+    bool_t lines; /* #line directives are output if true */
     code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
@@ -1027,7 +1028,7 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
-static context_t *create_context(const char *iname, const char *oname, bool_t ascii, bool_t debug) {
+static context_t *create_context(const char *iname, const char *oname, bool_t ascii, bool_t debug, bool_t lines) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
     ctx->iname = strdup_e((iname && iname[0]) ? iname : "-");
     ctx->sname = (oname && oname[0]) ? add_fileext(oname, "c") : replace_fileext(ctx->iname, "c");
@@ -1039,6 +1040,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->prefix = NULL;
     ctx->ascii = ascii;
     ctx->debug = debug;
+    ctx->lines = lines;
     ctx->flags = CODE_FLAG__NONE;
     ctx->errnum = 0;
     ctx->linenum = 0;
@@ -2240,19 +2242,19 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, char_ar
             const size_t q = ctx->bufcur;
             char buf[1024];
             int len;
-            len = snprintf(buf, 1024, "#line " FMT_LU " \"%s\"\n", l+1, ctx->iname);
+            if (ctx->lines) len = snprintf(buf, 1024, "#line " FMT_LU " \"%s\"\n", l+1, ctx->iname);
             match_spaces(ctx);
             if (output1 != NULL) {
-                char_array__append(output1, buf, len);
+                if (ctx->lines) char_array__append(output1, buf, len);
                 char_array__append(output1, ctx->buffer.buf + p + 1, q - p - 2);
                 char_array__add(output1, '\n');
-                char_array__append(output1, "#\n", 2);
+                if (ctx->lines) char_array__append(output1, "#\n", 2);
             }
             if (output2 != NULL) {
-                char_array__append(output2, buf, len);
+                if (ctx->lines) char_array__append(output2, buf, len);
                 char_array__append(output2, ctx->buffer.buf + p + 1, q - p - 2);
                 char_array__add(output2, '\n');
-                char_array__append(output2, "#\n", 2);
+                if (ctx->lines) char_array__append(output2, "#\n", 2);
             }
         }
         else {
@@ -4363,9 +4365,9 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    fprintf_e(sstream, "#line " FMT_LU " \"%s\"\n", r->line+1, ctx->iname);
+                    if (ctx->lines) fprintf_e(sstream, "#line " FMT_LU " \"%s\"\n", r->line+1, ctx->iname);
                     write_code_block(sstream, s, strlen(s), 4);
-                    fprintf_e(sstream, "#\n");
+                    if (ctx->lines) fprintf_e(sstream, "#\n");
                     k = c->len;
                     while (k > 0) {
                         k--;
@@ -4583,7 +4585,7 @@ static bool_t generate(context_t *ctx) {
         match_eol(ctx);
         if (!match_eof(ctx)) fputc_e('\n', sstream);
         commit_buffer(ctx);
-        fprintf_e(sstream, "#line " FMT_LU " \"%s\"\n", ctx->linenum+1, ctx->iname);
+        if (ctx->lines) fprintf_e(sstream, "#line " FMT_LU " \"%s\"\n", ctx->linenum+1, ctx->iname);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = (ctx->buffer.len > 0 && ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
             write_text(sstream, ctx->buffer.buf, n);
@@ -4613,6 +4615,7 @@ static void print_usage(FILE *output) {
     fprintf(output, "  -o BASENAME    specify a base name of output source and header files\n");
     fprintf(output, "  -a, --ascii    disable UTF-8 support\n");
     fprintf(output, "  -d, --debug    with debug information\n");
+    fprintf(output, "  -l, --lines    add #line directives\n");
     fprintf(output, "  -h, --help     print this help message and exit\n");
     fprintf(output, "  -v, --version  print the version and exit\n");
 }
@@ -4622,6 +4625,7 @@ int main(int argc, char **argv) {
     const char *oname = NULL;
     bool_t ascii = FALSE;
     bool_t debug = FALSE;
+    bool_t lines = FALSE;
 #ifdef _MSC_VER
 #ifdef _DEBUG
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -4635,6 +4639,7 @@ int main(int argc, char **argv) {
         const char *opt_o = NULL;
         bool_t opt_a = FALSE;
         bool_t opt_d = FALSE;
+        bool_t opt_l = FALSE;
         bool_t opt_h = FALSE;
         bool_t opt_v = FALSE;
         int i;
@@ -4666,6 +4671,9 @@ int main(int argc, char **argv) {
             }
             else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
                 opt_d = TRUE;
+            }
+            else if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--lines") == 0) {
+                opt_l = TRUE;
             }
             else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
                 opt_h = TRUE;
@@ -4702,9 +4710,10 @@ int main(int argc, char **argv) {
         oname = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
         ascii = opt_a;
         debug = opt_d;
+        lines = opt_l;
     }
     {
-        context_t *const ctx = create_context(iname, oname, ascii, debug);
+        context_t *const ctx = create_context(iname, oname, ascii, debug, lines);
         const int b = parse(ctx) && generate(ctx);
         destroy_context(ctx);
         if (!b) exit(10);
