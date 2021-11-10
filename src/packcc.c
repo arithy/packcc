@@ -2238,14 +2238,21 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, char_ar
         const size_t p = ctx->bufcur;
         if (match_code_block(ctx)) {
             const size_t q = ctx->bufcur;
+			char buf[1024];
+			int len;
+			len = snprintf(buf, 1024, "#line " FMT_LU " \"%s\"\n", l+1, ctx->iname);
             match_spaces(ctx);
             if (output1 != NULL) {
+				char_array__append(output1, buf, len);
                 char_array__append(output1, ctx->buffer.buf + p + 1, q - p - 2);
                 char_array__add(output1, '\n');
+				char_array__append(output1, "#\n", 2);
             }
             if (output2 != NULL) {
+				char_array__append(output2, buf, len);
                 char_array__append(output2, ctx->buffer.buf + p + 1, q - p - 2);
                 char_array__add(output2, '\n');
+				char_array__append(output2, "#\n", 2);
             }
         }
         else {
@@ -4356,7 +4363,9 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
+					fprintf_e(sstream, "#line " FMT_LU " \"%s\"\n", r->line+1, ctx->iname);
                     write_code_block(sstream, s, strlen(s), 4);
+					fprintf_e(sstream, "#\n");
                     k = c->len;
                     while (k > 0) {
                         k--;
@@ -4574,6 +4583,7 @@ static bool_t generate(context_t *ctx) {
         match_eol(ctx);
         if (!match_eof(ctx)) fputc_e('\n', sstream);
         commit_buffer(ctx);
+		fprintf_e(sstream, "#line " FMT_LU " \"%s\"\n", ctx->linenum+1, ctx->iname);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = (ctx->buffer.len > 0 && ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
             write_text(sstream, ctx->buffer.buf, n);
