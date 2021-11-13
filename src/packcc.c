@@ -232,6 +232,11 @@ struct node_tag {
     node_data_t data;
 };
 
+typedef struct options_tag {
+    bool_t ascii; /* UTF-8 support is disabled if true  */
+    bool_t debug; /* debug information is output if true */
+} options_t;
+
 typedef enum code_flag_tag {
     CODE_FLAG__NONE = 0,
     CODE_FLAG__UTF8_CHARCLASS_USED = 1
@@ -246,8 +251,7 @@ typedef struct context_tag {
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
     char *prefix; /* the prefix of the API function names (NULL means the default) */
-    bool_t ascii; /* UTF-8 support is disabled if true  */
-    bool_t debug; /* debug information is output if true */
+    options_t opts;      /* the options */
     code_flag_t flags;   /* bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;       /* the current number of PEG parsing errors */
     size_t linenum;      /* the current line number (0-based) */
@@ -1027,7 +1031,7 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
-static context_t *create_context(const char *iname, const char *oname, bool_t ascii, bool_t debug) {
+static context_t *create_context(const char *iname, const char *oname, const options_t *opts) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
     ctx->iname = strdup_e((iname && iname[0]) ? iname : "-");
     ctx->sname = (oname && oname[0]) ? add_fileext(oname, "c") : replace_fileext(ctx->iname, "c");
@@ -1037,8 +1041,7 @@ static context_t *create_context(const char *iname, const char *oname, bool_t as
     ctx->vtype = NULL;
     ctx->atype = NULL;
     ctx->prefix = NULL;
-    ctx->ascii = ascii;
-    ctx->debug = debug;
+    ctx->opts = *opts;
     ctx->flags = CODE_FLAG__NONE;
     ctx->errnum = 0;
     ctx->linenum = 0;
@@ -1979,7 +1982,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         match_spaces(ctx);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = NULL;
-        if (!ctx->ascii) {
+        if (!ctx->opts.ascii) {
             ctx->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
@@ -1992,11 +1995,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
-        if (!ctx->ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
+        if (!ctx->opts.ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
-        if (!ctx->ascii && n_p->data.charclass.value[0] != '\0') {
+        if (!ctx->opts.ascii && n_p->data.charclass.value[0] != '\0') {
             ctx->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
@@ -2009,7 +2012,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
-        if (!ctx->ascii && !is_valid_utf8_string(n_p->data.string.value)) {
+        if (!ctx->opts.ascii && !is_valid_utf8_string(n_p->data.string.value)) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
@@ -2399,7 +2402,7 @@ static bool_t parse(context_t *ctx) {
             verify_captures(ctx, ctx->rules.buf[i]->data.rule.expr, NULL);
         }
     }
-    if (ctx->debug) {
+    if (ctx->opts.debug) {
         size_t i;
         for (i = 0; i < ctx->rules.len; i++) {
             dump_node(ctx, ctx->rules.buf[i], 0);
@@ -4425,7 +4428,7 @@ static bool_t generate(context_t *ctx) {
                 g.stream = sstream;
                 g.rule = ctx->rules.buf[i];
                 g.label = 0;
-                g.ascii = ctx->ascii;
+                g.ascii = ctx->opts.ascii;
                 fprintf_e(
                     sstream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
@@ -4610,8 +4613,9 @@ static void print_usage(FILE *output) {
 int main(int argc, char **argv) {
     const char *iname = NULL;
     const char *oname = NULL;
-    bool_t ascii = FALSE;
-    bool_t debug = FALSE;
+    options_t opts;
+    opts.ascii = FALSE;
+    opts.debug = FALSE;
 #ifdef _MSC_VER
 #ifdef _DEBUG
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -4690,11 +4694,11 @@ int main(int argc, char **argv) {
         }
         iname = (fname != NULL && fname[0] != '\0') ? fname : NULL;
         oname = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
-        ascii = opt_a;
-        debug = opt_d;
+        opts.ascii = opt_a;
+        opts.debug = opt_d;
     }
     {
-        context_t *const ctx = create_context(iname, oname, ascii, debug);
+        context_t *const ctx = create_context(iname, oname, &opts);
         const int b = parse(ctx) && generate(ctx);
         destroy_context(ctx);
         if (!b) exit(10);
