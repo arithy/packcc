@@ -4578,8 +4578,8 @@ static bool_t generate(context_t *ctx) {
         if (!match_eof(ctx)) fputc_e('\n', sstream);
         commit_buffer(ctx);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
-            const size_t n = (ctx->buffer.len > 0 && ctx->buffer.buf[ctx->buffer.len - 1] == '\r') ? ctx->buffer.len - 1 : ctx->buffer.len;
-            write_text(sstream, ctx->buffer.buf, n);
+            const size_t n = ctx->buffer.len;
+            write_text(sstream, ctx->buffer.buf, (n > 0 && ctx->buffer.buf[n - 1] == '\r') ? n - 1 : n);
             ctx->bufcur = n;
             commit_buffer(ctx);
         }
