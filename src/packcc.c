@@ -104,6 +104,19 @@ typedef struct char_array_tag {
     size_t len;
 } char_array_t;
 
+typedef struct code_block_tag {
+    char *text;
+    size_t len;
+    size_t line;
+    size_t col;
+} code_block_t;
+
+typedef struct code_block_array_tag {
+    code_block_t *buf;
+    size_t max;
+    size_t len;
+} code_block_array_t;
+
 typedef enum node_type_tag {
     NODE_RULE = 0,
     NODE_REFERENCE,
@@ -198,7 +211,7 @@ typedef struct node_expand_tag {
 } node_expand_t;
 
 typedef struct node_action_tag {
-    char *value;
+    code_block_t code;
     size_t index;
     node_const_array_t vars;
     node_const_array_t capts;
@@ -206,7 +219,7 @@ typedef struct node_action_tag {
 
 typedef struct node_error_tag {
     node_t *expr;
-    char *value;
+    code_block_t code;
     size_t index;
     node_const_array_t vars;
     node_const_array_t capts;
@@ -261,10 +274,10 @@ typedef struct context_tag {
     char_array_t buffer; /* the character buffer */
     node_array_t rules;  /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
-    char_array_t esource; /* the code blocks from %earlysource and %earlycommon directives to be added into the generated source file */
-    char_array_t eheader; /* the code blocks from %earlyheader and %earlycommon directives to be added into the generated header file */
-    char_array_t source;  /* the code blocks from %source and %common directives to be added into the generated source file */
-    char_array_t header;  /* the code blocks from %header and %common directives to be added into the generated header file */
+    code_block_array_t esource; /* the code blocks from %earlysource and %earlycommon directives to be added into the generated source file */
+    code_block_array_t eheader; /* the code blocks from %earlyheader and %earlycommon directives to be added into the generated header file */
+    code_block_array_t source;  /* the code blocks from %source and %common directives to be added into the generated source file */
+    code_block_array_t header;  /* the code blocks from %header and %common directives to be added into the generated header file */
 } context_t;
 
 typedef struct generate_tag {
@@ -949,21 +962,46 @@ static void char_array__add(char_array_t *array, char ch) {
     array->buf[array->len++] = ch;
 }
 
-static void char_array__append(char_array_t *array, const char *str, size_t len) {
-    if (array->max < array->len + len) {
-        const size_t n = array->len + len;
-        size_t m = array->max;
-        if (m == 0) m = BUFFER_MIN_SIZE;
-        while (m < n && m != 0) m <<= 1;
-        if (m == 0) m = n; /* in case of shift overflow */
-        array->buf = (char *)realloc_e(array->buf, m);
-        array->max = m;
-    }
-    memcpy(array->buf + array->len, str, len);
-    array->len += len;
+static void char_array__term(char_array_t *array) {
+    free(array->buf);
 }
 
-static void char_array__term(char_array_t *array) {
+static void code_block__init(code_block_t *code) {
+    code->text = NULL;
+    code->len = 0;
+    code->line = VOID_VALUE;
+    code->col = VOID_VALUE;
+}
+
+static void code_block__term(code_block_t *code) {
+    free(code->text);
+}
+
+static void code_block_array__init(code_block_array_t *array) {
+    array->len = 0;
+    array->max = 0;
+    array->buf = NULL;
+}
+
+static code_block_t *code_block_array__create_entry(code_block_array_t *array) {
+    if (array->max <= array->len) {
+        const size_t n = array->len + 1;
+        size_t m = array->max;
+        if (m == 0) m = ARRAY_MIN_SIZE;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n; /* in case of shift overflow */
+        array->buf = (code_block_t *)realloc_e(array->buf, sizeof(code_block_t) * m);
+        array->max = m;
+    }
+    code_block__init(&array->buf[array->len]);
+    return &array->buf[array->len++];
+}
+
+static void code_block_array__term(code_block_array_t *array) {
+    while (array->len > 0) {
+        array->len--;
+        code_block__term(&array->buf[array->len]);
+    }
     free(array->buf);
 }
 
@@ -1053,10 +1091,10 @@ static context_t *create_context(const char *iname, const char *oname, const opt
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
     ctx->rulehash.buf = NULL;
-    char_array__init(&ctx->esource);
-    char_array__init(&ctx->eheader);
-    char_array__init(&ctx->source);
-    char_array__init(&ctx->header);
+    code_block_array__init(&ctx->esource);
+    code_block_array__init(&ctx->eheader);
+    code_block_array__init(&ctx->source);
+    code_block_array__init(&ctx->header);
     return ctx;
 }
 
@@ -1112,14 +1150,14 @@ static node_t *create_node(node_type_t type) {
         node->data.expand.col = VOID_VALUE;
         break;
     case NODE_ACTION:
-        node->data.action.value = NULL;
+        code_block__init(&node->data.action.code);
         node->data.action.index = VOID_VALUE;
         node_const_array__init(&node->data.action.vars);
         node_const_array__init(&node->data.action.capts);
         break;
     case NODE_ERROR:
         node->data.error.expr = NULL;
-        node->data.error.value = NULL;
+        code_block__init(&node->data.error.code);
         node->data.error.index = VOID_VALUE;
         node_const_array__init(&node->data.error.vars);
         node_const_array__init(&node->data.error.capts);
@@ -1171,12 +1209,12 @@ static void destroy_node(node_t *node) {
     case NODE_ACTION:
         node_const_array__term(&node->data.action.capts);
         node_const_array__term(&node->data.action.vars);
-        free(node->data.action.value);
+        code_block__term(&node->data.action.code);
         break;
     case NODE_ERROR:
         node_const_array__term(&node->data.error.capts);
         node_const_array__term(&node->data.error.vars);
-        free(node->data.error.value);
+        code_block__term(&node->data.error.code);
         destroy_node(node->data.error.expr);
         break;
     default:
@@ -1188,10 +1226,10 @@ static void destroy_node(node_t *node) {
 
 static void destroy_context(context_t *ctx) {
     if (ctx == NULL) return;
-    char_array__term(&ctx->header);
-    char_array__term(&ctx->source);
-    char_array__term(&ctx->eheader);
-    char_array__term(&ctx->esource);
+    code_block_array__term(&ctx->header);
+    code_block_array__term(&ctx->source);
+    code_block_array__term(&ctx->eheader);
+    code_block_array__term(&ctx->esource);
     free((node_t **)ctx->rulehash.buf);
     node_array__term(&ctx->rules);
     char_array__term(&ctx->buffer);
@@ -1557,8 +1595,8 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     case NODE_ACTION:
         fprintf(stdout, "%*sAction(index:", indent, "");
         dump_integer_value(node->data.action.index);
-        fprintf(stdout, ", value:{");
-        dump_escaped_string(node->data.action.value);
+        fprintf(stdout, ", code:{");
+        dump_escaped_string(node->data.action.code.text);
         fprintf(stdout, "}, vars:");
         if (node->data.action.vars.len + node->data.action.capts.len > 0) {
             size_t i;
@@ -1578,8 +1616,8 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     case NODE_ERROR:
         fprintf(stdout, "%*sError(index:", indent, "");
         dump_integer_value(node->data.error.index);
-        fprintf(stdout, ", value:{");
-        dump_escaped_string(node->data.error.value);
+        fprintf(stdout, ", code:{");
+        dump_escaped_string(node->data.error.code.text);
         fprintf(stdout, "}, vars:\n");
         {
             size_t i;
@@ -2021,7 +2059,10 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         const size_t q = ctx->bufcur;
         match_spaces(ctx);
         n_p = create_node(NODE_ACTION);
-        n_p->data.action.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.action.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.action.code.len = q - p - 2;
+        n_p->data.action.code.line = ctx->linenum;
+        n_p->data.action.code.col = column_number(ctx);
         n_p->data.action.index = rule->data.rule.codes.len;
         node_const_array__add(&rule->data.rule.codes, n_p);
     }
@@ -2097,7 +2138,10 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             match_spaces(ctx);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
-            n_t->data.error.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+            n_t->data.error.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+            n_t->data.error.code.len = q - p - 2;
+            n_t->data.error.code.line = ctx->linenum;
+            n_t->data.error.code.col = column_number(ctx);
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -2232,7 +2276,7 @@ static void dump_options(context_t *ctx) {
     fprintf(stdout, "prefix: '%s'\n", get_prefix(ctx));
 }
 
-static bool_t parse_directive_include_(context_t *ctx, const char *name, char_array_t *output1, char_array_t *output2) {
+static bool_t parse_directive_include_(context_t *ctx, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
     if (!match_string(ctx, name)) return FALSE;
@@ -2243,12 +2287,18 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, char_ar
             const size_t q = ctx->bufcur;
             match_spaces(ctx);
             if (output1 != NULL) {
-                char_array__append(output1, ctx->buffer.buf + p + 1, q - p - 2);
-                char_array__add(output1, '\n');
+                code_block_t *c = code_block_array__create_entry(output1);
+                c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+                c->len = q - p - 2;
+                c->line = ctx->linenum;
+                c->col = column_number(ctx);
             }
             if (output2 != NULL) {
-                char_array__append(output2, ctx->buffer.buf + p + 1, q - p - 2);
-                char_array__add(output2, '\n');
+                code_block_t *c = code_block_array__create_entry(output2);
+                c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+                c->len = q - p - 2;
+                c->line = ctx->linenum;
+                c->col = column_number(ctx);
             }
         }
         else {
@@ -3080,7 +3130,12 @@ static bool_t generate(context_t *ctx) {
     fprintf_e(sstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     fprintf_e(hstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     {
-        write_code_block(hstream, ctx->eheader.buf, ctx->eheader.len, 0);
+        {
+            size_t i;
+            for (i = 0; i < ctx->eheader.len; i++) {
+                write_code_block(hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0);
+            }
+        }
         if (ctx->eheader.len > 0) fputs_e("\n", hstream);
         fprintf_e(
             hstream,
@@ -3089,10 +3144,20 @@ static bool_t generate(context_t *ctx) {
             "\n",
             ctx->hid, ctx->hid
         );
-        write_code_block(hstream, ctx->header.buf, ctx->header.len, 0);
+        {
+            size_t i;
+            for (i = 0; i < ctx->header.len; i++) {
+                write_code_block(hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0);
+            }
+        }
     }
     {
-        write_code_block(sstream, ctx->esource.buf, ctx->esource.len, 0);
+        {
+            size_t i;
+            for (i = 0; i < ctx->esource.len; i++) {
+                write_code_block(sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0);
+            }
+        }
         if (ctx->esource.len > 0) fputs_e("\n", hstream);
         fputs_e(
             "#ifdef _MSC_VER\n"
@@ -3124,7 +3189,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             ctx->hname
         );
-        write_code_block(sstream, ctx->source.buf, ctx->source.len, 0);
+        {
+            size_t i;
+            for (i = 0; i < ctx->source.len; i++) {
+                write_code_block(sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0);
+            }
+        }
     }
     {
         fputs_e(
@@ -4293,18 +4363,18 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->rules.len; i++) {
                 const node_rule_t *const r = &ctx->rules.buf[i]->data.rule;
                 for (j = 0; j < r->codes.len; j++) {
-                    const char *s;
+                    const code_block_t *b;
                     size_t d;
                     const node_const_array_t *v, *c;
                     switch (r->codes.buf[j]->type) {
                     case NODE_ACTION:
-                        s = r->codes.buf[j]->data.action.value;
+                        b = &r->codes.buf[j]->data.action.code;
                         d = r->codes.buf[j]->data.action.index;
                         v = &r->codes.buf[j]->data.action.vars;
                         c = &r->codes.buf[j]->data.action.capts;
                         break;
                     case NODE_ERROR:
-                        s = r->codes.buf[j]->data.error.value;
+                        b = &r->codes.buf[j]->data.error.code;
                         d = r->codes.buf[j]->data.error.index;
                         v = &r->codes.buf[j]->data.error.vars;
                         c = &r->codes.buf[j]->data.error.capts;
@@ -4359,7 +4429,7 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    write_code_block(sstream, s, strlen(s), 4);
+                    write_code_block(sstream, b->text, b->len, 4);
                     k = c->len;
                     while (k > 0) {
                         k--;
