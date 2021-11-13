@@ -72,7 +72,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.6.0"
+#define VERSION "1.7.0"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -100,8 +100,9 @@ typedef enum bool_tag {
 } bool_t;
 
 typedef struct stream_tag {
-    FILE *file;  /* just a reference */
-    size_t line; /* line counting is disabled if VOID_VALUE */
+    FILE *file;       /* the stream; just a reference */
+    const char *name; /* the file name */
+    size_t line;      /* the current line number (0-based); line counting is disabled if VOID_VALUE */
 } stream_t;
 
 typedef struct char_array_tag {
@@ -253,6 +254,7 @@ struct node_tag {
 
 typedef struct options_tag {
     bool_t ascii; /* UTF-8 support is disabled if true  */
+    bool_t lines; /* #line directives are output if true */
     bool_t debug; /* debug information is output if true */
 } options_t;
 
@@ -790,9 +792,10 @@ static void make_header_identifier(char *str) {
     }
 }
 
-static stream_t stream__wrap(FILE *file, size_t line) {
+static stream_t stream__wrap(FILE *file, const char *name, size_t line) {
     stream_t s;
     s.file = file;
+    s.name = name;
     s.line = line;
     return s;
 }
@@ -890,7 +893,15 @@ static void stream__write_text(stream_t *stream, const char *ptr, size_t len) {
     }
 }
 
-static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent) {
+static void stream__write_escaped_string(stream_t *stream, const char *ptr, size_t len) {
+    char s[5];
+    size_t i;
+    for (i = 0; i < len; i++) {
+        stream__puts(stream, escape_character(ptr[i], &s));
+    }
+}
+
+static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent, const char *fname, size_t lineno) {
     size_t i, j, k;
     j = find_first_trailing_space(ptr, 0, len, &k);
     for (i = 0; i < j; i++) {
@@ -900,6 +911,12 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
             ptr[i] != '\f' &&
             ptr[i] != '\t'
         ) break;
+    }
+    if (stream->line != VOID_VALUE && (i < j || k < len)) {
+        if (i == j) lineno++;
+        stream__printf(stream, "#line " FMT_LU " \"", (ulong_t)(lineno + 1));
+        stream__write_escaped_string(stream, fname, strlen(fname));
+        stream__puts(stream, "\"\n");
     }
     if (i < j) {
         stream__write_characters(stream, ' ', indent);
@@ -930,6 +947,11 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
                 stream__putc(stream, '\n');
             }
         }
+    }
+    if (stream->line != VOID_VALUE && (i < j || k < len)) {
+        stream__printf(stream, "#line " FMT_LU " \"", (ulong_t)(stream->line + 1));
+        stream__write_escaped_string(stream, stream->name, strlen(stream->name));
+        stream__puts(stream, "\"\n");
     }
 }
 
@@ -2117,8 +2139,8 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         n_p->data.action.code.len = q - p - 2;
-        n_p->data.action.code.line = ctx->linenum;
-        n_p->data.action.code.col = column_number(ctx);
+        n_p->data.action.code.line = l;
+        n_p->data.action.code.col = m;
         n_p->data.action.index = rule->data.rule.codes.len;
         node_const_array__add(&rule->data.rule.codes, n_p);
     }
@@ -2186,9 +2208,11 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
         n_r = n_q;
     }
     if (match_character(ctx, '~')) {
-        size_t p;
+        size_t p, l, m;
         match_spaces(ctx);
         p = ctx->bufcur;
+        l = ctx->linenum;
+        m = column_number(ctx);
         if (match_code_block(ctx)) {
             const size_t q = ctx->bufcur;
             match_spaces(ctx);
@@ -2196,8 +2220,8 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             n_t->data.error.code.len = q - p - 2;
-            n_t->data.error.code.line = ctx->linenum;
-            n_t->data.error.code.col = column_number(ctx);
+            n_t->data.error.code.line = l;
+            n_t->data.error.code.col = m;
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -2333,12 +2357,12 @@ static void dump_options(context_t *ctx) {
 }
 
 static bool_t parse_directive_include_(context_t *ctx, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
     if (!match_string(ctx, name)) return FALSE;
     match_spaces(ctx);
     {
         const size_t p = ctx->bufcur;
+        const size_t l = ctx->linenum;
+        const size_t m = column_number(ctx);
         if (match_code_block(ctx)) {
             const size_t q = ctx->bufcur;
             match_spaces(ctx);
@@ -2346,15 +2370,15 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, code_bl
                 code_block_t *c = code_block_array__create_entry(output1);
                 c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                c->line = ctx->linenum;
-                c->col = column_number(ctx);
+                c->line = l;
+                c->col = m;
             }
             if (output2 != NULL) {
                 code_block_t *c = code_block_array__create_entry(output2);
                 c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                c->line = ctx->linenum;
-                c->col = column_number(ctx);
+                c->line = l;
+                c->col = m;
             }
         }
         else {
@@ -3010,7 +3034,8 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
         indent += 4;
     }
     stream__write_characters(gen->stream, ' ', indent);
-    stream__printf(gen->stream, "const size_t n = chunk->capts.buf[" FMT_LU "].range.end - chunk->capts.buf[" FMT_LU "].range.start;\n", (ulong_t)index, (ulong_t)index);
+    stream__printf(gen->stream,
+        "const size_t n = chunk->capts.buf[" FMT_LU "].range.end - chunk->capts.buf[" FMT_LU "].range.start;\n", (ulong_t)index, (ulong_t)index);
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
     stream__write_characters(gen->stream, ' ', indent);
@@ -3181,15 +3206,15 @@ static bool_t generate(context_t *ctx) {
     const char *const at = get_auxil_type(ctx);
     const bool_t vp = is_pointer_type(vt);
     const bool_t ap = is_pointer_type(at);
-    stream_t sstream = stream__wrap(fopen_wt_e(ctx->sname), VOID_VALUE);
-    stream_t hstream = stream__wrap(fopen_wt_e(ctx->hname), VOID_VALUE);
+    stream_t sstream = stream__wrap(fopen_wt_e(ctx->sname), ctx->sname, ctx->opts.lines ? 0 : VOID_VALUE);
+    stream_t hstream = stream__wrap(fopen_wt_e(ctx->hname), ctx->hname, ctx->opts.lines ? 0 : VOID_VALUE);
     stream__printf(&sstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     stream__printf(&hstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     {
         {
             size_t i;
             for (i = 0; i < ctx->eheader.len; i++) {
-                stream__write_code_block(&hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0);
+                stream__write_code_block(&hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0, ctx->iname, ctx->eheader.buf[i].line);
             }
         }
         if (ctx->eheader.len > 0) stream__puts(&hstream, "\n");
@@ -3203,7 +3228,7 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->header.len; i++) {
-                stream__write_code_block(&hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0);
+                stream__write_code_block(&hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0, ctx->iname, ctx->header.buf[i].line);
             }
         }
     }
@@ -3211,7 +3236,7 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->esource.len; i++) {
-                stream__write_code_block(&sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0);
+                stream__write_code_block(&sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0, ctx->iname, ctx->esource.buf[i].line);
             }
         }
         if (ctx->esource.len > 0) stream__puts(&sstream, "\n");
@@ -3248,7 +3273,7 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->source.len; i++) {
-                stream__write_code_block(&sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0);
+                stream__write_code_block(&sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0, ctx->iname, ctx->source.buf[i].line);
             }
         }
     }
@@ -4475,7 +4500,7 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    stream__write_code_block(&sstream, b->text, b->len, 4);
+                    stream__write_code_block(&sstream, b->text, b->len, 4, ctx->iname, b->line);
                     k = c->len;
                     while (k > 0) {
                         k--;
@@ -4693,6 +4718,11 @@ static bool_t generate(context_t *ctx) {
         match_eol(ctx);
         if (!match_eof(ctx)) stream__putc(&sstream, '\n');
         commit_buffer(ctx);
+        if (ctx->opts.lines && !match_eof(ctx)) {
+            stream__printf(&sstream, "#line " FMT_LU " \"", (ulong_t)(ctx->linenum + 1));
+            stream__write_escaped_string(&sstream, ctx->iname, strlen(ctx->iname));
+            stream__puts(&sstream, "\"\n");
+        }
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = ctx->buffer.len;
             stream__write_text(&sstream, ctx->buffer.buf, (n > 0 && ctx->buffer.buf[n - 1] == '\r') ? n - 1 : n);
@@ -4721,6 +4751,7 @@ static void print_usage(FILE *output) {
     fprintf(output, "\n");
     fprintf(output, "  -o BASENAME    specify a base name of output source and header files\n");
     fprintf(output, "  -a, --ascii    disable UTF-8 support\n");
+    fprintf(output, "  -l, --lines    add #line directives\n");
     fprintf(output, "  -d, --debug    with debug information\n");
     fprintf(output, "  -h, --help     print this help message and exit\n");
     fprintf(output, "  -v, --version  print the version and exit\n");
@@ -4731,6 +4762,7 @@ int main(int argc, char **argv) {
     const char *oname = NULL;
     options_t opts;
     opts.ascii = FALSE;
+    opts.lines = FALSE;
     opts.debug = FALSE;
 #ifdef _MSC_VER
 #ifdef _DEBUG
@@ -4744,6 +4776,7 @@ int main(int argc, char **argv) {
         const char *fname = NULL;
         const char *opt_o = NULL;
         bool_t opt_a = FALSE;
+        bool_t opt_l = FALSE;
         bool_t opt_d = FALSE;
         bool_t opt_h = FALSE;
         bool_t opt_v = FALSE;
@@ -4773,6 +4806,9 @@ int main(int argc, char **argv) {
             }
             else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--ascii") == 0) {
                 opt_a = TRUE;
+            }
+            else if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--lines") == 0) {
+                opt_l = TRUE;
             }
             else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
                 opt_d = TRUE;
@@ -4811,6 +4847,7 @@ int main(int argc, char **argv) {
         iname = (fname != NULL && fname[0] != '\0') ? fname : NULL;
         oname = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
         opts.ascii = opt_a;
+        opts.lines = opt_l;
         opts.debug = opt_d;
     }
     {
