@@ -757,7 +757,7 @@ static const char *escape_character(char ch, char (*buf)[5]) {
     return *buf;
 }
 
-static void remove_heading_blank(char *str) {
+static void remove_leading_blanks(char *str) {
     size_t i, j;
     for (i = 0; str[i]; i++) {
         if (
@@ -775,7 +775,7 @@ static void remove_heading_blank(char *str) {
     str[j] = '\0';
 }
 
-static void remove_trailing_blank(char *str) {
+static void remove_trailing_blanks(char *str) {
     size_t i, j;
     for (j = 0, i = 0; str[i]; i++) {
         if (
@@ -2283,8 +2283,8 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
         if (s != NULL) {
             string_flag_t f = STRING_FLAG__NONE;
             bool_t b = TRUE;
-            remove_heading_blank(s);
-            remove_trailing_blank(s);
+            remove_leading_blanks(s);
+            remove_trailing_blanks(s);
             assert((mode & ~7) == 0);
             if ((mode & STRING_FLAG__NOTEMPTY) && !is_filled_string(s)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
