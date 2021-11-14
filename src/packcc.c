@@ -892,11 +892,13 @@ static int stream__printf(stream_t *stream, const char *format, ...) {
 
 static void stream__write_characters(stream_t *stream, char ch, size_t len) {
     size_t i;
+    if (len == VOID_VALUE) return; /* for safety */
     for (i = 0; i < len; i++) stream__putc(stream, ch);
 }
 
 static void stream__write_text(stream_t *stream, const char *ptr, size_t len) {
     size_t i;
+    if (len == VOID_VALUE) return; /* for safety */
     for (i = 0; i < len; i++) {
         if (ptr[i] == '\r') {
             if (i + 1 < len && ptr[i + 1] == '\n') i++;
@@ -911,6 +913,7 @@ static void stream__write_text(stream_t *stream, const char *ptr, size_t len) {
 static void stream__write_escaped_string(stream_t *stream, const char *ptr, size_t len) {
     char s[5];
     size_t i;
+    if (len == VOID_VALUE) return; /* for safety */
     for (i = 0; i < len; i++) {
         stream__puts(stream, escape_character(ptr[i], &s));
     }
@@ -925,6 +928,7 @@ static void stream__write_line_directive(stream_t *stream, const char *fname, si
 static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent, const char *fname, size_t lineno) {
     bool_t b = FALSE;
     size_t i, j, k;
+    if (len == VOID_VALUE) return; /* for safety */
     j = find_first_trailing_space(ptr, 0, len, &k);
     for (i = 0; i < j; i++) {
         if (
