@@ -1617,15 +1617,14 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-static void dump_escaped_string(const char *s) {
-    char buf[5];
-    if (s == NULL) {
+static void dump_escaped_string(const char *str) {
+    char s[5];
+    if (str == NULL) {
         fprintf(stdout, "null");
         return;
     }
-    while (*s) {
-        escape_character(*s++, &buf);
-        fprintf(stdout, "%s", buf);
+    while (*str) {
+        fprintf(stdout, "%s", escape_character(*str++, &s));
     }
 }
 
