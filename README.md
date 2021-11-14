@@ -133,7 +133,10 @@ packcc -o parser example.peg
 
 By running this, the parser source `parser.h` and `parser.c` are generated.
 
-If you want to disable UTF-8 support, specify the command line option `-a` (version 1.4.0 or later).
+If you want to disable UTF-8 support, specify the command line option `-a` or `--ascii` (version 1.4.0 or later).
+
+If you want to insert `#line` directives in the generated source and header files, specify the command line option `-l` or `--lines` (version 1.7.0 or later).
+It is helpful to trace compilation errors of the generated source and header files back to the codes written in the PEG source file.
 
 If you want to confirm the version of the `packcc` command, execute the below.
 
@@ -641,7 +644,7 @@ while (pcc_parse(ctx, &ret));
 pcc_destroy(ctx);
 ```
 
-## Example ##
+## Examples ##
 
 ### Desktop calculator ###
 
