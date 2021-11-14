@@ -418,7 +418,7 @@ static size_t find_first_trailing_space(const char *str, size_t start, size_t en
         case '\v':
         case '\f':
         case '\t':
-            break;
+            continue;
         case '\n':
             if (next) *next = i + 1;
             return j;
@@ -783,6 +783,21 @@ static void remove_trailing_blanks(char *str) {
     str[j] = '\0';
 }
 
+static size_t find_trailing_blanks(const char *str) {
+    size_t i, j;
+    for (j = 0, i = 0; str[i]; i++) {
+        if (
+            str[i] != ' '  &&
+            str[i] != '\v' &&
+            str[i] != '\f' &&
+            str[i] != '\t' &&
+            str[i] != '\n' &&
+            str[i] != '\r'
+        ) j = i + 1;
+    }
+    return j;
+}
+
 static void make_header_identifier(char *str) {
     size_t i;
     for (i = 0; str[i]; i++) {
@@ -901,7 +916,14 @@ static void stream__write_escaped_string(stream_t *stream, const char *ptr, size
     }
 }
 
+static void stream__write_line_directive(stream_t *stream, const char *fname, size_t lineno) {
+    stream__printf(stream, "#line " FMT_LU " \"", (ulong_t)(lineno + 1));
+    stream__write_escaped_string(stream, fname, strlen(fname));
+    stream__puts(stream, "\"\n");
+}
+
 static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent, const char *fname, size_t lineno) {
+    bool_t b = FALSE;
     size_t i, j, k;
     j = find_first_trailing_space(ptr, 0, len, &k);
     for (i = 0; i < j; i++) {
@@ -912,16 +934,17 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
             ptr[i] != '\t'
         ) break;
     }
-    if (stream->line != VOID_VALUE && (i < j || k < len)) {
-        if (i == j) lineno++;
-        stream__printf(stream, "#line " FMT_LU " \"", (ulong_t)(lineno + 1));
-        stream__write_escaped_string(stream, fname, strlen(fname));
-        stream__puts(stream, "\"\n");
-    }
     if (i < j) {
-        stream__write_characters(stream, ' ', indent);
+        if (stream->line != VOID_VALUE)
+            stream__write_line_directive(stream, fname, lineno);
+        if (ptr[i] != '#')
+            stream__write_characters(stream, ' ', indent);
         stream__write_text(stream, ptr + i, j - i);
         stream__putc(stream, '\n');
+        b = TRUE;
+    }
+    else {
+        lineno++;
     }
     if (k < len) {
         size_t m = VOID_VALUE;
@@ -929,30 +952,41 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
         for (i = k; i < len; i = h) {
             j = find_first_trailing_space(ptr, i, len, &h);
             if (i < j) {
-                const size_t l = count_indent_spaces(ptr, i, j, NULL);
-                if (m == VOID_VALUE || m > l) m = l;
+                if (stream->line != VOID_VALUE && !b)
+                    stream__write_line_directive(stream, fname, lineno);
+                if (ptr[i] != '#') {
+                    const size_t l = count_indent_spaces(ptr, i, j, NULL);
+                    if (m == VOID_VALUE || m > l) m = l;
+                }
+                b = TRUE;
+            }
+            else {
+                if (!b) {
+                    k = h;
+                    lineno++;
+                }
             }
         }
         for (i = k; i < len; i = h) {
             j = find_first_trailing_space(ptr, i, len, &h);
             if (i < j) {
                 const size_t l = count_indent_spaces(ptr, i, j, &i);
-                assert(m != VOID_VALUE); /* m must have a valid value */
-                assert(l >= m);
-                stream__write_characters(stream, ' ', l - m + indent);
+                if (ptr[i] != '#') {
+                    assert(m != VOID_VALUE); /* m must have a valid value */
+                    assert(l >= m);
+                    stream__write_characters(stream, ' ', l - m + indent);
+                }
                 stream__write_text(stream, ptr + i, j - i);
                 stream__putc(stream, '\n');
+                b = TRUE;
             }
             else if (h < len) {
                 stream__putc(stream, '\n');
             }
         }
     }
-    if (stream->line != VOID_VALUE && (i < j || k < len)) {
-        stream__printf(stream, "#line " FMT_LU " \"", (ulong_t)(stream->line + 1));
-        stream__write_escaped_string(stream, stream->name, strlen(stream->name));
-        stream__puts(stream, "\"\n");
-    }
+    if (stream->line != VOID_VALUE && b)
+        stream__write_line_directive(stream, stream->name, stream->line);
 }
 
 static const char *extract_filename(const char *path) {
@@ -2138,7 +2172,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         match_spaces(ctx);
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
-        n_p->data.action.code.len = q - p - 2;
+        n_p->data.action.code.len = find_trailing_blanks(n_p->data.action.code.text);
         n_p->data.action.code.line = l;
         n_p->data.action.code.col = m;
         n_p->data.action.index = rule->data.rule.codes.len;
@@ -2219,7 +2253,7 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
-            n_t->data.error.code.len = q - p - 2;
+            n_t->data.error.code.len = find_trailing_blanks(n_t->data.error.code.text);
             n_t->data.error.code.line = l;
             n_t->data.error.code.col = m;
             n_t->data.error.index = rule->data.rule.codes.len;
@@ -4718,11 +4752,8 @@ static bool_t generate(context_t *ctx) {
         match_eol(ctx);
         if (!match_eof(ctx)) stream__putc(&sstream, '\n');
         commit_buffer(ctx);
-        if (ctx->opts.lines && !match_eof(ctx)) {
-            stream__printf(&sstream, "#line " FMT_LU " \"", (ulong_t)(ctx->linenum + 1));
-            stream__write_escaped_string(&sstream, ctx->iname, strlen(ctx->iname));
-            stream__puts(&sstream, "\"\n");
-        }
+        if (ctx->opts.lines && !match_eof(ctx))
+            stream__write_line_directive(&sstream, ctx->iname, ctx->linenum);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = ctx->buffer.len;
             stream__write_text(&sstream, ctx->buffer.buf, (n > 0 && ctx->buffer.buf[n - 1] == '\r') ? n - 1 : n);
