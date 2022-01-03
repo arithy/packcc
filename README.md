@@ -326,6 +326,7 @@ In the action, the C source code can use the predefined variables below.
     The default data type is `void *`.
 - _variable_
     The result of another rule that has already been evaluated.
+    If the rule has not been evaluated, it is ensured that the value is zero-cleared (version 1.7.1 or later).
     The data type is the one specified by `%value`.
     The default data type is `int`.
 - **`$`**_n_

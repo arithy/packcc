@@ -72,7 +72,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.7.0"
+#define VERSION "1.7.1"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -3231,12 +3231,20 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         print_error("Internal error [%d]\n", __LINE__);
         exit(-1);
     case NODE_REFERENCE:
-        stream__write_characters(gen->stream, ' ', indent);
         if (node->data.reference.index != VOID_VALUE) {
-            stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) goto L%04d;\n",
-                node->data.reference.name, (ulong_t)node->data.reference.index, onfail);
+            stream__write_characters(gen->stream, ' ', indent);
+            stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) {\n",
+                node->data.reference.name, (ulong_t)node->data.reference.index);
+            stream__write_characters(gen->stream, ' ', indent + 4);
+            stream__printf(gen->stream, "memset(&(chunk->values.buf[" FMT_LU "]), 0, sizeof(pcc_value_t));\n",
+                (ulong_t)node->data.reference.index);
+            stream__write_characters(gen->stream, ' ', indent + 4);
+            stream__printf(gen->stream, "goto L%04d;\n", onfail);
+            stream__write_characters(gen->stream, ' ', indent);
+            stream__puts(gen->stream, "}\n");
         }
         else {
+            stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, NULL)) goto L%04d;\n",
                 node->data.reference.name, onfail);
         }
