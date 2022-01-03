@@ -1883,22 +1883,6 @@ static bool_t match_section_line_(context_t *ctx, const char *head) {
     return FALSE;
 }
 
-static bool_t match_section_line_continuable_(context_t *ctx, const char *head) {
-    if (match_string(ctx, head)) {
-        while (!match_eof(ctx)) {
-            const size_t p = ctx->bufcur;
-            if (match_eol(ctx)) {
-                if (ctx->buffer.buf[p - 1] != '\\') break;
-            }
-            else {
-                match_character_any(ctx);
-            }
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
 static bool_t match_section_block_(context_t *ctx, const char *left, const char *right, const char *name) {
     const size_t l = ctx->linenum;
     const size_t m = column_number(ctx);
@@ -1941,10 +1925,6 @@ static bool_t match_quotation_(context_t *ctx, const char *left, const char *rig
         return TRUE;
     }
     return FALSE;
-}
-
-static bool_t match_directive_c(context_t *ctx) {
-    return match_section_line_continuable_(ctx, "#");
 }
 
 static bool_t match_comment(context_t *ctx) {
@@ -2014,7 +1994,6 @@ static bool_t match_code_block(context_t *ctx) {
                 break;
             }
             if (
-                match_directive_c(ctx) ||
                 match_comment_c(ctx) ||
                 match_comment_cxx(ctx) ||
                 match_quotation_single(ctx) ||
