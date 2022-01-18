@@ -303,6 +303,7 @@ This matches `[[`...`]]`, `[=[`...`]=]`, `[==[`...`]==]`, etc.
 Curly braces surround an action.
 The action is arbitrary C source code to be executed at the end of matching.
 Any braces within the action must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 One or more actions can be inserted in any places between elements in the pattern.
 Actions are not executed where matching fails.
 
@@ -372,6 +373,7 @@ The data type is `size_t` (before version 1.4.0, it was `int`).
 Curly braces following tilde (`~`) surround an error action.
 The error action is arbitrary C source code to be executed at the end of matching only if the preceding _element_ matching fails.
 Any braces within the error action must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 One or more error actions can be inserted in any places after elements in the pattern.
 The operator tilde (`~`) binds less tightly than any other operator except alternation (`/`) and sequencing.
 The error action is intended to make error handling and recovery code easier to write.
@@ -386,15 +388,21 @@ rule2 <- (e1 e2 e3) ~{ error("one of e[123] has failed"); }
 **`%header` `{` _c source code_ `}`**
 
 The specified C source code is copied verbatim to the C header file before the generated parser API function declarations.
+Any braces in the C source code must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
 **`%source` `{` _c source code_ `}`**
 
 The specified C source code is copied verbatim to the C source file before the generated parser implementation code.
+Any braces in the C source code must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
 **`%common` `{` _c source code_ `}`**
 
 The specified C source code is copied verbatim to both of the C header file and the C source file
 before the generated parser API function declarations and the implementation code respectively.
+Any braces in the C source code must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
 **`%earlyheader` `{` _c source code_ `}`**
 
