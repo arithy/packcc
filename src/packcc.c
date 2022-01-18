@@ -1,7 +1,7 @@
 /*
  * PackCC: a packrat parser generator for C.
  *
- * Copyright (c) 2014, 2019-2021 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019-2022 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -3233,15 +3233,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
     case NODE_REFERENCE:
         if (node->data.reference.index != VOID_VALUE) {
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) {\n",
-                node->data.reference.name, (ulong_t)node->data.reference.index);
-            stream__write_characters(gen->stream, ' ', indent + 4);
-            stream__printf(gen->stream, "memset(&(chunk->values.buf[" FMT_LU "]), 0, sizeof(pcc_value_t));\n",
-                (ulong_t)node->data.reference.index);
-            stream__write_characters(gen->stream, ' ', indent + 4);
-            stream__printf(gen->stream, "goto L%04d;\n", onfail);
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "}\n");
+            stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) goto L%04d;\n",
+                node->data.reference.name, (ulong_t)node->data.reference.index, onfail);
         }
         else {
             stream__write_characters(gen->stream, ' ', indent);
@@ -3695,6 +3688,11 @@ static bool_t generate(context_t *ctx) {
             "        table->max = m;\n"
             "    }\n"
             "    table->len = len;\n"
+            "}\n"
+            "\n"
+            "MARK_USED_FUNC\n"
+            "static void pcc_value_table__clear(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
+            "    memset(table->buf, 0, sizeof(pcc_value_t) * table->len);\n"
             "}\n"
             "\n"
             "static void pcc_value_table__term(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
@@ -4673,6 +4671,12 @@ static bool_t generate(context_t *ctx) {
                     "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, " FMT_LU ");\n",
                     (ulong_t)ctx->rules.buf[i]->data.rule.capts.len
                 );
+                if (ctx->rules.buf[i]->data.rule.vars.len > 0) {
+                    stream__puts(
+                        &sstream,
+                        "    pcc_value_table__clear(ctx->auxil, &chunk->values);\n"
+                    );
+                }
                 r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
                 stream__printf(
                     &sstream,
