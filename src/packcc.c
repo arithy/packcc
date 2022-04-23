@@ -2786,7 +2786,9 @@ static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const
                     u0 = 0;
                     r = FALSE;
                 }
-                else if (value[i] != '-') { /* single character */
+                else if ((value[i] != '-')
+                        || (i == n-1) /* the individual '-' char is valid when first or last*/
+                        ) { /* single character */
                     stream__write_characters(gen->stream, ' ', indent + 4);
                     stream__printf(gen->stream, "u == 0x%06x%s\n", u, (i < n) ? " ||" : "");
                     u0 = 0;
