@@ -72,7 +72,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.7.1"
+#define VERSION "1.7.2"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -2786,9 +2786,10 @@ static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const
                     u0 = 0;
                     r = FALSE;
                 }
-                else if ((value[i] != '-')
-                        || (i == n-1) /* the individual '-' char is valid when first or last*/
-                        ) { /* single character */
+                else if (
+                    value[i] != '-' ||
+                    i == n - 1 /* the individual '-' character is valid when it is at the first or the last position */
+                ) { /* single character */
                     stream__write_characters(gen->stream, ' ', indent + 4);
                     stream__printf(gen->stream, "u == 0x%06x%s\n", u, (i < n) ? " ||" : "");
                     u0 = 0;
