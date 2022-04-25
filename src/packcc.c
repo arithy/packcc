@@ -3575,6 +3575,20 @@ static bool_t generate(context_t *ctx) {
             "} pcc_lr_stack_t;\n"
             "\n"
         );
+        stream__puts(
+            &sstream,
+            "typedef struct pcc_recycle_list_tag {\n"
+            "    struct pcc_recycle_list_tag *next;\n"
+            "} pcc_recycle_list_t;\n"
+            "typedef struct pcc_recycle_manager_tag {\n"
+            "    pcc_recycle_list_t *list;\n"
+            "    size_t element_size;\n"
+            "    size_t allocated;\n"
+            "    size_t inuse;\n"
+            "    void *base;\n"
+            "} pcc_recycle_manager_t;\n"
+            "\n"
+        );
         stream__printf(
             &sstream,
             "struct %s_context_tag {\n"
@@ -3586,6 +3600,9 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_stack_t lrstack;\n"
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_auxil_t auxil;\n"
+            "    pcc_recycle_manager_t thunk_chunk_recycle_manager;\n"
+            "    pcc_recycle_manager_t lr_head_recycle_manager;\n"
+            "    pcc_recycle_manager_t lr_answer_recycle_manager;\n"
             "};\n"
             "\n",
             get_prefix(ctx)
@@ -3873,11 +3890,54 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
         );
+
+        stream__puts(
+            &sstream,
+            "static void *pcc_recycle_alloc(pcc_auxil_t auxil, pcc_recycle_manager_t *recycle_manager) {\n"
+            "    if (recycle_manager->list) {\n"
+            "        pcc_recycle_list_t *tmp = recycle_manager->list;\n"
+            "        recycle_manager->list = tmp->next;\n"
+            "        return tmp;\n"
+            "    }\n"
+            "    if (recycle_manager->inuse < recycle_manager->allocated) {\n"
+            "        char *base = recycle_manager->base;\n"
+            "        char *tmp  = base + (recycle_manager->inuse * recycle_manager->element_size);\n"
+            "        recycle_manager->inuse++;\n"
+            "        return tmp;\n"
+            "    }\n"
+            "    return PCC_MALLOC(auxil, recycle_manager->element_size);\n"
+            "}\n"
+            "static void pcc_recycle_return(pcc_recycle_manager_t *recycle_manager, void *obj) {\n"
+            "    pcc_recycle_list_t *tmp = obj;\n"
+            "    tmp->next = recycle_manager->list;\n"
+            "    recycle_manager->list = tmp;\n"
+            "}\n"
+            "static void pcc_recycle_manager_alloc(pcc_auxil_t auxil, pcc_recycle_manager_t *manager, size_t element_size) {\n"
+            "    manager->list = NULL;\n"
+            "    manager->element_size = element_size;\n"
+            "    manager->allocated = 1024 * 1024;\n"
+            "    manager->inuse = 0;\n"
+            "    manager->base = PCC_MALLOC(auxil, manager->element_size * manager->allocated);\n"
+            "}\n"
+            "static void pcc_recycle_manager_destroy(pcc_auxil_t auxil, pcc_recycle_manager_t *recycle_manager) {\n"
+            "    char *start = recycle_manager->base;\n"
+            "    char *end = recycle_manager->base + (recycle_manager->allocated * recycle_manager->element_size);\n"
+            "    while (recycle_manager->list) {\n"
+            "        pcc_recycle_list_t *tmp = recycle_manager->list;\n"
+            "        recycle_manager->list = tmp->next;\n"
+            "        if (start <= (char *)tmp && (char *)tmp < end)\n"
+            "            continue;\n"
+            "        PCC_FREE(auxil, tmp);\n"
+            "    }\n"
+            "    PCC_FREE(auxil, recycle_manager->base);\n"
+            "}\n"
+            "\n"
+        );
         stream__printf(
             &sstream,
             "MARK_USED_FUNC\n"
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(%s_context_t *ctx) {\n"
-            "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)PCC_MALLOC(ctx->auxil, sizeof(pcc_thunk_chunk_t));\n"
+            "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)pcc_recycle_alloc(ctx->auxil, &ctx->thunk_chunk_recycle_manager);\n"
             "    pcc_value_table__init(ctx->auxil, &chunk->values);\n"
             "    pcc_capture_table__init(ctx->auxil, &chunk->capts);\n"
             "    pcc_thunk_array__init(ctx->auxil, &chunk->thunks);\n"
@@ -3890,7 +3950,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_thunk_array__term(ctx->auxil, &chunk->thunks);\n"
             "    pcc_capture_table__term(ctx->auxil, &chunk->capts);\n"
             "    pcc_value_table__term(ctx->auxil, &chunk->values);\n"
-            "    PCC_FREE(ctx->auxil, chunk);\n"
+            "    pcc_recycle_return(&ctx->thunk_chunk_recycle_manager, chunk);\n"
             "}\n"
             "\n",
             get_prefix(ctx), get_prefix(ctx)
@@ -3954,7 +4014,7 @@ static bool_t generate(context_t *ctx) {
         stream__printf(
             &sstream,
             "static pcc_lr_head_t *pcc_lr_head__create(%s_context_t *ctx, pcc_rule_t rule) {\n"
-            "    pcc_lr_head_t *const head = (pcc_lr_head_t *)PCC_MALLOC(ctx->auxil, sizeof(pcc_lr_head_t));\n"
+            "    pcc_lr_head_t *const head = (pcc_lr_head_t *)pcc_recycle_alloc(ctx->auxil, &ctx->lr_head_recycle_manager);\n"
             "    head->rule = rule;\n"
             "    pcc_rule_set__init(ctx->auxil, &head->invol);\n"
             "    pcc_rule_set__init(ctx->auxil, &head->eval);\n"
@@ -3967,7 +4027,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_head__destroy(ctx, head->hold);\n"
             "    pcc_rule_set__term(ctx->auxil, &head->eval);\n"
             "    pcc_rule_set__term(ctx->auxil, &head->invol);\n"
-            "    PCC_FREE(ctx->auxil, head);\n"
+            "    pcc_recycle_return(&ctx->lr_head_recycle_manager, head);\n"
             "}\n"
             "\n",
             get_prefix(ctx), get_prefix(ctx)
@@ -3977,7 +4037,7 @@ static bool_t generate(context_t *ctx) {
             "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr);\n"
             "\n"
             "static pcc_lr_answer_t *pcc_lr_answer__create(%s_context_t *ctx, pcc_lr_answer_type_t type, size_t pos) {\n"
-            "    pcc_lr_answer_t *answer = (pcc_lr_answer_t *)PCC_MALLOC(ctx->auxil, sizeof(pcc_lr_answer_t));\n"
+            "    pcc_lr_answer_t *answer = (pcc_lr_answer_t *)pcc_recycle_alloc(ctx->auxil, &ctx->lr_answer_recycle_manager);\n"
             "    answer->type = type;\n"
             "    answer->pos = pos;\n"
             "    answer->hold = NULL;\n"
@@ -4026,7 +4086,7 @@ static bool_t generate(context_t *ctx) {
             "        default: /* unknown */\n"
             "            break;\n"
             "        }\n"
-            "        PCC_FREE(ctx->auxil, answer);\n"
+            "        pcc_recycle_return(&ctx->lr_answer_recycle_manager, answer);\n"
             "        answer = a;\n"
             "    }\n"
             "}\n"
@@ -4254,6 +4314,9 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_table__init(auxil, &ctx->lrtable);\n"
             "    pcc_lr_stack__init(auxil, &ctx->lrstack);\n"
             "    pcc_thunk_array__init(auxil, &ctx->thunks);\n"
+            "    pcc_recycle_manager_alloc(auxil, &ctx->thunk_chunk_recycle_manager, sizeof(pcc_thunk_chunk_t));\n"
+            "    pcc_recycle_manager_alloc(auxil, &ctx->lr_head_recycle_manager, sizeof(pcc_lr_head_t));\n"
+            "    pcc_recycle_manager_alloc(auxil, &ctx->lr_answer_recycle_manager, sizeof(pcc_lr_answer_t));\n"
             "    ctx->auxil = auxil;\n"
             "    return ctx;\n"
             "}\n"
@@ -4266,11 +4329,15 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
+            "    pcc_recycle_list_t *tmp;\n"
             "    if (ctx == NULL) return;\n"
             "    pcc_thunk_array__term(ctx->auxil, &ctx->thunks);\n"
             "    pcc_lr_stack__term(ctx->auxil, &ctx->lrstack);\n"
             "    pcc_lr_table__term(ctx, &ctx->lrtable);\n"
             "    pcc_char_array__term(ctx->auxil, &ctx->buffer);\n"
+            "    pcc_recycle_manager_destroy(ctx->auxil, &ctx->thunk_chunk_recycle_manager);\n"
+            "    pcc_recycle_manager_destroy(ctx->auxil, &ctx->lr_head_recycle_manager);\n"
+            "    pcc_recycle_manager_destroy(ctx->auxil, &ctx->lr_answer_recycle_manager);\n"
             "    PCC_FREE(ctx->auxil, ctx);\n"
             "}\n"
             "\n"
