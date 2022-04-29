@@ -3361,18 +3361,18 @@ static bool_t generate(context_t *ctx) {
             "#endif\n"
             "\n"
             "#ifdef _MSC_VER\n"
-            "#define MARK_USED_FUNC __pragma(warning(suppress:4505))\n"
+            "#define MARK_FUNC_AS_USED __pragma(warning(suppress:4505))\n"
             "#else\n"
-            "#define MARK_USED_FUNC __attribute__((__unused__))\n"
+            "#define MARK_FUNC_AS_USED __attribute__((__unused__))\n"
             "#endif\n"
             "\n"
-            "#ifndef PCC_BUFFERSIZE\n"
-            "#define PCC_BUFFERSIZE 256\n"
-            "#endif /* !PCC_BUFFERSIZE */\n"
+            "#ifndef PCC_BUFFER_MIN_SIZE\n"
+            "#define PCC_BUFFER_MIN_SIZE 256\n"
+            "#endif /* !PCC_BUFFER_MIN_SIZE */\n"
             "\n"
-            "#ifndef PCC_ARRAYSIZE\n"
-            "#define PCC_ARRAYSIZE 2\n"
-            "#endif /* !PCC_ARRAYSIZE */\n"
+            "#ifndef PCC_ARRAY_MIN_SIZE\n"
+            "#define PCC_ARRAY_MIN_SIZE 2\n"
+            "#endif /* !PCC_ARRAY_MIN_SIZE */\n"
             "\n"
             "#define PCC_DBG_EVALUATE 0\n"
             "#define PCC_DBG_MATCH    1\n"
@@ -3594,7 +3594,7 @@ static bool_t generate(context_t *ctx) {
             &sstream,
             "#ifndef PCC_ERROR\n"
             "#define PCC_ERROR(auxil) pcc_error()\n"
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static void pcc_error(void) {\n"
             "    fprintf(stderr, \"Syntax error\\n\");\n"
             "    exit(1);\n"
@@ -3658,7 +3658,7 @@ static bool_t generate(context_t *ctx) {
             "    if (array->max <= array->len) {\n"
             "        const size_t n = array->len + 1;\n"
             "        size_t m = array->max;\n"
-            "        if (m == 0) m = PCC_BUFFERSIZE;\n"
+            "        if (m == 0) m = PCC_BUFFER_MIN_SIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        array->buf = (char *)PCC_REALLOC(auxil, array->buf, m);\n"
@@ -3680,11 +3680,11 @@ static bool_t generate(context_t *ctx) {
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static void pcc_value_table__resize(pcc_auxil_t auxil, pcc_value_table_t *table, size_t len) {\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_value_t *)PCC_REALLOC(auxil, table->buf, sizeof(pcc_value_t) * m);\n"
@@ -3693,7 +3693,7 @@ static bool_t generate(context_t *ctx) {
             "    table->len = len;\n"
             "}\n"
             "\n"
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static void pcc_value_table__clear(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
             "    memset(table->buf, 0, sizeof(pcc_value_t) * table->len);\n"
             "}\n"
@@ -3715,7 +3715,7 @@ static bool_t generate(context_t *ctx) {
             "    size_t i;\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_value_t **)PCC_REALLOC(auxil, table->buf, sizeof(pcc_value_t *) * m);\n"
@@ -3738,13 +3738,13 @@ static bool_t generate(context_t *ctx) {
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    for (i = len; i < table->len; i++) PCC_FREE(auxil, table->buf[i].string);\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_capture_t *)PCC_REALLOC(auxil, table->buf, sizeof(pcc_capture_t) * m);\n"
@@ -3779,7 +3779,7 @@ static bool_t generate(context_t *ctx) {
             "    size_t i;\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (const pcc_capture_t **)PCC_REALLOC(auxil, (pcc_capture_t **)table->buf, sizeof(const pcc_capture_t *) * m);\n"
@@ -3796,7 +3796,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, size_t valuec, size_t captc) {\n"
             "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
             "    thunk->type = PCC_THUNK_LEAF;\n"
@@ -3848,7 +3848,7 @@ static bool_t generate(context_t *ctx) {
             "    if (array->max <= array->len) {\n"
             "        const size_t n = array->len + 1;\n"
             "        size_t m = array->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        array->buf = (pcc_thunk_t **)PCC_REALLOC(auxil, array->buf, sizeof(pcc_thunk_t *) * m);\n"
@@ -3875,7 +3875,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_auxil_t auxil) {\n"
             "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_chunk_t));\n"
             "    pcc_value_table__init(auxil, &chunk->values);\n"
@@ -3916,7 +3916,7 @@ static bool_t generate(context_t *ctx) {
             "    if (set->max <= set->len) {\n"
             "        const size_t n = set->len + 1;\n"
             "        size_t m = set->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        set->buf = (pcc_rule_t *)PCC_REALLOC(auxil, set->buf, sizeof(pcc_rule_t) * m);\n"
@@ -4056,7 +4056,7 @@ static bool_t generate(context_t *ctx) {
             "        if (map->max <= map->len) {\n"
             "            const size_t n = map->len + 1;\n"
             "            size_t m = map->max;\n"
-            "            if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "            if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "            while (m < n && m != 0) m <<= 1;\n"
             "            if (m == 0) m = n;\n"
             "            map->buf = (pcc_lr_memo_t *)PCC_REALLOC(auxil, map->buf, sizeof(pcc_lr_memo_t) * m);\n"
@@ -4116,7 +4116,7 @@ static bool_t generate(context_t *ctx) {
             "    for (i = len; i < table->len; i++) pcc_lr_table_entry__destroy(auxil, table->buf[i]);\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
             "        table->buf = (pcc_lr_table_entry_t **)PCC_REALLOC(auxil, table->buf, sizeof(pcc_lr_table_entry_t *) * m);\n"
@@ -4215,7 +4215,7 @@ static bool_t generate(context_t *ctx) {
             "    if (stack->max <= stack->len) {\n"
             "        const size_t n = stack->len + 1;\n"
             "        size_t m = stack->max;\n"
-            "        if (m == 0) m = PCC_ARRAYSIZE;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < n && m != 0) m <<= 1;\n"
             "        if (m == 0) m = n;\n"
             "        stack->buf = (pcc_lr_entry_t **)PCC_REALLOC(auxil, stack->buf, sizeof(pcc_lr_entry_t *) * m);\n"
@@ -4288,7 +4288,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__printf(
             &sstream,
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static void pcc_commit_buffer(%s_context_t *ctx) {\n",
             get_prefix(ctx)
         );
@@ -4304,7 +4304,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__printf(
             &sstream,
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static const char *pcc_get_capture_string(%s_context_t *ctx, const pcc_capture_t *capt) {\n",
             get_prefix(ctx)
         );
@@ -4380,7 +4380,7 @@ static bool_t generate(context_t *ctx) {
         }
         stream__printf(
             &sstream,
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
@@ -4487,7 +4487,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__printf(
             &sstream,
-            "MARK_USED_FUNC\n"
+            "MARK_FUNC_AS_USED\n"
             "static void pcc_do_action(%s_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
             get_prefix(ctx)
         );
