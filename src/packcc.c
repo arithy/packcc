@@ -72,7 +72,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.7.2"
+#define VERSION "1.8.0"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -3374,6 +3374,10 @@ static bool_t generate(context_t *ctx) {
             "#define PCC_ARRAY_MIN_SIZE 2\n"
             "#endif /* !PCC_ARRAY_MIN_SIZE */\n"
             "\n"
+            "#ifndef PCC_POOL_MIN_SIZE\n"
+            "#define PCC_POOL_MIN_SIZE 65536\n"
+            "#endif /* !PCC_POOL_MIN_SIZE */\n"
+            "\n"
             "#define PCC_DBG_EVALUATE 0\n"
             "#define PCC_DBG_MATCH    1\n"
             "#define PCC_DBG_NOMATCH  2\n"
@@ -3409,6 +3413,14 @@ static bool_t generate(context_t *ctx) {
             "\n",
             at, ap ? "" : " "
         );
+        if (strcmp(get_prefix(ctx), "pcc") != 0) {
+            stream__printf(
+                &sstream,
+                "typedef %s_context_t pcc_context_t;\n"
+                "\n",
+                get_prefix(ctx)
+            );
+        }
         stream__puts(
             &sstream,
             "typedef struct pcc_value_table_tag {\n"
@@ -3443,12 +3455,8 @@ static bool_t generate(context_t *ctx) {
             "typedef struct pcc_thunk_tag pcc_thunk_t;\n"
             "typedef struct pcc_thunk_array_tag pcc_thunk_array_t;\n"
             "\n"
-        );
-        stream__printf(
-            &sstream,
-            "typedef void (*pcc_action_t)(%s_context_t *, pcc_thunk_t *, pcc_value_t *);\n"
-            "\n",
-            get_prefix(ctx)
+            "typedef void (*pcc_action_t)(pcc_context_t *, pcc_thunk_t *, pcc_value_t *);\n"
+            "\n"
         );
         stream__puts(
             &sstream,
@@ -3514,14 +3522,10 @@ static bool_t generate(context_t *ctx) {
             "};\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "typedef pcc_thunk_chunk_t *(*pcc_rule_t)(%s_context_t *);\n"
-            "\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "typedef pcc_thunk_chunk_t *(*pcc_rule_t)(pcc_context_t *);\n"
+            "\n"
             "typedef struct pcc_rule_set_tag {\n"
             "    pcc_rule_t *buf;\n"
             "    size_t max;\n"
@@ -3575,6 +3579,28 @@ static bool_t generate(context_t *ctx) {
             "} pcc_lr_stack_t;\n"
             "\n"
         );
+        stream__puts(
+            &sstream,
+            "typedef struct pcc_memory_entry_tag pcc_memory_entry_t;\n"
+            "typedef struct pcc_memory_pool_tag pcc_memory_pool_t;\n"
+            "\n"
+            "struct pcc_memory_entry_tag {\n"
+            "    pcc_memory_entry_t *next;\n"
+            "};\n"
+            "\n"
+            "struct pcc_memory_pool_tag {\n"
+            "    pcc_memory_pool_t *next;\n"
+            "    size_t allocated;\n"
+            "    size_t unused;\n"
+            "};\n"
+            "\n"
+            "typedef struct pcc_memory_recycler_tag {\n"
+            "    pcc_memory_pool_t *pool_list;\n"
+            "    pcc_memory_entry_t *entry_list;\n"
+            "    size_t element_size;\n"
+            "} pcc_memory_recycler_t;\n"
+            "\n"
+        );
         stream__printf(
             &sstream,
             "struct %s_context_tag {\n"
@@ -3586,6 +3612,9 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_stack_t lrstack;\n"
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_auxil_t auxil;\n"
+            "    pcc_memory_recycler_t thunk_chunk_recycler;\n"
+            "    pcc_memory_recycler_t lr_head_recycler;\n"
+            "    pcc_memory_recycler_t lr_answer_recycler;\n"
             "};\n"
             "\n",
             get_prefix(ctx)
@@ -3875,22 +3904,71 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
+            "static void pcc_memory_recycler__init(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler, size_t element_size) {\n"
+            "    recycler->pool_list = NULL;\n"
+            "    recycler->entry_list = NULL;\n"
+            "    recycler->element_size = element_size;\n"
+            "}\n"
+            "\n"
+            "static void *pcc_memory_recycler__supply(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler) {\n"
+            "    if (recycler->entry_list) {\n"
+            "        pcc_memory_entry_t *const tmp = recycler->entry_list;\n"
+            "        recycler->entry_list = tmp->next;\n"
+            "        return tmp;\n"
+            "    }\n"
+            "    if (!recycler->pool_list || recycler->pool_list->unused == 0) {\n"
+            "        size_t size = PCC_POOL_MIN_SIZE;\n"
+            "        if (recycler->pool_list) {\n"
+            "            size = recycler->pool_list->allocated << 1;\n"
+            "            if (size == 0) size = recycler->pool_list->allocated;\n"
+            "        }\n"
+            "        {\n"
+            "            pcc_memory_pool_t *const pool = (pcc_memory_pool_t *)PCC_MALLOC(\n"
+            "                auxil, sizeof(pcc_memory_pool_t) + recycler->element_size * size\n"
+            "            );\n"
+            "            pool->allocated = size;\n"
+            "            pool->unused = size;\n"
+            "            pool->next = recycler->pool_list;\n"
+            "            recycler->pool_list = pool;\n"
+            "        }\n"
+            "    }\n"
+            "    recycler->pool_list->unused--;\n"
+            "    return (char *)recycler->pool_list + sizeof(pcc_memory_pool_t) + recycler->element_size * recycler->pool_list->unused;\n"
+            "}\n"
+            "\n"
+            "static void pcc_memory_recycler__recycle(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler, void *ptr) {\n"
+            "    pcc_memory_entry_t *const tmp = (pcc_memory_entry_t *)ptr;\n"
+            "    tmp->next = recycler->entry_list;\n"
+            "    recycler->entry_list = tmp;\n"
+            "}\n"
+            "\n"
+            "static void pcc_memory_recycler__term(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler) {\n"
+            "    while (recycler->pool_list) {\n"
+            "        pcc_memory_pool_t *const tmp = recycler->pool_list;\n"
+            "        recycler->pool_list = tmp->next;\n"
+            "        PCC_FREE(auxil, tmp);\n"
+            "    }\n"
+            "}\n"
+            "\n"
+        );
+        stream__puts(
+            &sstream,
             "MARK_FUNC_AS_USED\n"
-            "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_auxil_t auxil) {\n"
-            "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_chunk_t));\n"
-            "    pcc_value_table__init(auxil, &chunk->values);\n"
-            "    pcc_capture_table__init(auxil, &chunk->capts);\n"
-            "    pcc_thunk_array__init(auxil, &chunk->thunks);\n"
+            "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_context_t *ctx) {\n"
+            "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->thunk_chunk_recycler);\n"
+            "    pcc_value_table__init(ctx->auxil, &chunk->values);\n"
+            "    pcc_capture_table__init(ctx->auxil, &chunk->capts);\n"
+            "    pcc_thunk_array__init(ctx->auxil, &chunk->thunks);\n"
             "    chunk->pos = 0;\n"
             "    return chunk;\n"
             "}\n"
             "\n"
-            "static void pcc_thunk_chunk__destroy(pcc_auxil_t auxil, pcc_thunk_chunk_t *chunk) {\n"
+            "static void pcc_thunk_chunk__destroy(pcc_context_t *ctx, pcc_thunk_chunk_t *chunk) {\n"
             "    if (chunk == NULL) return;\n"
-            "    pcc_thunk_array__term(auxil, &chunk->thunks);\n"
-            "    pcc_capture_table__term(auxil, &chunk->capts);\n"
-            "    pcc_value_table__term(auxil, &chunk->values);\n"
-            "    PCC_FREE(auxil, chunk);\n"
+            "    pcc_thunk_array__term(ctx->auxil, &chunk->thunks);\n"
+            "    pcc_capture_table__term(ctx->auxil, &chunk->capts);\n"
+            "    pcc_value_table__term(ctx->auxil, &chunk->values);\n"
+            "    pcc_memory_recycler__recycle(ctx->auxil, &ctx->thunk_chunk_recycler, chunk);\n"
             "}\n"
             "\n"
         );
@@ -3952,21 +4030,21 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static pcc_lr_head_t *pcc_lr_head__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
-            "    pcc_lr_head_t *const head = (pcc_lr_head_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_head_t));\n"
+            "static pcc_lr_head_t *pcc_lr_head__create(pcc_context_t *ctx, pcc_rule_t rule) {\n"
+            "    pcc_lr_head_t *const head = (pcc_lr_head_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->lr_head_recycler);\n"
             "    head->rule = rule;\n"
-            "    pcc_rule_set__init(auxil, &head->invol);\n"
-            "    pcc_rule_set__init(auxil, &head->eval);\n"
+            "    pcc_rule_set__init(ctx->auxil, &head->invol);\n"
+            "    pcc_rule_set__init(ctx->auxil, &head->eval);\n"
             "    head->hold = NULL;\n"
             "    return head;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_head__destroy(pcc_auxil_t auxil, pcc_lr_head_t *head) {\n"
+            "static void pcc_lr_head__destroy(pcc_context_t *ctx, pcc_lr_head_t *head) {\n"
             "    if (head == NULL) return;\n"
-            "    pcc_lr_head__destroy(auxil, head->hold);\n"
-            "    pcc_rule_set__term(auxil, &head->eval);\n"
-            "    pcc_rule_set__term(auxil, &head->invol);\n"
-            "    PCC_FREE(auxil, head);\n"
+            "    pcc_lr_head__destroy(ctx, head->hold);\n"
+            "    pcc_rule_set__term(ctx->auxil, &head->eval);\n"
+            "    pcc_rule_set__term(ctx->auxil, &head->invol);\n"
+            "    pcc_memory_recycler__recycle(ctx->auxil, &ctx->lr_head_recycler, head);\n"
             "}\n"
             "\n"
         );
@@ -3974,8 +4052,8 @@ static bool_t generate(context_t *ctx) {
             &sstream,
             "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr);\n"
             "\n"
-            "static pcc_lr_answer_t *pcc_lr_answer__create(pcc_auxil_t auxil, pcc_lr_answer_type_t type, size_t pos) {\n"
-            "    pcc_lr_answer_t *answer = (pcc_lr_answer_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_answer_t));\n"
+            "static pcc_lr_answer_t *pcc_lr_answer__create(pcc_context_t *ctx, pcc_lr_answer_type_t type, size_t pos) {\n"
+            "    pcc_lr_answer_t *answer = (pcc_lr_answer_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->lr_answer_recycler);\n"
             "    answer->type = type;\n"
             "    answer->pos = pos;\n"
             "    answer->hold = NULL;\n"
@@ -3987,14 +4065,14 @@ static bool_t generate(context_t *ctx) {
             "        answer->data.chunk = NULL;\n"
             "        break;\n"
             "    default: /* unknown */\n"
-            "        PCC_FREE(auxil, answer);\n"
+            "        PCC_FREE(ctx->auxil, answer);\n"
             "        answer = NULL;\n"
             "    }\n"
             "    return answer;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_answer__set_chunk(pcc_auxil_t auxil, pcc_lr_answer_t *answer, pcc_thunk_chunk_t *chunk) {\n"
-            "    pcc_lr_answer_t *const a = pcc_lr_answer__create(auxil, answer->type, answer->pos);\n"
+            "static void pcc_lr_answer__set_chunk(pcc_context_t *ctx, pcc_lr_answer_t *answer, pcc_thunk_chunk_t *chunk) {\n"
+            "    pcc_lr_answer_t *const a = pcc_lr_answer__create(ctx, answer->type, answer->pos);\n"
             "    switch (answer->type) {\n"
             "    case PCC_LR_ANSWER_LR:\n"
             "        a->data.lr = answer->data.lr;\n"
@@ -4011,20 +4089,20 @@ static bool_t generate(context_t *ctx) {
             "    answer->data.chunk = chunk;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_answer__destroy(pcc_auxil_t auxil, pcc_lr_answer_t *answer) {\n"
+            "static void pcc_lr_answer__destroy(pcc_context_t *ctx, pcc_lr_answer_t *answer) {\n"
             "    while (answer != NULL) {\n"
             "        pcc_lr_answer_t *const a = answer->hold;\n"
             "        switch (answer->type) {\n"
             "        case PCC_LR_ANSWER_LR:\n"
-            "            pcc_lr_entry__destroy(auxil, answer->data.lr);\n"
+            "            pcc_lr_entry__destroy(ctx->auxil, answer->data.lr);\n"
             "            break;\n"
             "        case PCC_LR_ANSWER_CHUNK:\n"
-            "            pcc_thunk_chunk__destroy(auxil, answer->data.chunk);\n"
+            "            pcc_thunk_chunk__destroy(ctx, answer->data.chunk);\n"
             "            break;\n"
             "        default: /* unknown */\n"
             "            break;\n"
             "        }\n"
-            "        PCC_FREE(auxil, answer);\n"
+            "        pcc_memory_recycler__recycle(ctx->auxil, &ctx->lr_answer_recycler, answer);\n"
             "        answer = a;\n"
             "    }\n"
             "}\n"
@@ -4038,7 +4116,7 @@ static bool_t generate(context_t *ctx) {
             "    map->buf = NULL;\n"
             "}\n"
             "\n"
-            "static size_t pcc_lr_memo_map__index(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
+            "static size_t pcc_lr_memo_map__index(pcc_context_t *ctx, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < map->len; i++) {\n"
             "        if (map->buf[i].rule == rule) return i;\n"
@@ -4046,10 +4124,10 @@ static bool_t generate(context_t *ctx) {
             "    return PCC_VOID_VALUE;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_memo_map__put(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, pcc_rule_t rule, pcc_lr_answer_t *answer) {\n"
-            "    const size_t i = pcc_lr_memo_map__index(auxil, map, rule);\n"
+            "static void pcc_lr_memo_map__put(pcc_context_t *ctx, pcc_lr_memo_map_t *map, pcc_rule_t rule, pcc_lr_answer_t *answer) {\n"
+            "    const size_t i = pcc_lr_memo_map__index(ctx->auxil, map, rule);\n"
             "    if (i != PCC_VOID_VALUE) {\n"
-            "        pcc_lr_answer__destroy(auxil, map->buf[i].answer);\n"
+            "        pcc_lr_answer__destroy(ctx, map->buf[i].answer);\n"
             "        map->buf[i].answer = answer;\n"
             "    }\n"
             "    else {\n"
@@ -4059,7 +4137,7 @@ static bool_t generate(context_t *ctx) {
             "            if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "            while (m < n && m != 0) m <<= 1;\n"
             "            if (m == 0) m = n;\n"
-            "            map->buf = (pcc_lr_memo_t *)PCC_REALLOC(auxil, map->buf, sizeof(pcc_lr_memo_t) * m);\n"
+            "            map->buf = (pcc_lr_memo_t *)PCC_REALLOC(ctx->auxil, map->buf, sizeof(pcc_lr_memo_t) * m);\n"
             "            map->max = m;\n"
             "        }\n"
             "        map->buf[map->len].rule = rule;\n"
@@ -4068,37 +4146,37 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "}\n"
             "\n"
-            "static pcc_lr_answer_t *pcc_lr_memo_map__get(pcc_auxil_t auxil, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
-            "    const size_t i = pcc_lr_memo_map__index(auxil, map, rule);\n"
+            "static pcc_lr_answer_t *pcc_lr_memo_map__get(pcc_context_t *ctx, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
+            "    const size_t i = pcc_lr_memo_map__index(ctx->auxil, map, rule);\n"
             "    return (i != PCC_VOID_VALUE) ? map->buf[i].answer : NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_memo_map__term(pcc_auxil_t auxil, pcc_lr_memo_map_t *map) {\n"
+            "static void pcc_lr_memo_map__term(pcc_context_t *ctx, pcc_lr_memo_map_t *map) {\n"
             "    while (map->len > 0) {\n"
             "        map->len--;\n"
-            "        pcc_lr_answer__destroy(auxil, map->buf[map->len].answer);\n"
+            "        pcc_lr_answer__destroy(ctx, map->buf[map->len].answer);\n"
             "    }\n"
-            "    PCC_FREE(auxil, map->buf);\n"
+            "    PCC_FREE(ctx->auxil, map->buf);\n"
             "}\n"
             "\n"
         );
         stream__puts(
             &sstream,
-            "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_auxil_t auxil) {\n"
-            "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_table_entry_t));\n"
+            "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_context_t *ctx) {\n"
+            "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)PCC_MALLOC(ctx->auxil, sizeof(pcc_lr_table_entry_t));\n"
             "    entry->head = NULL;\n"
-            "    pcc_lr_memo_map__init(auxil, &entry->memos);\n"
+            "    pcc_lr_memo_map__init(ctx->auxil, &entry->memos);\n"
             "    entry->hold_a = NULL;\n"
             "    entry->hold_h = NULL;\n"
             "    return entry;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table_entry__destroy(pcc_auxil_t auxil, pcc_lr_table_entry_t *entry) {\n"
+            "static void pcc_lr_table_entry__destroy(pcc_context_t *ctx, pcc_lr_table_entry_t *entry) {\n"
             "    if (entry == NULL) return;\n"
-            "    pcc_lr_head__destroy(auxil, entry->hold_h);\n"
-            "    pcc_lr_answer__destroy(auxil, entry->hold_a);\n"
-            "    pcc_lr_memo_map__term(auxil, &entry->memos);\n"
-            "    PCC_FREE(auxil, entry);\n"
+            "    pcc_lr_head__destroy(ctx, entry->hold_h);\n"
+            "    pcc_lr_answer__destroy(ctx, entry->hold_a);\n"
+            "    pcc_lr_memo_map__term(ctx, &entry->memos);\n"
+            "    PCC_FREE(ctx->auxil, entry);\n"
             "}\n"
             "\n"
         );
@@ -4111,67 +4189,67 @@ static bool_t generate(context_t *ctx) {
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__resize(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t len) {\n"
+            "static void pcc_lr_table__resize(pcc_context_t *ctx, pcc_lr_table_t *table, size_t len) {\n"
             "    size_t i;\n"
-            "    for (i = len; i < table->len; i++) pcc_lr_table_entry__destroy(auxil, table->buf[i]);\n"
+            "    for (i = len; i < table->len; i++) pcc_lr_table_entry__destroy(ctx, table->buf[i]);\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
             "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
-            "        table->buf = (pcc_lr_table_entry_t **)PCC_REALLOC(auxil, table->buf, sizeof(pcc_lr_table_entry_t *) * m);\n"
+            "        table->buf = (pcc_lr_table_entry_t **)PCC_REALLOC(ctx->auxil, table->buf, sizeof(pcc_lr_table_entry_t *) * m);\n"
             "        table->max = m;\n"
             "    }\n"
             "    for (i = table->len; i < len; i++) table->buf[i] = NULL;\n"
             "    table->len = len;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__set_head(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t index, pcc_lr_head_t *head) {\n"
+            "static void pcc_lr_table__set_head(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index, pcc_lr_head_t *head) {\n"
             "    index += table->ofs;\n"
-            "    if (index >= table->len) pcc_lr_table__resize(auxil, table, index + 1);\n"
-            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(auxil);\n"
+            "    if (index >= table->len) pcc_lr_table__resize(ctx, table, index + 1);\n"
+            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(ctx);\n"
             "    table->buf[index]->head = head;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__hold_head(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t index, pcc_lr_head_t *head) {\n"
+            "static void pcc_lr_table__hold_head(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index, pcc_lr_head_t *head) {\n"
             "    index += table->ofs;\n"
-            "    if (index >= table->len) pcc_lr_table__resize(auxil, table, index + 1);\n"
-            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(auxil);\n"
+            "    if (index >= table->len) pcc_lr_table__resize(ctx, table, index + 1);\n"
+            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(ctx);\n"
             "    head->hold = table->buf[index]->hold_h;\n"
             "    table->buf[index]->hold_h = head;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__set_answer(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t index, pcc_rule_t rule, pcc_lr_answer_t *answer) {\n"
+            "static void pcc_lr_table__set_answer(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index, pcc_rule_t rule, pcc_lr_answer_t *answer) {\n"
             "    index += table->ofs;\n"
-            "    if (index >= table->len) pcc_lr_table__resize(auxil, table, index + 1);\n"
-            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(auxil);\n"
-            "    pcc_lr_memo_map__put(auxil, &table->buf[index]->memos, rule, answer);\n"
+            "    if (index >= table->len) pcc_lr_table__resize(ctx, table, index + 1);\n"
+            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(ctx);\n"
+            "    pcc_lr_memo_map__put(ctx, &table->buf[index]->memos, rule, answer);\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__hold_answer(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t index, pcc_lr_answer_t *answer) {\n"
+            "static void pcc_lr_table__hold_answer(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index, pcc_lr_answer_t *answer) {\n"
             "    index += table->ofs;\n"
-            "    if (index >= table->len) pcc_lr_table__resize(auxil, table, index + 1);\n"
-            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(auxil);\n"
+            "    if (index >= table->len) pcc_lr_table__resize(ctx, table, index + 1);\n"
+            "    if (table->buf[index] == NULL) table->buf[index] = pcc_lr_table_entry__create(ctx);\n"
             "    answer->hold = table->buf[index]->hold_a;\n"
             "    table->buf[index]->hold_a = answer;\n"
             "}\n"
             "\n"
-            "static pcc_lr_head_t *pcc_lr_table__get_head(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t index) {\n"
+            "static pcc_lr_head_t *pcc_lr_table__get_head(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index) {\n"
             "    index += table->ofs;\n"
             "    if (index >= table->len || table->buf[index] == NULL) return NULL;\n"
             "    return table->buf[index]->head;\n"
             "}\n"
             "\n"
-            "static pcc_lr_answer_t *pcc_lr_table__get_answer(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t index, pcc_rule_t rule) {\n"
+            "static pcc_lr_answer_t *pcc_lr_table__get_answer(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index, pcc_rule_t rule) {\n"
             "    index += table->ofs;\n"
             "    if (index >= table->len || table->buf[index] == NULL) return NULL;\n"
-            "    return pcc_lr_memo_map__get(auxil, &table->buf[index]->memos, rule);\n"
+            "    return pcc_lr_memo_map__get(ctx, &table->buf[index]->memos, rule);\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__shift(pcc_auxil_t auxil, pcc_lr_table_t *table, size_t count) {\n"
+            "static void pcc_lr_table__shift(pcc_context_t *ctx, pcc_lr_table_t *table, size_t count) {\n"
             "    size_t i;\n"
             "    if (count > table->len - table->ofs) count = table->len - table->ofs;\n"
-            "    for (i = 0; i < count; i++) pcc_lr_table_entry__destroy(auxil, table->buf[table->ofs++]);\n"
+            "    for (i = 0; i < count; i++) pcc_lr_table_entry__destroy(ctx, table->buf[table->ofs++]);\n"
             "    if (table->ofs > (table->max >> 1)) {\n"
             "        memmove(table->buf, table->buf + table->ofs, sizeof(pcc_lr_table_entry_t *) * (table->len - table->ofs));\n"
             "        table->len -= table->ofs;\n"
@@ -4179,12 +4257,12 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "}\n"
             "\n"
-            "static void pcc_lr_table__term(pcc_auxil_t auxil, pcc_lr_table_t *table) {\n"
+            "static void pcc_lr_table__term(pcc_context_t *ctx, pcc_lr_table_t *table) {\n"
             "    while (table->len > table->ofs) {\n"
             "        table->len--;\n"
-            "        pcc_lr_table_entry__destroy(auxil, table->buf[table->len]);\n"
+            "        pcc_lr_table_entry__destroy(ctx, table->buf[table->len]);\n"
             "    }\n"
-            "    PCC_FREE(auxil, table->buf);\n"
+            "    PCC_FREE(ctx->auxil, table->buf);\n"
             "}\n"
             "\n"
         );
@@ -4233,14 +4311,10 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "static %s_context_t *pcc_context__create(pcc_auxil_t auxil) {\n"
-            "    %s_context_t *const ctx = (%s_context_t *)PCC_MALLOC(auxil, sizeof(%s_context_t));\n",
-            get_prefix(ctx), get_prefix(ctx), get_prefix(ctx), get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "static pcc_context_t *pcc_context__create(pcc_auxil_t auxil) {\n"
+            "    pcc_context_t *const ctx = (pcc_context_t *)PCC_MALLOC(auxil, sizeof(pcc_context_t));\n"
             "    ctx->pos = 0;\n"
             "    ctx->cur = 0;\n"
             "    ctx->level = 0;\n"
@@ -4248,34 +4322,32 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_table__init(auxil, &ctx->lrtable);\n"
             "    pcc_lr_stack__init(auxil, &ctx->lrstack);\n"
             "    pcc_thunk_array__init(auxil, &ctx->thunks);\n"
+            "    pcc_memory_recycler__init(auxil, &ctx->thunk_chunk_recycler, sizeof(pcc_thunk_chunk_t));\n"
+            "    pcc_memory_recycler__init(auxil, &ctx->lr_head_recycler, sizeof(pcc_lr_head_t));\n"
+            "    pcc_memory_recycler__init(auxil, &ctx->lr_answer_recycler, sizeof(pcc_lr_answer_t));\n"
             "    ctx->auxil = auxil;\n"
             "    return ctx;\n"
             "}\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "static void pcc_context__destroy(%s_context_t *ctx) {\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "static void pcc_context__destroy(pcc_context_t *ctx) {\n"
             "    if (ctx == NULL) return;\n"
             "    pcc_thunk_array__term(ctx->auxil, &ctx->thunks);\n"
             "    pcc_lr_stack__term(ctx->auxil, &ctx->lrstack);\n"
-            "    pcc_lr_table__term(ctx->auxil, &ctx->lrtable);\n"
+            "    pcc_lr_table__term(ctx, &ctx->lrtable);\n"
             "    pcc_char_array__term(ctx->auxil, &ctx->buffer);\n"
+            "    pcc_memory_recycler__term(ctx->auxil, &ctx->thunk_chunk_recycler);\n"
+            "    pcc_memory_recycler__term(ctx->auxil, &ctx->lr_head_recycler);\n"
+            "    pcc_memory_recycler__term(ctx->auxil, &ctx->lr_answer_recycler);\n"
             "    PCC_FREE(ctx->auxil, ctx);\n"
             "}\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "static size_t pcc_refill_buffer(%s_context_t *ctx, size_t num) {\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "static size_t pcc_refill_buffer(pcc_context_t *ctx, size_t num) {\n"
             "    if (ctx->buffer.len >= ctx->cur + num) return ctx->buffer.len - ctx->cur;\n"
             "    while (ctx->buffer.len < ctx->cur + num) {\n"
             "        const int c = PCC_GETCHAR(ctx->auxil);\n"
@@ -4286,30 +4358,22 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "MARK_FUNC_AS_USED\n"
-            "static void pcc_commit_buffer(%s_context_t *ctx) {\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "MARK_FUNC_AS_USED\n"
+            "static void pcc_commit_buffer(pcc_context_t *ctx) {\n"
             "    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->cur, ctx->buffer.len - ctx->cur);\n"
             "    ctx->buffer.len -= ctx->cur;\n"
             "    ctx->pos += ctx->cur;\n"
-            "    pcc_lr_table__shift(ctx->auxil, &ctx->lrtable, ctx->cur);\n"
+            "    pcc_lr_table__shift(ctx, &ctx->lrtable, ctx->cur);\n"
             "    ctx->cur = 0;\n"
             "}\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "MARK_FUNC_AS_USED\n"
-            "static const char *pcc_get_capture_string(%s_context_t *ctx, const pcc_capture_t *capt) {\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "MARK_FUNC_AS_USED\n"
+            "static const char *pcc_get_capture_string(pcc_context_t *ctx, const pcc_capture_t *capt) {\n"
             "    if (capt->string == NULL)\n"
             "        ((pcc_capture_t *)capt)->string =\n"
             "            pcc_strndup_e(ctx->auxil, ctx->buffer.buf + capt->range.start, capt->range.end - capt->range.start);\n"
@@ -4318,13 +4382,9 @@ static bool_t generate(context_t *ctx) {
             "\n"
         );
         if (ctx->flags & CODE_FLAG__UTF8_CHARCLASS_USED) {
-            stream__printf(
-                &sstream,
-                "static size_t pcc_get_char_as_utf32(%s_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n",
-                get_prefix(ctx)
-            );
             stream__puts(
                 &sstream,
+                "static size_t pcc_get_char_as_utf32(pcc_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n"
                 "    int c, u;\n"
                 "    size_t n;\n"
                 "    if (pcc_refill_buffer(ctx, 1) < 1) return 0;\n"
@@ -4378,19 +4438,15 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        stream__printf(
-            &sstream,
-            "MARK_FUNC_AS_USED\n"
-            "static pcc_bool_t pcc_apply_rule(%s_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "MARK_FUNC_AS_USED\n"
+            "static pcc_bool_t pcc_apply_rule(pcc_context_t *ctx, pcc_rule_t rule, pcc_thunk_array_t *thunks, pcc_value_t *value) {\n"
             "    static pcc_value_t null;\n"
             "    pcc_thunk_chunk_t *c = NULL;\n"
             "    const size_t p = ctx->pos + ctx->cur;\n"
             "    pcc_bool_t b = PCC_TRUE;\n"
-            "    pcc_lr_answer_t *a = pcc_lr_table__get_answer(ctx->auxil, &ctx->lrtable, p, rule);\n"
+            "    pcc_lr_answer_t *a = pcc_lr_table__get_answer(ctx, &ctx->lrtable, p, rule);\n"
             "    pcc_lr_head_t *h = pcc_lr_table__get_head(ctx->auxil, &ctx->lrtable, p);\n"
             "    if (h != NULL) {\n"
             "        if (a == NULL && rule != h->rule && pcc_rule_set__index(ctx->auxil, &h->invol, rule) == PCC_VOID_VALUE) {\n"
@@ -4400,9 +4456,9 @@ static bool_t generate(context_t *ctx) {
             "        else if (pcc_rule_set__remove(ctx->auxil, &h->eval, rule)) {\n"
             "            b = PCC_FALSE;\n"
             "            c = rule(ctx);\n"
-            "            a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_CHUNK, ctx->pos + ctx->cur);\n"
+            "            a = pcc_lr_answer__create(ctx, PCC_LR_ANSWER_CHUNK, ctx->pos + ctx->cur);\n"
             "            a->data.chunk = c;\n"
-            "            pcc_lr_table__hold_answer(ctx->auxil, &ctx->lrtable, p, a);\n"
+            "            pcc_lr_table__hold_answer(ctx, &ctx->lrtable, p, a);\n"
             "        }\n"
             "    }\n"
             "    if (b) {\n"
@@ -4411,8 +4467,8 @@ static bool_t generate(context_t *ctx) {
             "            switch (a->type) {\n"
             "            case PCC_LR_ANSWER_LR:\n"
             "                if (a->data.lr->head == NULL) {\n"
-            "                    a->data.lr->head = pcc_lr_head__create(ctx->auxil, rule);\n"
-            "                    pcc_lr_table__hold_head(ctx->auxil, &ctx->lrtable, p, a->data.lr->head);\n"
+            "                    a->data.lr->head = pcc_lr_head__create(ctx, rule);\n"
+            "                    pcc_lr_table__hold_head(ctx, &ctx->lrtable, p, a->data.lr->head);\n"
             "                }\n"
             "                {\n"
             "                    size_t i = ctx->lrstack.len;\n"
@@ -4435,41 +4491,41 @@ static bool_t generate(context_t *ctx) {
             "        else {\n"
             "            pcc_lr_entry_t *const e = pcc_lr_entry__create(ctx->auxil, rule);\n"
             "            pcc_lr_stack__push(ctx->auxil, &ctx->lrstack, e);\n"
-            "            a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_LR, p);\n"
+            "            a = pcc_lr_answer__create(ctx, PCC_LR_ANSWER_LR, p);\n"
             "            a->data.lr = e;\n"
-            "            pcc_lr_table__set_answer(ctx->auxil, &ctx->lrtable, p, rule, a);\n"
+            "            pcc_lr_table__set_answer(ctx, &ctx->lrtable, p, rule, a);\n"
             "            c = rule(ctx);\n"
             "            pcc_lr_stack__pop(ctx->auxil, &ctx->lrstack);\n"
             "            a->pos = ctx->pos + ctx->cur;\n"
             "            if (e->head == NULL) {\n"
-            "                pcc_lr_answer__set_chunk(ctx->auxil, a, c);\n"
+            "                pcc_lr_answer__set_chunk(ctx, a, c);\n"
             "            }\n"
             "            else {\n"
             "                e->seed = c;\n"
             "                h = a->data.lr->head;\n"
             "                if (h->rule != rule) {\n"
             "                    c = a->data.lr->seed;\n"
-            "                    a = pcc_lr_answer__create(ctx->auxil, PCC_LR_ANSWER_CHUNK, ctx->pos + ctx->cur);\n"
+            "                    a = pcc_lr_answer__create(ctx, PCC_LR_ANSWER_CHUNK, ctx->pos + ctx->cur);\n"
             "                    a->data.chunk = c;\n"
-            "                    pcc_lr_table__hold_answer(ctx->auxil, &ctx->lrtable, p, a);\n"
+            "                    pcc_lr_table__hold_answer(ctx, &ctx->lrtable, p, a);\n"
             "                }\n"
             "                else {\n"
-            "                    pcc_lr_answer__set_chunk(ctx->auxil, a, a->data.lr->seed);\n"
+            "                    pcc_lr_answer__set_chunk(ctx, a, a->data.lr->seed);\n"
             "                    if (a->data.chunk == NULL) {\n"
             "                        c = NULL;\n"
             "                    }\n"
             "                    else {\n"
-            "                        pcc_lr_table__set_head(ctx->auxil, &ctx->lrtable, p, h);\n"
+            "                        pcc_lr_table__set_head(ctx, &ctx->lrtable, p, h);\n"
             "                        for (;;) {\n"
             "                            ctx->cur = p - ctx->pos;\n"
             "                            pcc_rule_set__copy(ctx->auxil, &h->eval, &h->invol);\n"
             "                            c = rule(ctx);\n"
             "                            if (c == NULL || ctx->pos + ctx->cur <= a->pos) break;\n"
-            "                            pcc_lr_answer__set_chunk(ctx->auxil, a, c);\n"
+            "                            pcc_lr_answer__set_chunk(ctx, a, c);\n"
             "                            a->pos = ctx->pos + ctx->cur;\n"
             "                        }\n"
-            "                        pcc_thunk_chunk__destroy(ctx->auxil, c);\n"
-            "                        pcc_lr_table__set_head(ctx->auxil, &ctx->lrtable, p, NULL);\n"
+            "                        pcc_thunk_chunk__destroy(ctx, c);\n"
+            "                        pcc_lr_table__set_head(ctx, &ctx->lrtable, p, NULL);\n"
             "                        ctx->cur = a->pos - ctx->pos;\n"
             "                        c = a->data.chunk;\n"
             "                    }\n"
@@ -4485,14 +4541,10 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
         );
-        stream__printf(
-            &sstream,
-            "MARK_FUNC_AS_USED\n"
-            "static void pcc_do_action(%s_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n",
-            get_prefix(ctx)
-        );
         stream__puts(
             &sstream,
+            "MARK_FUNC_AS_USED\n"
+            "static void pcc_do_action(pcc_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < thunks->len; i++) {\n"
             "        pcc_thunk_t *const thunk = thunks->buf[i];\n"
@@ -4636,8 +4688,8 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->rules.len; i++) {
                 stream__printf(
                     &sstream,
-                    "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx);\n",
-                    ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
+                    "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(pcc_context_t *ctx);\n",
+                    ctx->rules.buf[i]->data.rule.name
                 );
             }
             stream__puts(
@@ -4653,12 +4705,12 @@ static bool_t generate(context_t *ctx) {
                 g.ascii = ctx->opts.ascii;
                 stream__printf(
                     &sstream,
-                    "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(%s_context_t *ctx) {\n",
-                    ctx->rules.buf[i]->data.rule.name, get_prefix(ctx)
+                    "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(pcc_context_t *ctx) {\n",
+                    ctx->rules.buf[i]->data.rule.name
                 );
                 stream__printf(
                     &sstream,
-                    "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx->auxil);\n"
+                    "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx);\n"
                     "    chunk->pos = ctx->cur;\n"
                     "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
                     "    ctx->level++;\n",
@@ -4694,7 +4746,7 @@ static bool_t generate(context_t *ctx) {
                         "L0000:;\n"
                         "    ctx->level--;\n"
                         "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
-                        "    pcc_thunk_chunk__destroy(ctx->auxil, chunk);\n"
+                        "    pcc_thunk_chunk__destroy(ctx, chunk);\n"
                         "    return NULL;\n",
                         ctx->rules.buf[i]->data.rule.name
                     );
