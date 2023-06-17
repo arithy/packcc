@@ -485,6 +485,14 @@ static void pcc_error(void) {
 }
 ```
 
+To stop parsing without aborting the process, this definition will return `0` from `pcc_parse(pcc_context_t *ctx, int *ret)`:
+
+```C
+#define PCC_ERROR(auxil) return 0
+```
+
+This is useful when the grammar does not handle all inputs: if the input does not match any rule, the input buffer never gets empty and `pcc_parse()` returns nonzero again and again. The `return 0` will stop that.
+
 **`PCC_MALLOC(`**_auxil_**`,`**_size_**`)`**
 
 The function macro to allocate a memory block.
