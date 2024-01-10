@@ -1,7 +1,7 @@
 /*
  * PackCC: a packrat parser generator for C.
  *
- * Copyright (c) 2014, 2019-2022 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019-2024 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,6 +43,8 @@
 #include <string.h>
 #include <limits.h>
 #include <assert.h>
+
+#include "value.h"
 
 #ifndef _MSC_VER
 #if defined __GNUC__ && defined _WIN32 /* MinGW */
@@ -3298,8 +3300,10 @@ static bool_t generate(context_t *ctx) {
             &hstream,
             "#ifndef PCC_INCLUDED_%s\n"
             "#define PCC_INCLUDED_%s\n"
-            "\n",
-            ctx->hid, ctx->hid
+            "\n"
+            "%s\n\n",
+            ctx->hid, ctx->hid,
+            TREE_HEADER
         );
         {
             size_t i;
