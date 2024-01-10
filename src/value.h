@@ -55,7 +55,7 @@
   "typedef char byte;\n"                                                       \
   "typedef byte bool;\n"                                                       \
   "\n"                                                                         \
-  "bool IS_VALUE_CREATE_NULL(TREE_VALUE *v) {\n"                               \
+  "bool IS_VALUE_NULL(TREE_VALUE *v) {\n"                                      \
   "   return v->type == STRING && !strcmp(v->value->_text, \"EMPTY\");\n"      \
   "}\n"                                                                        \
   "\n"                                                                         \
@@ -63,7 +63,7 @@
   "void PRINT_TREE_(TREE_PART *t, int depth) {\n"                              \
   "   TREE_VALUE *v = t->left;\n"                                              \
   "\n"                                                                         \
-  "   if(!IS_VALUE_CREATE_NULL(v)) {\n"                                        \
+  "   if(!IS_VALUE_NULL(v)) {\n"                                               \
   "       switch(v->type) {\n"                                                 \
   "           case NUMBER:\n"                                                  \
   "               run();\n"                                                    \
@@ -84,7 +84,7 @@
   "   }\n"                                                                     \
   "\n"                                                                         \
   "   v = t->right;\n"                                                         \
-  "   if(!IS_VALUE_CREATE_NULL(v)) {\n"                                        \
+  "   if(!IS_VALUE_NULL(v)) {\n"                                               \
   "       switch(v->type) {\n"                                                 \
   "           case NUMBER:\n"                                                  \
   "               PRINT_INDENT(depth + 1);\n"                                  \

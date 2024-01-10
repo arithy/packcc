@@ -144,6 +144,48 @@ If you want to confirm the version of the `packcc` command, execute the below.
 packcc -v
 ```
 
+### Tree syntax ###
+This syntax lets you define ASTs for an easier development experience.
+
+First, Add this to your peg file: `%value "TREE_VALUE*"`. This makes sure your return values are always a tree node.
+
+**Create a number value with `number(num)`. Example: `number(5)`**
+
+**Create a text value with `text(txt)`. Example: `text("Hello World!")`**
+
+**Create a tree value with `make(type, left, right)`. The structure only supports binary trees.**
+
+**Create a null value whenever needed (rarely by the user) with `CREATE_NULL()`.**
+
+**Create a node (a tree value with the left value being your value and the right being null) with `CREATE_NODE(type, data)`.**
+
+**Use `PRINT_VALUE(expression)` to print your syntax tree at any point.**
+
+#### Tree API ####
+
+```c
+enum VALUE_TYPE { NUMBER, STRING, TREE };
+
+// --- IMPORTANT PARTS --- //
+typedef struct tree {
+   string type;
+   TREE_VALUE *left;
+   TREE_VALUE *right;
+} TREE_PART;
+
+typedef struct value {
+   enum VALUE_TYPE    type;
+   union _value *value;
+} TREE_VALUE;
+// --- IMPORTANT PARTS --- //
+
+typedef union _value {
+   int   number;
+   string _text;
+   TREE_PART *tree;
+} _TREE_VALUE;
+```
+
 ### Syntax ###
 
 A grammar consists of a set of named rules.
