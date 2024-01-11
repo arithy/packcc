@@ -2069,9 +2069,9 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             s = ctx->bufcur;
             match_spaces(ctx);
         }
-        if (match_string(ctx, "=")) goto EXCEPTION;
         if (match_string(ctx, "<-")) goto EXCEPTION;
-        if (match_string(ctx, ":")) goto EXCEPTION;
+        if (match_character(ctx, '=')) goto EXCEPTION;
+        if (match_character(ctx, ':')) goto EXCEPTION;
         n_p = create_node(NODE_REFERENCE);
         if (r == VOID_VALUE) {
             assert(q >= p);
@@ -2392,7 +2392,7 @@ static node_t *parse_rule(context_t *ctx) {
     if (!match_identifier(ctx)) goto EXCEPTION;
     q = ctx->bufcur;
     match_spaces(ctx);
-    if (!match_string(ctx, "<-") && !match_string(ctx, "=") && !match_string(ctx, ":")) goto EXCEPTION;
+    if (!match_string(ctx, "<-") && !match_character(ctx, '=') && !match_character(ctx, ':')) goto EXCEPTION;
     match_spaces(ctx);
     n_r = create_node(NODE_RULE);
     n_r->data.rule.expr = parse_expression(ctx, n_r);
