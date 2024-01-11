@@ -192,6 +192,11 @@ A grammar consists of a set of named rules.
 A rule definition can be split into multiple lines.
 
 **_rulename_ `<-` _pattern_**
+or
+**_rulename_ `=` _pattern_**
+or
+**_rulename_ `:` _pattern_**
+matched in that exact order.
 
 The _rulename_ is the name of the rule to define.
 The _pattern_ is a text pattern that contains one or more of the following elements.
