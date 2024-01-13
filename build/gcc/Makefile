@@ -1,6 +1,9 @@
 CC=gcc
-CFLAGS_D=-std=gnu89 -fsigned-char -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -O0 -g2
-CFLAGS_R=-std=gnu89 -fsigned-char -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -O2 -DNDEBUG
+CFLAGS_0=-std=gnu89 -fsigned-char -Wall -Wextra -Wno-overlength-strings -pedantic
+CFLAGS_D=        $(CFLAGS_0) -Wno-unused-parameter -O0 -g2
+CFLAGS_EXAMPLE_D=$(CFLAGS_0)                       -O0 -g2
+CFLAGS_R=        $(CFLAGS_0) -Wno-unused-parameter -O2 -DNDEBUG
+CFLAGS_EXAMPLE_R=$(CFLAGS_0)                       -O2 -DNDEBUG
 LDFLAGS_D=
 LDFLAGS_R=
 
