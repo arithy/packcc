@@ -3671,7 +3671,7 @@ static bool_t generate(context_t *ctx) {
             "#define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) ((void)0)\n"
             "#endif /* !PCC_DEBUG */\n"
             "\n"
-            "static char *pcc_strndup_e(pcc_auxil_t auxil, const char *str, size_t len) {\n"
+            "static char *pcc_strndup_e(pcc_auxil_t auxil MARK_VAR_AS_USED, const char *str, size_t len) {\n"
             "    const size_t m = strnlen(str, len);\n"
             "    char *const s = (char *)PCC_MALLOC(auxil, m + 1);\n"
             "    memcpy(s, str, m);\n"
@@ -3682,13 +3682,13 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_char_array__init(pcc_auxil_t auxil, pcc_char_array_t *array) {\n"
+            "static void pcc_char_array__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_char_array_t *array) {\n"
             "    array->len = 0;\n"
             "    array->max = 0;\n"
             "    array->buf = NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_char_array__add(pcc_auxil_t auxil, pcc_char_array_t *array, char ch) {\n"
+            "static void pcc_char_array__add(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_char_array_t *array, char ch) {\n"
             "    if (array->max <= array->len) {\n"
             "        const size_t n = array->len + 1;\n"
             "        size_t m = array->max;\n"
@@ -3701,21 +3701,21 @@ static bool_t generate(context_t *ctx) {
             "    array->buf[array->len++] = ch;\n"
             "}\n"
             "\n"
-            "static void pcc_char_array__term(pcc_auxil_t auxil, pcc_char_array_t *array) {\n"
+            "static void pcc_char_array__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_char_array_t *array) {\n"
             "    PCC_FREE(auxil, array->buf);\n"
             "}\n"
             "\n"
         );
         stream__puts(
             &sstream,
-            "static void pcc_value_table__init(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
+            "static void pcc_value_table__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_table_t *table) {\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "MARK_FUNC_AS_USED\n"
-            "static void pcc_value_table__resize(pcc_auxil_t auxil, pcc_value_table_t *table, size_t len) {\n"
+            "static void pcc_value_table__resize(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_table_t *table, size_t len) {\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
             "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
@@ -3728,24 +3728,24 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
             "MARK_FUNC_AS_USED\n"
-            "static void pcc_value_table__clear(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
+            "static void pcc_value_table__clear(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_table_t *table) {\n"
             "    memset(table->buf, 0, sizeof(pcc_value_t) * table->len);\n"
             "}\n"
             "\n"
-            "static void pcc_value_table__term(pcc_auxil_t auxil, pcc_value_table_t *table) {\n"
+            "static void pcc_value_table__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_table_t *table) {\n"
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n"
         );
         stream__puts(
             &sstream,
-            "static void pcc_value_refer_table__init(pcc_auxil_t auxil, pcc_value_refer_table_t *table) {\n"
+            "static void pcc_value_refer_table__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_refer_table_t *table) {\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_value_refer_table__resize(pcc_auxil_t auxil, pcc_value_refer_table_t *table, size_t len) {\n"
+            "static void pcc_value_refer_table__resize(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_refer_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
@@ -3759,21 +3759,21 @@ static bool_t generate(context_t *ctx) {
             "    table->len = len;\n"
             "}\n"
             "\n"
-            "static void pcc_value_refer_table__term(pcc_auxil_t auxil, pcc_value_refer_table_t *table) {\n"
+            "static void pcc_value_refer_table__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_value_refer_table_t *table) {\n"
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
             "\n"
         );
         stream__puts(
             &sstream,
-            "static void pcc_capture_table__init(pcc_auxil_t auxil, pcc_capture_table_t *table) {\n"
+            "static void pcc_capture_table__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_capture_table_t *table) {\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
             "MARK_FUNC_AS_USED\n"
-            "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t len) {\n"
+            "static void pcc_capture_table__resize(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_capture_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    for (i = len; i < table->len; i++) PCC_FREE(auxil, table->buf[i].string);\n"
             "    if (table->max < len) {\n"
@@ -3792,7 +3792,7 @@ static bool_t generate(context_t *ctx) {
             "    table->len = len;\n"
             "}\n"
             "\n"
-            "static void pcc_capture_table__term(pcc_auxil_t auxil, pcc_capture_table_t *table) {\n"
+            "static void pcc_capture_table__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_capture_table_t *table) {\n"
             "    while (table->len > 0) {\n"
             "        table->len--;\n"
             "        PCC_FREE(auxil, table->buf[table->len].string);\n"
@@ -3803,13 +3803,13 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_capture_const_table__init(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
+            "static void pcc_capture_const_table__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_capture_const_table_t *table) {\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
             "    table->buf = NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_capture_const_table__resize(pcc_auxil_t auxil, pcc_capture_const_table_t *table, size_t len) {\n"
+            "static void pcc_capture_const_table__resize(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_capture_const_table_t *table, size_t len) {\n"
             "    size_t i;\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
@@ -3823,7 +3823,7 @@ static bool_t generate(context_t *ctx) {
             "    table->len = len;\n"
             "}\n"
             "\n"
-            "static void pcc_capture_const_table__term(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
+            "static void pcc_capture_const_table__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_capture_const_table_t *table) {\n"
             "    PCC_FREE(auxil, (void *)table->buf);\n"
             "}\n"
             "\n"
@@ -3845,7 +3845,7 @@ static bool_t generate(context_t *ctx) {
             "    return thunk;\n"
             "}\n"
             "\n"
-            "static pcc_thunk_t *pcc_thunk__create_node(pcc_auxil_t auxil, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n"
+            "static pcc_thunk_t *pcc_thunk__create_node(pcc_auxil_t auxil MARK_VAR_AS_USED, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n"
             "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
             "    thunk->type = PCC_THUNK_NODE;\n"
             "    thunk->data.node.thunks = thunks;\n"
@@ -3872,13 +3872,13 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_thunk_array__init(pcc_auxil_t auxil, pcc_thunk_array_t *array) {\n"
+            "static void pcc_thunk_array__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_thunk_array_t *array) {\n"
             "    array->len = 0;\n"
             "    array->max = 0;\n"
             "    array->buf = NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_thunk_array__add(pcc_auxil_t auxil, pcc_thunk_array_t *array, pcc_thunk_t *thunk) {\n"
+            "static void pcc_thunk_array__add(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_thunk_array_t *array, pcc_thunk_t *thunk) {\n"
             "    if (array->max <= array->len) {\n"
             "        const size_t n = array->len + 1;\n"
             "        size_t m = array->max;\n"
@@ -3909,13 +3909,13 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_memory_recycler__init(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler, size_t element_size) {\n"
+            "static void pcc_memory_recycler__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_memory_recycler_t *recycler, size_t element_size) {\n"
             "    recycler->pool_list = NULL;\n"
             "    recycler->entry_list = NULL;\n"
             "    recycler->element_size = element_size;\n"
             "}\n"
             "\n"
-            "static void *pcc_memory_recycler__supply(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler) {\n"
+            "static void *pcc_memory_recycler__supply(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_memory_recycler_t *recycler) {\n"
             "    if (recycler->entry_list) {\n"
             "        pcc_memory_entry_t *const tmp = recycler->entry_list;\n"
             "        recycler->entry_list = tmp->next;\n"
@@ -3941,13 +3941,13 @@ static bool_t generate(context_t *ctx) {
             "    return (char *)recycler->pool_list + sizeof(pcc_memory_pool_t) + recycler->element_size * recycler->pool_list->unused;\n"
             "}\n"
             "\n"
-            "static void pcc_memory_recycler__recycle(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler, void *ptr) {\n"
+            "static void pcc_memory_recycler__recycle(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_memory_recycler_t *recycler, void *ptr) {\n"
             "    pcc_memory_entry_t *const tmp = (pcc_memory_entry_t *)ptr;\n"
             "    tmp->next = recycler->entry_list;\n"
             "    recycler->entry_list = tmp;\n"
             "}\n"
             "\n"
-            "static void pcc_memory_recycler__term(pcc_auxil_t auxil, pcc_memory_recycler_t *recycler) {\n"
+            "static void pcc_memory_recycler__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_memory_recycler_t *recycler) {\n"
             "    while (recycler->pool_list) {\n"
             "        pcc_memory_pool_t *const tmp = recycler->pool_list;\n"
             "        recycler->pool_list = tmp->next;\n"
@@ -3979,13 +3979,13 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_rule_set__init(pcc_auxil_t auxil, pcc_rule_set_t *set) {\n"
+            "static void pcc_rule_set__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_rule_set_t *set) {\n"
             "    set->len = 0;\n"
             "    set->max = 0;\n"
             "    set->buf = NULL;\n"
             "}\n"
             "\n"
-            "static size_t pcc_rule_set__index(pcc_auxil_t auxil, const pcc_rule_set_t *set, pcc_rule_t rule) {\n"
+            "static size_t pcc_rule_set__index(pcc_auxil_t auxil MARK_VAR_AS_USED, const pcc_rule_set_t *set, pcc_rule_t rule) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < set->len; i++) {\n"
             "        if (set->buf[i] == rule) return i;\n"
@@ -4016,7 +4016,7 @@ static bool_t generate(context_t *ctx) {
             "    return PCC_TRUE;\n"
             "}\n"
             "\n"
-            "static void pcc_rule_set__clear(pcc_auxil_t auxil, pcc_rule_set_t *set) {\n"
+            "static void pcc_rule_set__clear(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_rule_set_t *set) {\n"
             "    set->len = 0;\n"
             "}\n"
             "\n"
@@ -4028,7 +4028,7 @@ static bool_t generate(context_t *ctx) {
             "    }\n"
             "}\n"
             "\n"
-            "static void pcc_rule_set__term(pcc_auxil_t auxil, pcc_rule_set_t *set) {\n"
+            "static void pcc_rule_set__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_rule_set_t *set) {\n"
             "    PCC_FREE(auxil, set->buf);\n"
             "}\n"
             "\n"
@@ -4115,13 +4115,13 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map) {\n"
+            "static void pcc_lr_memo_map__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_memo_map_t *map) {\n"
             "    map->len = 0;\n"
             "    map->max = 0;\n"
             "    map->buf = NULL;\n"
             "}\n"
             "\n"
-            "static size_t pcc_lr_memo_map__index(pcc_context_t *ctx, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
+            "static size_t pcc_lr_memo_map__index(pcc_context_t *ctx MARK_VAR_AS_USED, pcc_lr_memo_map_t *map, pcc_rule_t rule) {\n"
             "    size_t i;\n"
             "    for (i = 0; i < map->len; i++) {\n"
             "        if (map->buf[i].rule == rule) return i;\n"
@@ -4187,7 +4187,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_lr_table__init(pcc_auxil_t auxil, pcc_lr_table_t *table) {\n"
+            "static void pcc_lr_table__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_table_t *table) {\n"
             "    table->ofs = 0;\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
@@ -4239,7 +4239,7 @@ static bool_t generate(context_t *ctx) {
             "    table->buf[index]->hold_a = answer;\n"
             "}\n"
             "\n"
-            "static pcc_lr_head_t *pcc_lr_table__get_head(pcc_context_t *ctx, pcc_lr_table_t *table, size_t index) {\n"
+            "static pcc_lr_head_t *pcc_lr_table__get_head(pcc_context_t *ctx MARK_VAR_AS_USED, pcc_lr_table_t *table, size_t index) {\n"
             "    index += table->ofs;\n"
             "    if (index >= table->len || table->buf[index] == NULL) return NULL;\n"
             "    return table->buf[index]->head;\n"
@@ -4273,7 +4273,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
+            "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_rule_t rule) {\n"
             "    pcc_lr_entry_t *const lr = (pcc_lr_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_entry_t));\n"
             "    lr->rule = rule;\n"
             "    lr->seed = NULL;\n"
@@ -4281,20 +4281,20 @@ static bool_t generate(context_t *ctx) {
             "    return lr;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr) {\n"
+            "static void pcc_lr_entry__destroy(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_entry_t *lr) {\n"
             "    PCC_FREE(auxil, lr);\n"
             "}\n"
             "\n"
         );
         stream__puts(
             &sstream,
-            "static void pcc_lr_stack__init(pcc_auxil_t auxil, pcc_lr_stack_t *stack) {\n"
+            "static void pcc_lr_stack__init(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_stack_t *stack) {\n"
             "    stack->len = 0;\n"
             "    stack->max = 0;\n"
             "    stack->buf = NULL;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_stack__push(pcc_auxil_t auxil, pcc_lr_stack_t *stack, pcc_lr_entry_t *lr) {\n"
+            "static void pcc_lr_stack__push(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_stack_t *stack, pcc_lr_entry_t *lr) {\n"
             "    if (stack->max <= stack->len) {\n"
             "        const size_t n = stack->len + 1;\n"
             "        size_t m = stack->max;\n"
@@ -4307,11 +4307,11 @@ static bool_t generate(context_t *ctx) {
             "    stack->buf[stack->len++] = lr;\n"
             "}\n"
             "\n"
-            "static pcc_lr_entry_t *pcc_lr_stack__pop(pcc_auxil_t auxil, pcc_lr_stack_t *stack) {\n"
+            "static pcc_lr_entry_t *pcc_lr_stack__pop(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_stack_t *stack) {\n"
             "    return stack->buf[--stack->len];\n"
             "}\n"
             "\n"
-            "static void pcc_lr_stack__term(pcc_auxil_t auxil, pcc_lr_stack_t *stack) {\n"
+            "static void pcc_lr_stack__term(pcc_auxil_t auxil MARK_VAR_AS_USED, pcc_lr_stack_t *stack) {\n"
             "    PCC_FREE(auxil, stack->buf);\n"
             "}\n"
             "\n"
@@ -4594,7 +4594,7 @@ static bool_t generate(context_t *ctx) {
                     }
                     stream__printf(
                         &sstream,
-                        "static void pcc_action_%s_" FMT_LU "(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
+                        "static void pcc_action_%s_" FMT_LU "(%s_context_t *__pcc_ctx MARK_VAR_AS_USED, pcc_thunk_t *__pcc_in MARK_VAR_AS_USED, pcc_value_t *__pcc_out MARK_VAR_AS_USED) {\n",
                         r->name, (ulong_t)d, get_prefix(ctx)
                     );
                     stream__puts(
