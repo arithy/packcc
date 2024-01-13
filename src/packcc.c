@@ -2898,9 +2898,9 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 indent += 4;
             }
             stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
+            stream__puts(gen->stream, "const size_t p MARK_VAR_AS_USED = ctx->cur;\n");
             stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "const size_t n = chunk->thunks.len;\n");
+            stream__puts(gen->stream, "const size_t n MARK_VAR_AS_USED = chunk->thunks.len;\n");
             {
                 const int l = ++gen->label;
                 if (generate_code(gen, expr, l, indent, FALSE) != CODE_REACH__ALWAYS_SUCCEED) {
@@ -3024,9 +3024,9 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         indent += 4;
     }
     stream__write_characters(gen->stream, ' ', indent);
-    stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
+    stream__puts(gen->stream, "const size_t p MARK_VAR_AS_USED = ctx->cur;\n");
     stream__write_characters(gen->stream, ' ', indent);
-    stream__puts(gen->stream, "const size_t n = chunk->thunks.len;\n");
+    stream__puts(gen->stream, "const size_t n MARK_VAR_AS_USED = chunk->thunks.len;\n");
     for (i = 0; i < nodes->len; i++) {
         const bool_t c = (i + 1 < nodes->len) ? TRUE : FALSE;
         const int l = ++gen->label;
