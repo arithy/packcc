@@ -3352,7 +3352,7 @@ static bool_t generate(context_t *ctx) {
             &sstream,
             "#include \"%s\"\n"
             "\n",
-            ctx->hname
+            extract_filename(ctx->hname)
         );
         {
             size_t i;
