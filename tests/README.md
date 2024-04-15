@@ -16,6 +16,7 @@ If you do not have `uncrustify` installed, you can do it using your package mana
 ```
 $ git clone https://github.com/uncrustify/uncrustify &&
   cd uncrustify &&
+  git checkout uncrustify-0.72.0 &&
   mkdir -p build &&
   cd build &&
   cmake .. &&
