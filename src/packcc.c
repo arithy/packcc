@@ -1,7 +1,7 @@
 /*
  * PackCC: a packrat parser generator for C.
  *
- * Copyright (c) 2014, 2019-2022 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019-2024 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -65,6 +65,34 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #include <unistd.h> /* for unlink() */
 #endif
 
+#ifdef _WIN32 /* Windows including MSVC and MinGW */
+#include <io.h> /* _get_osfhandle() */
+/* NOTE: The header "fileapi.h" causes a compiler error due to an illegal anonymous union. */
+#define WINAPI __stdcall
+typedef int BOOL;
+typedef unsigned long DWORD;
+typedef void *HANDLE;
+typedef struct _FILETIME {
+    DWORD dwLowDateTime;
+    DWORD dwHighDateTime;
+} FILETIME;
+typedef struct _BY_HANDLE_FILE_INFORMATION {
+    DWORD dwFileAttributes;
+    FILETIME ftCreationTime;
+    FILETIME ftLastAccessTime;
+    FILETIME ftLastWriteTime;
+    DWORD dwVolumeSerialNumber;
+    DWORD nFileSizeHigh;
+    DWORD nFileSizeLow;
+    DWORD nNumberOfLinks;
+    DWORD nFileIndexHigh;
+    DWORD nFileIndexLow;
+} BY_HANDLE_FILE_INFORMATION, *LPBY_HANDLE_FILE_INFORMATION;
+BOOL WINAPI GetFileInformationByHandle(HANDLE hFile, LPBY_HANDLE_FILE_INFORMATION lpFileInformation);
+#else /* !_WIN32 */
+#include <sys/stat.h> /* for fstat() */
+#endif
+
 #if !defined __has_attribute || defined _MSC_VER
 #define __attribute__(x)
 #endif
@@ -72,7 +100,7 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
 
-#define VERSION "1.8.0"
+#define VERSION "2.0.0"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -98,6 +126,18 @@ typedef enum bool_tag {
     FALSE = 0,
     TRUE
 } bool_t;
+
+#ifdef _WIN32 /* Windows including MSVC and MinGW */
+typedef BY_HANDLE_FILE_INFORMATION file_id_t;
+#else
+typedef struct stat file_id_t;
+#endif
+
+typedef struct file_id_array_tag {
+    file_id_t *buf;
+    size_t max;
+    size_t len;
+} file_id_array_t;
 
 typedef struct file_pos_tag {
     char *path;  /* the file path name */
@@ -293,6 +333,7 @@ typedef struct context_tag {
     code_flag_t flags;    /* the bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;        /* the current number of PEG parsing errors */
     input_state_t *input; /* the current input state */
+    file_id_array_t done; /* the unique identifiers of the PEG file already parsed or being parsed */
     node_array_t rules;   /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
     code_block_array_t esource; /* the code blocks from %earlysource and %earlycommon directives to be added into the generated source file */
@@ -850,6 +891,32 @@ static void file_pos__term(file_pos_t *pos) {
     free(pos->path);
 }
 
+static void file_id__get(FILE *file, const char *path, file_id_t *id) {
+#ifdef _WIN32 /* Windows including MSVC and MinGW */
+    if (GetFileInformationByHandle((HANDLE)_get_osfhandle(_fileno(file)), id) == 0) {
+        print_error("Cannot get file information: %s\n", path);
+        exit(2);
+    }
+#else
+    if (fstat(fileno(file), id) != 0) {
+        print_error("Cannot get file information: %s\n", path);
+        exit(2);
+    }
+#endif
+}
+
+static bool_t file_id__equals(const file_id_t *id0, const file_id_t *id1) {
+#ifdef _WIN32 /* Windows including MSVC and MinGW */
+    return (
+        id0->dwVolumeSerialNumber == id1->dwVolumeSerialNumber &&
+        id0->nFileIndexHigh == id1->nFileIndexHigh &&
+        id0->nFileIndexLow == id1->nFileIndexLow
+    ) ? TRUE : FALSE;
+#else
+    return (id0->st_dev == id1->st_dev && id0->st_ino == id1->st_ino) ? TRUE : FALSE;
+#endif
+}
+
 static stream_t stream__wrap(FILE *file, const char *path, size_t line) {
     stream_t s;
     s.file = file;
@@ -1168,6 +1235,34 @@ static size_t column_number(const input_state_t *input) { /* 0-based */
         );
 }
 
+static void file_id_array__init(file_id_array_t *array) {
+    array->len = 0;
+    array->max = 0;
+    array->buf = NULL;
+}
+
+static bool_t file_id_array__add_if_not_yet(file_id_array_t *array, const file_id_t *id) {
+    size_t i;
+    for (i = 0; i < array->len; i++) {
+        if (file_id__equals(id, &(array->buf[i]))) return FALSE; /* already added */
+    }
+    if (array->max <= array->len) {
+        const size_t n = array->len + 1;
+        size_t m = array->max;
+        if (m == 0) m = BUFFER_MIN_SIZE;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n; /* in case of shift overflow */
+        array->buf = (file_id_t *)realloc_e(array->buf, m);
+        array->max = m;
+    }
+    array->buf[array->len++] = *id;
+    return TRUE; /* newly added */
+}
+
+static void file_id_array__term(file_id_array_t *array) {
+    free(array->buf);
+}
+
 static void char_array__init(char_array_t *array) {
     array->len = 0;
     array->max = 0;
@@ -1338,6 +1433,7 @@ static context_t *create_context(const char *ipath, const char *opath, const opt
     ctx->flags = CODE_FLAG__NONE;
     ctx->errnum = 0;
     ctx->input = create_input_state(ipath, NULL, NULL, opts);
+    file_id_array__init(&ctx->done);
     node_array__init(&ctx->rules);
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
@@ -1359,6 +1455,7 @@ static void destroy_context(context_t *ctx) {
     code_block_array__term(&ctx->esource);
     free((node_t **)ctx->rulehash.buf);
     node_array__term(&ctx->rules);
+    file_id_array__term(&ctx->done);
     while (ctx->input) ctx->input = destroy_input_state(ctx->input);
     free(ctx->prefix);
     free(ctx->atype);
@@ -2676,6 +2773,11 @@ static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
 
 static void parse_file_(context_t *ctx) {
     if (ctx->input == NULL) return;
+    {
+        file_id_t id;
+        file_id__get(ctx->input->file, ctx->input->path, &id);
+        if (!file_id_array__add_if_not_yet(&ctx->done, &id)) return; /* already imported */
+    }
     {
         const bool_t imp = is_in_imported_input(ctx->input);
         bool_t b = TRUE;
