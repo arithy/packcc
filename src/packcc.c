@@ -265,30 +265,41 @@ typedef enum code_flag_tag {
     CODE_FLAG__UTF8_CHARCLASS_USED = 1
 } code_flag_t;
 
+typedef struct input_state_tag input_state_t;
+
+struct input_state_tag {
+    char *path;        /* the path name of the PEG file being parsed; "<stdin>" if stdin */
+    FILE *file;        /* the input file stream of the PEG file */
+    bool_t ascii;      /* UTF-8 support is disabled if true  */
+    code_flag_t flags; /* the bitwise flags to control code generation; updated during PEG parsing */
+    size_t errnum;     /* the current number of PEG parsing errors */
+    size_t linenum;    /* the current line number (0-based) */
+    size_t charnum;    /* the number of characters in the current line that are already flushed (0-based, UTF-8 support if not disabled) */
+    size_t linepos;    /* the beginning position in the PEG file of the current line */
+    size_t bufpos;     /* the position in the PEG file of the first character currently buffered */
+    size_t bufcur;     /* the current parsing position in the character buffer */
+    char_array_t buffer;   /* the character buffer */
+    input_state_t *parent; /* the input state of the parent PEG file that imports the input; just a reference */
+};
+
 typedef struct context_tag {
-    char *ipath;  /* the path name of the PEG file being parsed */
     char *spath;  /* the path name of the C source file being generated */
     char *hpath;  /* the path name of the C header file being generated */
-    FILE *ifile;  /* the input file stream of the PEG file */
     char *hid;    /* the macro name for the include guard of the C header file */
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
     char *prefix; /* the prefix of the API function names (NULL means the default) */
-    options_t opts;      /* the options */
-    code_flag_t flags;   /* the bitwise flags to control code generation; updated during PEG parsing */
-    size_t errnum;       /* the current number of PEG parsing errors */
-    size_t linenum;      /* the current line number (0-based) */
-    size_t charnum;      /* the number of characters in the current line that are already flushed (0-based, UTF-8 support if not disabled) */
-    size_t linepos;      /* the beginning position in the PEG file of the current line */
-    size_t bufpos;       /* the position in the PEG file of the first character currently buffered */
-    size_t bufcur;       /* the current parsing position in the character buffer */
-    char_array_t buffer; /* the character buffer */
-    node_array_t rules;  /* the PEG rules */
+    options_t opts;       /* the options */
+    code_flag_t flags;    /* the bitwise flags to control code generation; updated during PEG parsing */
+    size_t errnum;        /* the current number of PEG parsing errors */
+    input_state_t *input; /* the current input state */
+    node_array_t rules;   /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
     code_block_array_t esource; /* the code blocks from %earlysource and %earlycommon directives to be added into the generated source file */
     code_block_array_t eheader; /* the code blocks from %earlyheader and %earlycommon directives to be added into the generated header file */
     code_block_array_t source;  /* the code blocks from %source and %common directives to be added into the generated source file */
     code_block_array_t header;  /* the code blocks from %header and %common directives to be added into the generated header file */
+    code_block_array_t fsource; /* the code fragments after %% directive to be added into the generated source file */
 } context_t;
 
 typedef struct generate_tag {
@@ -1025,6 +1036,59 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
         stream__write_line_directive(stream, stream->path, stream->line);
 }
 
+static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, const char *path, size_t lineno) {
+    bool_t b = FALSE;
+    size_t i, j, k;
+    if (len == VOID_VALUE) return; /* for safety */
+    j = find_first_trailing_space(ptr, 0, len, &k);
+    for (i = 0; i < j; i++) {
+        if (
+            ptr[i] != ' '  &&
+            ptr[i] != '\v' &&
+            ptr[i] != '\f' &&
+            ptr[i] != '\t'
+        ) break;
+    }
+    if (i < j) {
+        if (stream->line != VOID_VALUE)
+            stream__write_line_directive(stream, path, lineno);
+        stream__write_text(stream, ptr + i, j - i);
+        stream__putc(stream, '\n');
+        b = TRUE;
+    }
+    else {
+        lineno++;
+    }
+    if (k < len) {
+        size_t h;
+        for (i = k; i < len; i = h) {
+            j = find_first_trailing_space(ptr, i, len, &h);
+            if (i < j) {
+                if (stream->line != VOID_VALUE && !b)
+                    stream__write_line_directive(stream, path, lineno);
+                b = TRUE;
+                break;
+            }
+            else {
+                if (!b) {
+                    k = h;
+                    lineno++;
+                }
+            }
+        }
+        for (i = k; i < len; i = h) {
+            j = find_first_trailing_space(ptr, i, len, &h);
+            if (i < j) {
+                stream__write_text(stream, ptr + i, j - i);
+                stream__putc(stream, '\n');
+            }
+            else if (h < len) {
+                stream__putc(stream, '\n');
+            }
+        }
+    }
+}
+
 static const char *extract_filename(const char *path) {
     size_t i = strlen(path);
     while (i > 0) {
@@ -1094,12 +1158,14 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
-static size_t column_number(const context_t *ctx) { /* 0-based */
-    assert(ctx->bufpos + ctx->bufcur >= ctx->linepos);
-    if (ctx->opts.ascii)
-        return ctx->charnum + ctx->bufcur - ((ctx->linepos > ctx->bufpos) ? ctx->linepos - ctx->bufpos : 0);
+static size_t column_number(const input_state_t *input) { /* 0-based */
+    assert(input->bufpos + input->bufcur >= input->linepos);
+    if (input->ascii)
+        return input->charnum + input->bufcur - ((input->linepos > input->bufpos) ? input->linepos - input->bufpos : 0);
     else
-        return ctx->charnum + count_characters(ctx->buffer.buf, (ctx->linepos > ctx->bufpos) ? ctx->linepos - ctx->bufpos : 0, ctx->bufcur);
+        return input->charnum + count_characters(
+            input->buffer.buf, (input->linepos > input->bufpos) ? input->linepos - input->bufpos : 0, input->bufcur
+        );
 }
 
 static void char_array__init(char_array_t *array) {
@@ -1228,12 +1294,42 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
+static input_state_t *create_input_state(const char *path, FILE *file, input_state_t *parent, const options_t *opts) {
+    input_state_t *const input = (input_state_t *)malloc_e(sizeof(input_state_t));
+    input->path = strdup_e((path && path[0]) ? path : "<stdin>");
+    input->file = file ? file : (path && path[0]) ? fopen_rb_e(path) : stdin;
+    input->ascii = opts->ascii;
+    input->flags = CODE_FLAG__NONE;
+    input->errnum = 0;
+    input->linenum = 0;
+    input->charnum = 0;
+    input->linepos = 0;
+    input->bufpos = 0;
+    input->bufcur = 0;
+    char_array__init(&input->buffer);
+    input->parent = parent;
+    return input;
+}
+
+static input_state_t *destroy_input_state(input_state_t *input) {
+    input_state_t *parent;
+    if (input == NULL) return NULL;
+    parent = input->parent;
+    char_array__term(&input->buffer);
+    fclose_e(input->file, input->path);
+    free(input->path);
+    free(input);
+    return parent;
+}
+
+static bool_t is_in_imported_input(const input_state_t *input) {
+    return input->parent ? TRUE : FALSE;
+}
+
 static context_t *create_context(const char *ipath, const char *opath, const options_t *opts) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
-    ctx->ipath = strdup_e((ipath && ipath[0]) ? ipath : "-");
-    ctx->spath = (opath && opath[0]) ? add_fileext(opath, "c") : replace_fileext(ctx->ipath, "c");
-    ctx->hpath = (opath && opath[0]) ? add_fileext(opath, "h") : replace_fileext(ctx->ipath, "h");
-    ctx->ifile = (ipath && ipath[0]) ? fopen_rb_e(ctx->ipath) : stdin;
+    ctx->spath = (opath && opath[0]) ? add_fileext(opath, "c") : replace_fileext((ipath && ipath[0]) ? ipath : "-", "c");
+    ctx->hpath = (opath && opath[0]) ? add_fileext(opath, "h") : replace_fileext((ipath && ipath[0]) ? ipath : "-", "h");
     ctx->hid = strdup_e(ctx->hpath); make_header_identifier(ctx->hid);
     ctx->vtype = NULL;
     ctx->atype = NULL;
@@ -1241,12 +1337,7 @@ static context_t *create_context(const char *ipath, const char *opath, const opt
     ctx->opts = *opts;
     ctx->flags = CODE_FLAG__NONE;
     ctx->errnum = 0;
-    ctx->linenum = 0;
-    ctx->charnum = 0;
-    ctx->linepos = 0;
-    ctx->bufpos = 0;
-    ctx->bufcur = 0;
-    char_array__init(&ctx->buffer);
+    ctx->input = create_input_state(ipath, NULL, NULL, opts);
     node_array__init(&ctx->rules);
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
@@ -1255,7 +1346,27 @@ static context_t *create_context(const char *ipath, const char *opath, const opt
     code_block_array__init(&ctx->eheader);
     code_block_array__init(&ctx->source);
     code_block_array__init(&ctx->header);
+    code_block_array__init(&ctx->fsource);
     return ctx;
+}
+
+static void destroy_context(context_t *ctx) {
+    if (ctx == NULL) return;
+    code_block_array__term(&ctx->fsource);
+    code_block_array__term(&ctx->header);
+    code_block_array__term(&ctx->source);
+    code_block_array__term(&ctx->eheader);
+    code_block_array__term(&ctx->esource);
+    free((node_t **)ctx->rulehash.buf);
+    node_array__term(&ctx->rules);
+    while (ctx->input) ctx->input = destroy_input_state(ctx->input);
+    free(ctx->prefix);
+    free(ctx->atype);
+    free(ctx->vtype);
+    free(ctx->hid);
+    free(ctx->hpath);
+    free(ctx->spath);
+    free(ctx);
 }
 
 static node_t *create_node(node_type_t type) {
@@ -1384,26 +1495,6 @@ static void destroy_node(node_t *node) {
     free(node);
 }
 
-static void destroy_context(context_t *ctx) {
-    if (ctx == NULL) return;
-    code_block_array__term(&ctx->header);
-    code_block_array__term(&ctx->source);
-    code_block_array__term(&ctx->eheader);
-    code_block_array__term(&ctx->esource);
-    free((node_t **)ctx->rulehash.buf);
-    node_array__term(&ctx->rules);
-    char_array__term(&ctx->buffer);
-    free(ctx->prefix);
-    free(ctx->atype);
-    free(ctx->vtype);
-    free(ctx->hid);
-    fclose_e(ctx->ifile, ctx->ipath);
-    free(ctx->hpath);
-    free(ctx->spath);
-    free(ctx->ipath);
-    free(ctx);
-}
-
 static void make_rulehash(context_t *ctx) {
     size_t i, j;
     ctx->rulehash.mod = populate_bits(ctx->rules.len * 4);
@@ -1448,7 +1539,7 @@ static void link_references(context_t *ctx, node_t *node) {
         node->data.reference.rule = lookup_rulehash(ctx, node->data.reference.name);
         if (node->data.reference.rule == NULL) {
             print_error(
-                "%s:" FMT_LU ":" FMT_LU ": No definition of rule '%s'\n",
+                "%s:" FMT_LU ":" FMT_LU ": No definition of rule: '%s'\n",
                 node->data.reference.fpos.path,
                 (ulong_t)(node->data.reference.fpos.line + 1), (ulong_t)(node->data.reference.fpos.col + 1),
                 node->data.reference.name
@@ -1645,7 +1736,8 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
                     node->data.expand.fpos.path,
-                    (ulong_t)(node->data.expand.fpos.line + 1), (ulong_t)(node->data.expand.fpos.col + 1), (ulong_t)(node->data.expand.index + 1)
+                    (ulong_t)(node->data.expand.fpos.line + 1), (ulong_t)(node->data.expand.fpos.col + 1),
+                    (ulong_t)(node->data.expand.index + 1)
                 );
                 ctx->errnum++;
             }
@@ -1811,81 +1903,81 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     }
 }
 
-static size_t refill_buffer(context_t *ctx, size_t num) {
-    if (ctx->buffer.len >= ctx->bufcur + num) return ctx->buffer.len - ctx->bufcur;
-    while (ctx->buffer.len < ctx->bufcur + num) {
-        const int c = fgetc_e(ctx->ifile, ctx->ipath);
+static size_t refill_buffer(input_state_t *input, size_t num) {
+    if (input->buffer.len >= input->bufcur + num) return input->buffer.len - input->bufcur;
+    while (input->buffer.len < input->bufcur + num) {
+        const int c = fgetc_e(input->file, input->path);
         if (c == EOF) break;
-        char_array__add(&ctx->buffer, (char)c);
+        char_array__add(&input->buffer, (char)c);
     }
-    return ctx->buffer.len - ctx->bufcur;
+    return input->buffer.len - input->bufcur;
 }
 
-static void commit_buffer(context_t *ctx) {
-    assert(ctx->buffer.len >= ctx->bufcur);
-    if (ctx->linepos < ctx->bufpos + ctx->bufcur)
-        ctx->charnum += ctx->opts.ascii ? ctx->bufcur : count_characters(ctx->buffer.buf, 0, ctx->bufcur);
-    memmove(ctx->buffer.buf, ctx->buffer.buf + ctx->bufcur, ctx->buffer.len - ctx->bufcur);
-    ctx->buffer.len -= ctx->bufcur;
-    ctx->bufpos += ctx->bufcur;
-    ctx->bufcur = 0;
+static void commit_buffer(input_state_t *input) {
+    assert(input->buffer.len >= input->bufcur);
+    if (input->linepos < input->bufpos + input->bufcur)
+        input->charnum += input->ascii ? input->bufcur : count_characters(input->buffer.buf, 0, input->bufcur);
+    memmove(input->buffer.buf, input->buffer.buf + input->bufcur, input->buffer.len - input->bufcur);
+    input->buffer.len -= input->bufcur;
+    input->bufpos += input->bufcur;
+    input->bufcur = 0;
 }
 
-static bool_t match_eof(context_t *ctx) {
-    return (refill_buffer(ctx, 1) < 1) ? TRUE : FALSE;
+static bool_t match_eof(input_state_t *input) {
+    return (refill_buffer(input, 1) < 1) ? TRUE : FALSE;
 }
 
-static bool_t match_eol(context_t *ctx) {
-    if (refill_buffer(ctx, 1) >= 1) {
-        switch (ctx->buffer.buf[ctx->bufcur]) {
+static bool_t match_eol(input_state_t *input) {
+    if (refill_buffer(input, 1) >= 1) {
+        switch (input->buffer.buf[input->bufcur]) {
         case '\n':
-            ctx->bufcur++;
-            ctx->linenum++;
-            ctx->charnum = 0;
-            ctx->linepos = ctx->bufpos + ctx->bufcur;
+            input->bufcur++;
+            input->linenum++;
+            input->charnum = 0;
+            input->linepos = input->bufpos + input->bufcur;
             return TRUE;
         case '\r':
-            ctx->bufcur++;
-            if (refill_buffer(ctx, 1) >= 1) {
-                if (ctx->buffer.buf[ctx->bufcur] == '\n') ctx->bufcur++;
+            input->bufcur++;
+            if (refill_buffer(input, 1) >= 1) {
+                if (input->buffer.buf[input->bufcur] == '\n') input->bufcur++;
             }
-            ctx->linenum++;
-            ctx->charnum = 0;
-            ctx->linepos = ctx->bufpos + ctx->bufcur;
+            input->linenum++;
+            input->charnum = 0;
+            input->linepos = input->bufpos + input->bufcur;
             return TRUE;
         }
     }
     return FALSE;
 }
 
-static bool_t match_character(context_t *ctx, char ch) {
-    if (refill_buffer(ctx, 1) >= 1) {
-        if (ctx->buffer.buf[ctx->bufcur] == ch) {
-            ctx->bufcur++;
+static bool_t match_character(input_state_t *input, char ch) {
+    if (refill_buffer(input, 1) >= 1) {
+        if (input->buffer.buf[input->bufcur] == ch) {
+            input->bufcur++;
             return TRUE;
         }
     }
     return FALSE;
 }
 
-static bool_t match_character_range(context_t *ctx, char min, char max) {
-    if (refill_buffer(ctx, 1) >= 1) {
-        const char c = ctx->buffer.buf[ctx->bufcur];
+static bool_t match_character_range(input_state_t *input, char min, char max) {
+    if (refill_buffer(input, 1) >= 1) {
+        const char c = input->buffer.buf[input->bufcur];
         if (c >= min && c <= max) {
-            ctx->bufcur++;
+            input->bufcur++;
             return TRUE;
         }
     }
     return FALSE;
 }
 
-static bool_t match_character_set(context_t *ctx, const char *chs) {
-    if (refill_buffer(ctx, 1) >= 1) {
-        const char c = ctx->buffer.buf[ctx->bufcur];
+static bool_t match_character_set(input_state_t *input, const char *chs) {
+    if (refill_buffer(input, 1) >= 1) {
+        const char c = input->buffer.buf[input->bufcur];
         size_t i;
         for (i = 0; chs[i]; i++) {
             if (c == chs[i]) {
-                ctx->bufcur++;
+                input->bufcur++;
                 return TRUE;
             }
         }
@@ -1893,46 +1985,46 @@ static bool_t match_character_set(context_t *ctx, const char *chs) {
     return FALSE;
 }
 
-static bool_t match_character_any(context_t *ctx) {
-    if (refill_buffer(ctx, 1) >= 1) {
-        ctx->bufcur++;
+static bool_t match_character_any(input_state_t *input) {
+    if (refill_buffer(input, 1) >= 1) {
+        input->bufcur++;
         return TRUE;
     }
     return FALSE;
 }
 
-static bool_t match_string(context_t *ctx, const char *str) {
+static bool_t match_string(input_state_t *input, const char *str) {
     const size_t n = strlen(str);
-    if (refill_buffer(ctx, n) >= n) {
-        if (strncmp(ctx->buffer.buf + ctx->bufcur, str, n) == 0) {
-            ctx->bufcur += n;
+    if (refill_buffer(input, n) >= n) {
+        if (strncmp(input->buffer.buf + input->bufcur, str, n) == 0) {
+            input->bufcur += n;
             return TRUE;
         }
     }
     return FALSE;
 }
 
-static bool_t match_blank(context_t *ctx) {
-    return match_character_set(ctx, " \t\v\f");
+static bool_t match_blank(input_state_t *input) {
+    return match_character_set(input, " \t\v\f");
 }
 
-static bool_t match_section_line_(context_t *ctx, const char *head) {
-    if (match_string(ctx, head)) {
-        while (!match_eol(ctx) && !match_eof(ctx)) match_character_any(ctx);
+static bool_t match_section_line_(input_state_t *input, const char *head) {
+    if (match_string(input, head)) {
+        while (!match_eol(input) && !match_eof(input)) match_character_any(input);
         return TRUE;
     }
     return FALSE;
 }
 
-static bool_t match_section_line_continuable_(context_t *ctx, const char *head) {
-    if (match_string(ctx, head)) {
-        while (!match_eof(ctx)) {
-            const size_t p = ctx->bufcur;
-            if (match_eol(ctx)) {
-                if (ctx->buffer.buf[p - 1] != '\\') break;
+static bool_t match_section_line_continuable_(input_state_t *input, const char *head) {
+    if (match_string(input, head)) {
+        while (!match_eof(input)) {
+            const size_t p = input->bufcur;
+            if (match_eol(input)) {
+                if (input->buffer.buf[p - 1] != '\\') break;
             }
             else {
-                match_character_any(ctx);
+                match_character_any(input);
             }
         }
         return TRUE;
@@ -1940,43 +2032,43 @@ static bool_t match_section_line_continuable_(context_t *ctx, const char *head) 
     return FALSE;
 }
 
-static bool_t match_section_block_(context_t *ctx, const char *left, const char *right, const char *name) {
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
-    if (match_string(ctx, left)) {
-        while (!match_string(ctx, right)) {
-            if (match_eof(ctx)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                ctx->errnum++;
+static bool_t match_section_block_(input_state_t *input, const char *left, const char *right, const char *name) {
+    const size_t l = input->linenum;
+    const size_t m = column_number(input);
+    if (match_string(input, left)) {
+        while (!match_string(input, right)) {
+            if (match_eof(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
                 break;
             }
-            if (!match_eol(ctx)) match_character_any(ctx);
+            if (!match_eol(input)) match_character_any(input);
         }
         return TRUE;
     }
     return FALSE;
 }
 
-static bool_t match_quotation_(context_t *ctx, const char *left, const char *right, const char *name) {
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
-    if (match_string(ctx, left)) {
-        while (!match_string(ctx, right)) {
-            if (match_eof(ctx)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                ctx->errnum++;
+static bool_t match_quotation_(input_state_t *input, const char *left, const char *right, const char *name) {
+    const size_t l = input->linenum;
+    const size_t m = column_number(input);
+    if (match_string(input, left)) {
+        while (!match_string(input, right)) {
+            if (match_eof(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
                 break;
             }
-            if (match_character(ctx, '\\')) {
-                if (!match_eol(ctx)) match_character_any(ctx);
+            if (match_character(input, '\\')) {
+                if (!match_eol(input)) match_character_any(input);
             }
             else {
-                if (match_eol(ctx)) {
-                    print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                    ctx->errnum++;
+                if (match_eol(input)) {
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                    input->errnum++;
                     break;
                 }
-                match_character_any(ctx);
+                match_character_any(input);
             }
         }
         return TRUE;
@@ -1984,97 +2076,97 @@ static bool_t match_quotation_(context_t *ctx, const char *left, const char *rig
     return FALSE;
 }
 
-static bool_t match_directive_c(context_t *ctx) {
-    return match_section_line_continuable_(ctx, "#");
+static bool_t match_directive_c(input_state_t *input) {
+    return match_section_line_continuable_(input, "#");
 }
 
-static bool_t match_comment(context_t *ctx) {
-    return match_section_line_(ctx, "#");
+static bool_t match_comment(input_state_t *input) {
+    return match_section_line_(input, "#");
 }
 
-static bool_t match_comment_c(context_t *ctx) {
-    return match_section_block_(ctx, "/*", "*/", "C comment");
+static bool_t match_comment_c(input_state_t *input) {
+    return match_section_block_(input, "/*", "*/", "C comment");
 }
 
-static bool_t match_comment_cxx(context_t *ctx) {
-    return match_section_line_(ctx, "//");
+static bool_t match_comment_cxx(input_state_t *input) {
+    return match_section_line_(input, "//");
 }
 
-static bool_t match_quotation_single(context_t *ctx) {
-    return match_quotation_(ctx, "\'", "\'", "single quotation");
+static bool_t match_quotation_single(input_state_t *input) {
+    return match_quotation_(input, "\'", "\'", "single quotation");
 }
 
-static bool_t match_quotation_double(context_t *ctx) {
-    return match_quotation_(ctx, "\"", "\"", "double quotation");
+static bool_t match_quotation_double(input_state_t *input) {
+    return match_quotation_(input, "\"", "\"", "double quotation");
 }
 
-static bool_t match_character_class(context_t *ctx) {
-    return match_quotation_(ctx, "[", "]", "character class");
+static bool_t match_character_class(input_state_t *input) {
+    return match_quotation_(input, "[", "]", "character class");
 }
 
-static bool_t match_spaces(context_t *ctx) {
+static bool_t match_spaces(input_state_t *input) {
     size_t n = 0;
-    while (match_blank(ctx) || match_eol(ctx) || match_comment(ctx)) n++;
+    while (match_blank(input) || match_eol(input) || match_comment(input)) n++;
     return (n > 0) ? TRUE : FALSE;
 }
 
-static bool_t match_number(context_t *ctx) {
-    if (match_character_range(ctx, '0', '9')) {
-        while (match_character_range(ctx, '0', '9'));
+static bool_t match_number(input_state_t *input) {
+    if (match_character_range(input, '0', '9')) {
+        while (match_character_range(input, '0', '9'));
         return TRUE;
     }
     return FALSE;
 }
 
-static bool_t match_identifier(context_t *ctx) {
+static bool_t match_identifier(input_state_t *input) {
     if (
-        match_character_range(ctx, 'a', 'z') ||
-        match_character_range(ctx, 'A', 'Z') ||
-        match_character(ctx, '_')
+        match_character_range(input, 'a', 'z') ||
+        match_character_range(input, 'A', 'Z') ||
+        match_character(input, '_')
     ) {
         while (
-            match_character_range(ctx, 'a', 'z') ||
-            match_character_range(ctx, 'A', 'Z') ||
-            match_character_range(ctx, '0', '9') ||
-            match_character(ctx, '_')
+            match_character_range(input, 'a', 'z') ||
+            match_character_range(input, 'A', 'Z') ||
+            match_character_range(input, '0', '9') ||
+            match_character(input, '_')
         );
         return TRUE;
     }
     return FALSE;
 }
 
-static bool_t match_code_block(context_t *ctx) {
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
-    if (match_character(ctx, '{')) {
+static bool_t match_code_block(input_state_t *input) {
+    const size_t l = input->linenum;
+    const size_t m = column_number(input);
+    if (match_character(input, '{')) {
         int d = 1;
         for (;;) {
-            if (match_eof(ctx)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-                ctx->errnum++;
+            if (match_eof(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                input->errnum++;
                 break;
             }
             if (
-                match_directive_c(ctx) ||
-                match_comment_c(ctx) ||
-                match_comment_cxx(ctx) ||
-                match_quotation_single(ctx) ||
-                match_quotation_double(ctx)
+                match_directive_c(input) ||
+                match_comment_c(input) ||
+                match_comment_cxx(input) ||
+                match_quotation_single(input) ||
+                match_quotation_double(input)
             ) continue;
-            if (match_character(ctx, '{')) {
+            if (match_character(input, '{')) {
                 d++;
             }
-            else if (match_character(ctx, '}')) {
+            else if (match_character(input, '}')) {
                 d--;
                 if (d == 0) break;
             }
             else {
-                if (!match_eol(ctx)) {
-                    if (match_character(ctx, '$')) {
-                        ctx->buffer.buf[ctx->bufcur - 1] = '_';
+                if (!match_eol(input)) {
+                    if (match_character(input, '$')) {
+                        input->buffer.buf[input->bufcur - 1] = '_';
                     }
                     else {
-                        match_character_any(ctx);
+                        match_character_any(input);
                     }
                 }
             }
@@ -2084,48 +2176,48 @@ static bool_t match_code_block(context_t *ctx) {
     return FALSE;
 }
 
-static bool_t match_footer_start(context_t *ctx) {
-    return match_string(ctx, "%%");
+static bool_t match_footer_start(input_state_t *input) {
+    return match_string(input, "%%");
 }
 
-static node_t *parse_expression(context_t *ctx, node_t *rule);
+static node_t *parse_expression(input_state_t *input, node_t *rule);
 
-static node_t *parse_primary(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufcur;
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
-    const size_t n = ctx->charnum;
-    const size_t o = ctx->linepos;
+static node_t *parse_primary(input_state_t *input, node_t *rule) {
+    const size_t p = input->bufcur;
+    const size_t l = input->linenum;
+    const size_t m = column_number(input);
+    const size_t n = input->charnum;
+    const size_t o = input->linepos;
     node_t *n_p = NULL;
-    if (match_identifier(ctx)) {
-        const size_t q = ctx->bufcur;
+    if (match_identifier(input)) {
+        const size_t q = input->bufcur;
         size_t r = VOID_VALUE, s = VOID_VALUE;
-        match_spaces(ctx);
-        if (match_character(ctx, ':')) {
-            match_spaces(ctx);
-            r = ctx->bufcur;
-            if (!match_identifier(ctx)) goto EXCEPTION;
-            s = ctx->bufcur;
-            match_spaces(ctx);
+        match_spaces(input);
+        if (match_character(input, ':')) {
+            match_spaces(input);
+            r = input->bufcur;
+            if (!match_identifier(input)) goto EXCEPTION;
+            s = input->bufcur;
+            match_spaces(input);
         }
-        if (match_string(ctx, "<-")) goto EXCEPTION;
+        if (match_string(input, "<-")) goto EXCEPTION;
         n_p = create_node(NODE_REFERENCE);
         if (r == VOID_VALUE) {
             assert(q >= p);
             n_p->data.reference.var = NULL;
             n_p->data.reference.index = VOID_VALUE;
-            n_p->data.reference.name = strndup_e(ctx->buffer.buf + p, q - p);
+            n_p->data.reference.name = strndup_e(input->buffer.buf + p, q - p);
         }
         else {
             assert(s != VOID_VALUE); /* s should have a valid value when r has a valid value */
             assert(q >= p);
-            n_p->data.reference.var = strndup_e(ctx->buffer.buf + p, q - p);
+            n_p->data.reference.var = strndup_e(input->buffer.buf + p, q - p);
             if (n_p->data.reference.var[0] == '_') {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
-                    ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var
+                    input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var
                 );
-                ctx->errnum++;
+                input->errnum++;
             }
             {
                 size_t i;
@@ -2137,110 +2229,110 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
                 n_p->data.reference.index = i;
             }
             assert(s >= r);
-            n_p->data.reference.name = strndup_e(ctx->buffer.buf + r, s - r);
+            n_p->data.reference.name = strndup_e(input->buffer.buf + r, s - r);
         }
-        file_pos__set(&n_p->data.reference.fpos, ctx->ipath, l, m);
+        file_pos__set(&n_p->data.reference.fpos, input->path, l, m);
     }
-    else if (match_character(ctx, '(')) {
-        match_spaces(ctx);
-        n_p = parse_expression(ctx, rule);
+    else if (match_character(input, '(')) {
+        match_spaces(input);
+        n_p = parse_expression(input, rule);
         if (n_p == NULL) goto EXCEPTION;
-        if (!match_character(ctx, ')')) goto EXCEPTION;
-        match_spaces(ctx);
+        if (!match_character(input, ')')) goto EXCEPTION;
+        match_spaces(input);
     }
-    else if (match_character(ctx, '<')) {
-        match_spaces(ctx);
+    else if (match_character(input, '<')) {
+        match_spaces(input);
         n_p = create_node(NODE_CAPTURE);
         n_p->data.capture.index = rule->data.rule.capts.len;
         node_const_array__add(&rule->data.rule.capts, n_p);
-        n_p->data.capture.expr = parse_expression(ctx, rule);
-        if (n_p->data.capture.expr == NULL || !match_character(ctx, '>')) {
+        n_p->data.capture.expr = parse_expression(input, rule);
+        if (n_p->data.capture.expr == NULL || !match_character(input, '>')) {
             rule->data.rule.capts.len = n_p->data.capture.index;
             goto EXCEPTION;
         }
-        match_spaces(ctx);
+        match_spaces(input);
     }
-    else if (match_character(ctx, '$')) {
+    else if (match_character(input, '$')) {
         size_t p;
-        match_spaces(ctx);
-        p = ctx->bufcur;
-        if (match_number(ctx)) {
-            const size_t q = ctx->bufcur;
+        match_spaces(input);
+        p = input->bufcur;
+        if (match_number(input)) {
+            const size_t q = input->bufcur;
             char *s;
-            match_spaces(ctx);
+            match_spaces(input);
             n_p = create_node(NODE_EXPAND);
             assert(q >= p);
-            s = strndup_e(ctx->buffer.buf + p, q - p);
+            s = strndup_e(input->buffer.buf + p, q - p);
             n_p->data.expand.index = string_to_size_t(s);
             if (n_p->data.expand.index == VOID_VALUE) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
-                ctx->errnum++;
+                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
+                input->errnum++;
             }
             else if (n_p->data.expand.index == 0) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-                ctx->errnum++;
+                print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                input->errnum++;
             }
             else if (s[0] == '0') {
-                print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-                ctx->errnum++;
+                print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                input->errnum++;
                 n_p->data.expand.index = 0;
             }
             free(s);
             if (n_p->data.expand.index > 0 && n_p->data.expand.index != VOID_VALUE) {
                 n_p->data.expand.index--;
-                file_pos__set(&n_p->data.expand.fpos, ctx->ipath, l, m);
+                file_pos__set(&n_p->data.expand.fpos, input->path, l, m);
             }
         }
         else {
             goto EXCEPTION;
         }
     }
-    else if (match_character(ctx, '.')) {
-        match_spaces(ctx);
+    else if (match_character(input, '.')) {
+        match_spaces(input);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = NULL;
-        if (!ctx->opts.ascii) {
-            ctx->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
+        if (!input->ascii) {
+            input->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
-    else if (match_character_class(ctx)) {
-        const size_t q = ctx->bufcur;
-        match_spaces(ctx);
+    else if (match_character_class(input)) {
+        const size_t q = input->bufcur;
+        match_spaces(input);
         n_p = create_node(NODE_CHARCLASS);
-        n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.charclass.value = strndup_e(input->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.charclass.value, TRUE)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-            ctx->errnum++;
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            input->errnum++;
         }
-        if (!ctx->opts.ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-            ctx->errnum++;
+        if (!input->ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            input->errnum++;
         }
-        if (!ctx->opts.ascii && n_p->data.charclass.value[0] != '\0') {
-            ctx->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
+        if (!input->ascii && n_p->data.charclass.value[0] != '\0') {
+            input->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
-    else if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
-        const size_t q = ctx->bufcur;
-        match_spaces(ctx);
+    else if (match_quotation_single(input) || match_quotation_double(input)) {
+        const size_t q = input->bufcur;
+        match_spaces(input);
         n_p = create_node(NODE_STRING);
-        n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.string.value = strndup_e(input->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.string.value, FALSE)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-            ctx->errnum++;
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            input->errnum++;
         }
-        if (!ctx->opts.ascii && !is_valid_utf8_string(n_p->data.string.value)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-            ctx->errnum++;
+        if (!input->ascii && !is_valid_utf8_string(n_p->data.string.value)) {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            input->errnum++;
         }
     }
-    else if (match_code_block(ctx)) {
-        const size_t q = ctx->bufcur;
-        match_spaces(ctx);
+    else if (match_code_block(input)) {
+        const size_t q = input->bufcur;
+        match_spaces(input);
         n_p = create_node(NODE_ACTION);
-        n_p->data.action.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        n_p->data.action.code.text = strndup_e(input->buffer.buf + p + 1, q - p - 2);
         n_p->data.action.code.len = find_trailing_blanks(n_p->data.action.code.text);
-        file_pos__set(&n_p->data.action.code.fpos, ctx->ipath, l, m);
+        file_pos__set(&n_p->data.action.code.fpos, input->path, l, m);
         n_p->data.action.index = rule->data.rule.codes.len;
         node_const_array__add(&rule->data.rule.codes, n_p);
     }
@@ -2251,42 +2343,42 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_p);
-    ctx->bufcur = p;
-    ctx->linenum = l;
-    ctx->charnum = n;
-    ctx->linepos = o;
+    input->bufcur = p;
+    input->linenum = l;
+    input->charnum = n;
+    input->linepos = o;
     return NULL;
 }
 
-static node_t *parse_term(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufcur;
-    const size_t l = ctx->linenum;
-    const size_t n = ctx->charnum;
-    const size_t o = ctx->linepos;
+static node_t *parse_term(input_state_t *input, node_t *rule) {
+    const size_t p = input->bufcur;
+    const size_t l = input->linenum;
+    const size_t n = input->charnum;
+    const size_t o = input->linepos;
     node_t *n_p = NULL;
     node_t *n_q = NULL;
     node_t *n_r = NULL;
     node_t *n_t = NULL;
-    const char t = match_character(ctx, '&') ? '&' : match_character(ctx, '!') ? '!' : '\0';
-    if (t) match_spaces(ctx);
-    n_p = parse_primary(ctx, rule);
+    const char t = match_character(input, '&') ? '&' : match_character(input, '!') ? '!' : '\0';
+    if (t) match_spaces(input);
+    n_p = parse_primary(input, rule);
     if (n_p == NULL) goto EXCEPTION;
-    if (match_character(ctx, '*')) {
-        match_spaces(ctx);
+    if (match_character(input, '*')) {
+        match_spaces(input);
         n_q = create_node(NODE_QUANTITY);
         n_q->data.quantity.min = 0;
         n_q->data.quantity.max = -1;
         n_q->data.quantity.expr = n_p;
     }
-    else if (match_character(ctx, '+')) {
-        match_spaces(ctx);
+    else if (match_character(input, '+')) {
+        match_spaces(input);
         n_q = create_node(NODE_QUANTITY);
         n_q->data.quantity.min = 1;
         n_q->data.quantity.max = -1;
         n_q->data.quantity.expr = n_p;
     }
-    else if (match_character(ctx, '?')) {
-        match_spaces(ctx);
+    else if (match_character(input, '?')) {
+        match_spaces(input);
         n_q = create_node(NODE_QUANTITY);
         n_q->data.quantity.min = 0;
         n_q->data.quantity.max = 1;
@@ -2309,20 +2401,20 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
     default:
         n_r = n_q;
     }
-    if (match_character(ctx, '~')) {
+    if (match_character(input, '~')) {
         size_t p, l, m;
-        match_spaces(ctx);
-        p = ctx->bufcur;
-        l = ctx->linenum;
-        m = column_number(ctx);
-        if (match_code_block(ctx)) {
-            const size_t q = ctx->bufcur;
-            match_spaces(ctx);
+        match_spaces(input);
+        p = input->bufcur;
+        l = input->linenum;
+        m = column_number(input);
+        if (match_code_block(input)) {
+            const size_t q = input->bufcur;
+            match_spaces(input);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
-            n_t->data.error.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+            n_t->data.error.code.text = strndup_e(input->buffer.buf + p + 1, q - p - 2);
             n_t->data.error.code.len = find_trailing_blanks(n_t->data.error.code.text);
-            file_pos__set(&n_t->data.error.code.fpos, ctx->ipath, l, m);
+            file_pos__set(&n_t->data.error.code.fpos, input->path, l, m);
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -2337,31 +2429,31 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_r);
-    ctx->bufcur = p;
-    ctx->linenum = l;
-    ctx->charnum = n;
-    ctx->linepos = o;
+    input->bufcur = p;
+    input->linenum = l;
+    input->charnum = n;
+    input->linepos = o;
     return NULL;
 }
 
-static node_t *parse_sequence(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufcur;
-    const size_t l = ctx->linenum;
-    const size_t n = ctx->charnum;
-    const size_t o = ctx->linepos;
+static node_t *parse_sequence(input_state_t *input, node_t *rule) {
+    const size_t p = input->bufcur;
+    const size_t l = input->linenum;
+    const size_t n = input->charnum;
+    const size_t o = input->linepos;
     node_array_t *a_t = NULL;
     node_t *n_t = NULL;
     node_t *n_u = NULL;
     node_t *n_s = NULL;
-    n_t = parse_term(ctx, rule);
+    n_t = parse_term(input, rule);
     if (n_t == NULL) goto EXCEPTION;
-    n_u = parse_term(ctx, rule);
+    n_u = parse_term(input, rule);
     if (n_u != NULL) {
         n_s = create_node(NODE_SEQUENCE);
         a_t = &n_s->data.sequence.nodes;
         node_array__add(a_t, n_t);
         node_array__add(a_t, n_u);
-        while ((n_t = parse_term(ctx, rule)) != NULL) {
+        while ((n_t = parse_term(input, rule)) != NULL) {
             node_array__add(a_t, n_t);
         }
     }
@@ -2371,33 +2463,33 @@ static node_t *parse_sequence(context_t *ctx, node_t *rule) {
     return n_s;
 
 EXCEPTION:;
-    ctx->bufcur = p;
-    ctx->linenum = l;
-    ctx->charnum = n;
-    ctx->linepos = o;
+    input->bufcur = p;
+    input->linenum = l;
+    input->charnum = n;
+    input->linepos = o;
     return NULL;
 }
 
-static node_t *parse_expression(context_t *ctx, node_t *rule) {
-    const size_t p = ctx->bufcur;
-    const size_t l = ctx->linenum;
-    const size_t n = ctx->charnum;
-    const size_t o = ctx->linepos;
+static node_t *parse_expression(input_state_t *input, node_t *rule) {
+    const size_t p = input->bufcur;
+    const size_t l = input->linenum;
+    const size_t n = input->charnum;
+    const size_t o = input->linepos;
     size_t q;
     node_array_t *a_s = NULL;
     node_t *n_s = NULL;
     node_t *n_e = NULL;
-    n_s = parse_sequence(ctx, rule);
+    n_s = parse_sequence(input, rule);
     if (n_s == NULL) goto EXCEPTION;
-    q = ctx->bufcur;
-    if (match_character(ctx, '/')) {
-        ctx->bufcur = q;
+    q = input->bufcur;
+    if (match_character(input, '/')) {
+        input->bufcur = q;
         n_e = create_node(NODE_ALTERNATE);
         a_s = &n_e->data.alternate.nodes;
         node_array__add(a_s, n_s);
-        while (match_character(ctx, '/')) {
-            match_spaces(ctx);
-            n_s = parse_sequence(ctx, rule);
+        while (match_character(input, '/')) {
+            match_spaces(input);
+            n_s = parse_sequence(input, rule);
             if (n_s == NULL) goto EXCEPTION;
             node_array__add(a_s, n_s);
         }
@@ -2409,40 +2501,40 @@ static node_t *parse_expression(context_t *ctx, node_t *rule) {
 
 EXCEPTION:;
     destroy_node(n_e);
-    ctx->bufcur = p;
-    ctx->linenum = l;
-    ctx->charnum = n;
-    ctx->linepos = o;
+    input->bufcur = p;
+    input->linenum = l;
+    input->charnum = n;
+    input->linepos = o;
     return NULL;
 }
 
-static node_t *parse_rule(context_t *ctx) {
-    const size_t p = ctx->bufcur;
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
-    const size_t n = ctx->charnum;
-    const size_t o = ctx->linepos;
+static node_t *parse_rule(input_state_t *input) {
+    const size_t p = input->bufcur;
+    const size_t l = input->linenum;
+    const size_t m = column_number(input);
+    const size_t n = input->charnum;
+    const size_t o = input->linepos;
     size_t q;
     node_t *n_r = NULL;
-    if (!match_identifier(ctx)) goto EXCEPTION;
-    q = ctx->bufcur;
-    match_spaces(ctx);
-    if (!match_string(ctx, "<-")) goto EXCEPTION;
-    match_spaces(ctx);
+    if (!match_identifier(input)) goto EXCEPTION;
+    q = input->bufcur;
+    match_spaces(input);
+    if (!match_string(input, "<-")) goto EXCEPTION;
+    match_spaces(input);
     n_r = create_node(NODE_RULE);
-    n_r->data.rule.expr = parse_expression(ctx, n_r);
+    n_r->data.rule.expr = parse_expression(input, n_r);
     if (n_r->data.rule.expr == NULL) goto EXCEPTION;
     assert(q >= p);
-    n_r->data.rule.name = strndup_e(ctx->buffer.buf + p, q - p);
-    file_pos__set(&n_r->data.rule.fpos, ctx->ipath, l, m);
+    n_r->data.rule.name = strndup_e(input->buffer.buf + p, q - p);
+    file_pos__set(&n_r->data.rule.fpos, input->path, l, m);
     return n_r;
 
 EXCEPTION:;
     destroy_node(n_r);
-    ctx->bufcur = p;
-    ctx->linenum = l;
-    ctx->charnum = n;
-    ctx->linepos = o;
+    input->bufcur = p;
+    input->linenum = l;
+    input->charnum = n;
+    input->linepos = o;
     return NULL;
 }
 
@@ -2464,60 +2556,60 @@ static void dump_options(context_t *ctx) {
     fprintf(stdout, "prefix: '%s'\n", get_prefix(ctx));
 }
 
-static bool_t parse_directive_include_(context_t *ctx, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
-    if (!match_string(ctx, name)) return FALSE;
-    match_spaces(ctx);
+static bool_t parse_directive_block_(input_state_t *input, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
+    if (!match_string(input, name)) return FALSE;
+    match_spaces(input);
     {
-        const size_t p = ctx->bufcur;
-        const size_t l = ctx->linenum;
-        const size_t m = column_number(ctx);
-        if (match_code_block(ctx)) {
-            const size_t q = ctx->bufcur;
-            match_spaces(ctx);
+        const size_t p = input->bufcur;
+        const size_t l = input->linenum;
+        const size_t m = column_number(input);
+        if (match_code_block(input)) {
+            const size_t q = input->bufcur;
+            match_spaces(input);
             if (output1 != NULL) {
-                code_block_t *c = code_block_array__create_entry(output1);
-                c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+                code_block_t *const c = code_block_array__create_entry(output1);
+                c->text = strndup_e(input->buffer.buf + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                file_pos__set(&c->fpos, ctx->ipath, l, m);
+                file_pos__set(&c->fpos, input->path, l, m);
             }
             if (output2 != NULL) {
-                code_block_t *c = code_block_array__create_entry(output2);
-                c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+                code_block_t *const c = code_block_array__create_entry(output2);
+                c->text = strndup_e(input->buffer.buf + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                file_pos__set(&c->fpos, ctx->ipath, l, m);
+                file_pos__set(&c->fpos, input->path, l, m);
             }
         }
         else {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-            ctx->errnum++;
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            input->errnum++;
         }
     }
     return TRUE;
 }
 
-static bool_t parse_directive_string_(context_t *ctx, const char *name, char **output, string_flag_t mode) {
-    const size_t l = ctx->linenum;
-    const size_t m = column_number(ctx);
-    if (!match_string(ctx, name)) return FALSE;
-    match_spaces(ctx);
+static bool_t parse_directive_string_(input_state_t *input, const char *name, char **output, string_flag_t mode) {
+    const size_t l = input->linenum;
+    const size_t m = column_number(input);
+    if (!match_string(input, name)) return FALSE;
+    match_spaces(input);
     {
         char *s = NULL;
-        const size_t p = ctx->bufcur;
-        const size_t lv = ctx->linenum;
-        const size_t mv = column_number(ctx);
+        const size_t p = input->bufcur;
+        const size_t lv = input->linenum;
+        const size_t mv = column_number(input);
         size_t q;
-        if (match_quotation_single(ctx) || match_quotation_double(ctx)) {
-            q = ctx->bufcur;
-            match_spaces(ctx);
-            s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
+        if (match_quotation_single(input) || match_quotation_double(input)) {
+            q = input->bufcur;
+            match_spaces(input);
+            s = strndup_e(input->buffer.buf + p + 1, q - p - 2);
             if (!unescape_string(s, FALSE)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
-                ctx->errnum++;
+                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                input->errnum++;
             }
         }
         else {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-            ctx->errnum++;
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            input->errnum++;
         }
         if (s != NULL) {
             string_flag_t f = STRING_FLAG__NONE;
@@ -2526,28 +2618,34 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
             remove_trailing_blanks(s);
             assert((mode & ~7) == 0);
             if ((mode & STRING_FLAG__NOTEMPTY) && !is_filled_string(s)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
-                ctx->errnum++;
+                print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                input->errnum++;
                 f |= STRING_FLAG__NOTEMPTY;
             }
             if ((mode & STRING_FLAG__NOTVOID) && strcmp(s, "void") == 0) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": 'void' not allowed\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
-                ctx->errnum++;
+                print_error("%s:" FMT_LU ":" FMT_LU ": 'void' not allowed\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                input->errnum++;
                 f |= STRING_FLAG__NOTVOID;
             }
             if ((mode & STRING_FLAG__IDENTIFIER) && !is_identifier_string(s)) {
                 if (!(f & STRING_FLAG__NOTEMPTY)) {
-                    print_error("%s:" FMT_LU ":" FMT_LU ": Invalid identifier\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
-                    ctx->errnum++;
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Invalid identifier\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                    input->errnum++;
                 }
                 f |= STRING_FLAG__IDENTIFIER;
             }
-            if (*output != NULL) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple %s definition\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                ctx->errnum++;
+            if (output == NULL) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Definition of %s not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
+                b = FALSE;
+            }
+            else if (*output != NULL) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple definitions of %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
                 b = FALSE;
             }
             if (f == STRING_FLAG__NONE && b) {
+                assert(output != NULL);
                 *output = s;
             }
             else {
@@ -2558,58 +2656,84 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
     return TRUE;
 }
 
-static bool_t parse(context_t *ctx) {
+static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
+    if (!match_footer_start(input)) return FALSE;
     {
+        const size_t p = input->bufcur;
+        const size_t l = input->linenum;
+        const size_t m = column_number(input);
+        while (!match_eof(input)) match_character_any(input);
+        {
+            const size_t q = input->bufcur;
+            code_block_t *const c = code_block_array__create_entry(output);
+            c->text = strndup_e(input->buffer.buf + p, q - p);
+            c->len = q - p;
+            file_pos__set(&c->fpos, input->path, l, m);
+        }
+    }
+    return TRUE;
+}
+
+static void parse_file_(context_t *ctx) {
+    if (ctx->input == NULL) return;
+    {
+        const bool_t imp = is_in_imported_input(ctx->input);
         bool_t b = TRUE;
-        match_spaces(ctx);
+        match_spaces(ctx->input);
         for (;;) {
             size_t l, m, n, o;
-            if (match_eof(ctx) || match_footer_start(ctx)) break;
-            l = ctx->linenum;
-            m = column_number(ctx);
-            n = ctx->charnum;
-            o = ctx->linepos;
+            if (match_eof(ctx->input) || parse_footer_(ctx->input, &ctx->fsource)) break;
+            l = ctx->input->linenum;
+            m = column_number(ctx->input);
+            n = ctx->input->charnum;
+            o = ctx->input->linepos;
             if (
-                parse_directive_include_(ctx, "%earlysource", &ctx->esource, NULL) ||
-                parse_directive_include_(ctx, "%earlyheader", &ctx->eheader, NULL) ||
-                parse_directive_include_(ctx, "%earlycommon", &ctx->esource, &ctx->eheader) ||
-                parse_directive_include_(ctx, "%source", &ctx->source, NULL) ||
-                parse_directive_include_(ctx, "%header", &ctx->header, NULL) ||
-                parse_directive_include_(ctx, "%common", &ctx->source, &ctx->header) ||
-                parse_directive_string_(ctx, "%value", &ctx->vtype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
-                parse_directive_string_(ctx, "%auxil", &ctx->atype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
-                parse_directive_string_(ctx, "%prefix", &ctx->prefix, STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)
+                parse_directive_block_(ctx->input, "%earlysource", &ctx->esource, NULL) ||
+                parse_directive_block_(ctx->input, "%earlyheader", &ctx->eheader, NULL) ||
+                parse_directive_block_(ctx->input, "%earlycommon", &ctx->esource, &ctx->eheader) ||
+                parse_directive_block_(ctx->input, "%source", &ctx->source, NULL) ||
+                parse_directive_block_(ctx->input, "%header", &ctx->header, NULL) ||
+                parse_directive_block_(ctx->input, "%common", &ctx->source, &ctx->header) ||
+                parse_directive_string_(ctx->input, "%value", imp ? NULL : &ctx->vtype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
+                parse_directive_string_(ctx->input, "%auxil", imp ? NULL : &ctx->atype, STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
+                parse_directive_string_(ctx->input, "%prefix", imp ? NULL : &ctx->prefix, STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)
             ) {
                 b = TRUE;
             }
-            else if (match_character(ctx, '%')) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid directive\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-                ctx->errnum++;
-                match_identifier(ctx);
-                match_spaces(ctx);
+            else if (match_character(ctx->input, '%')) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid directive\n", ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                ctx->input->errnum++;
+                match_identifier(ctx->input);
+                match_spaces(ctx->input);
                 b = TRUE;
             }
             else {
-                node_t *const n_r = parse_rule(ctx);
+                node_t *const n_r = parse_rule(ctx->input);
                 if (n_r == NULL) {
                     if (b) {
-                        print_error("%s:" FMT_LU ":" FMT_LU ": Illegal rule syntax\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
-                        ctx->errnum++;
+                        print_error("%s:" FMT_LU ":" FMT_LU ": Illegal rule syntax\n", ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                        ctx->input->errnum++;
                         b = FALSE;
                     }
-                    ctx->linenum = l;
-                    ctx->charnum = n;
-                    ctx->linepos = o;
-                    if (!match_identifier(ctx) && !match_spaces(ctx)) match_character_any(ctx);
+                    ctx->input->linenum = l;
+                    ctx->input->charnum = n;
+                    ctx->input->linepos = o;
+                    if (!match_identifier(ctx->input) && !match_spaces(ctx->input)) match_character_any(ctx->input);
                     continue;
                 }
                 node_array__add(&ctx->rules, n_r);
                 b = TRUE;
             }
-            commit_buffer(ctx);
+            commit_buffer(ctx->input);
         }
-        commit_buffer(ctx);
+        commit_buffer(ctx->input);
     }
+    ctx->errnum += ctx->input->errnum;
+    ctx->flags |= ctx->input->flags;
+}
+
+static bool_t parse(context_t *ctx) {
+    parse_file_(ctx);
     {
         size_t i;
         make_rulehash(ctx);
@@ -2628,7 +2752,7 @@ static bool_t parse(context_t *ctx) {
             }
             else if (ctx->rules.buf[i]->data.rule.ref < 0) {
                 print_error(
-                    "%s:" FMT_LU ":" FMT_LU ": Multiple definition of rule '%s'\n",
+                    "%s:" FMT_LU ":" FMT_LU ": Multiple definitions of rule: '%s'\n",
                     ctx->rules.buf[i]->data.rule.fpos.path,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.col + 1),
                     ctx->rules.buf[i]->data.rule.name
@@ -4940,16 +5064,13 @@ static bool_t generate(context_t *ctx) {
         );
     }
     {
-        match_eol(ctx);
-        if (!match_eof(ctx)) stream__putc(&sstream, '\n');
-        commit_buffer(ctx);
-        if (ctx->opts.lines && !match_eof(ctx))
-            stream__write_line_directive(&sstream, ctx->ipath, ctx->linenum);
-        while (refill_buffer(ctx, ctx->buffer.max) > 0) {
-            const size_t n = ctx->buffer.len;
-            stream__write_text(&sstream, ctx->buffer.buf, (n > 0 && ctx->buffer.buf[n - 1] == '\r') ? n - 1 : n);
-            ctx->bufcur = n;
-            commit_buffer(ctx);
+        size_t i;
+        for (i = 0; i < ctx->fsource.len; i++) {
+            stream__putc(&sstream, '\n');
+            stream__write_footer(
+                &sstream, ctx->fsource.buf[i].text, ctx->fsource.buf[i].len,
+                ctx->fsource.buf[i].fpos.path, ctx->fsource.buf[i].fpos.line
+            );
         }
     }
     fclose_e(hstream.file, hstream.path);
@@ -5066,8 +5187,8 @@ int main(int argc, char **argv) {
             if (opt_h) print_usage(stdout);
             exit(0);
         }
-        ipath = (path != NULL && path[0] != '\0') ? path : NULL;
-        opath = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
+        ipath = (path && path[0]) ? path : NULL;
+        opath = (opt_o && opt_o[0]) ? opt_o : NULL;
         opts.ascii = opt_a;
         opts.lines = opt_l;
         opts.debug = opt_d;
