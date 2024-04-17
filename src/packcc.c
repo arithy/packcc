@@ -99,6 +99,12 @@ typedef enum bool_tag {
     TRUE
 } bool_t;
 
+typedef struct file_pos_tag {
+    char *path;  /* the file path name */
+    size_t line; /* the line number (0-based); VOID_VALUE if not available */
+    size_t col;  /* the column number (0-based); VOID_VALUE if not available */
+} file_pos_t;
+
 typedef struct stream_tag {
     FILE *file;       /* the file stream; just a reference */
     const char *path; /* the file path name */
@@ -114,8 +120,7 @@ typedef struct char_array_tag {
 typedef struct code_block_tag {
     char *text;
     size_t len;
-    size_t line;
-    size_t col;
+    file_pos_t fpos;
 } code_block_t;
 
 typedef struct code_block_array_tag {
@@ -166,8 +171,7 @@ typedef struct node_rule_tag {
     node_const_array_t vars;
     node_const_array_t capts;
     node_const_array_t codes;
-    size_t line;
-    size_t col;
+    file_pos_t fpos;
 } node_rule_t;
 
 typedef struct node_reference_tag {
@@ -175,8 +179,7 @@ typedef struct node_reference_tag {
     size_t index;
     char *name;
     const node_t *rule;
-    size_t line;
-    size_t col;
+    file_pos_t fpos;
 } node_reference_t;
 
 typedef struct node_string_tag {
@@ -213,8 +216,7 @@ typedef struct node_capture_tag {
 
 typedef struct node_expand_tag {
     size_t index;
-    size_t line;
-    size_t col;
+    file_pos_t fpos;
 } node_expand_t;
 
 typedef struct node_action_tag {
@@ -328,7 +330,7 @@ static int print_error(const char *format, ...) {
 static FILE *fopen_rb_e(const char *path) {
     FILE *const f = fopen(path, "rb");
     if (f == NULL) {
-        print_error("Cannot open file '%s' to read\n", path);
+        print_error("Cannot open file to read: %s\n", path);
         exit(2);
     }
     return f;
@@ -337,25 +339,25 @@ static FILE *fopen_rb_e(const char *path) {
 static FILE *fopen_wt_e(const char *path) {
     FILE *const f = fopen(path, "wt");
     if (f == NULL) {
-        print_error("Cannot open file '%s' to write\n", path);
+        print_error("Cannot open file to write: %s\n", path);
         exit(2);
     }
     return f;
 }
 
-static int fclose_e(FILE *file) {
+static int fclose_e(FILE *file, const char *path) {
     const int r = fclose(file);
     if (r == EOF) {
-        print_error("File closing error\n");
+        print_error("File closing error: %s\n", path);
         exit(2);
     }
     return r;
 }
 
-static int fgetc_e(FILE *file) {
+static int fgetc_e(FILE *file, const char *path) {
     const int c = fgetc(file);
     if (c == EOF && ferror(file)) {
-        print_error("File read error\n");
+        print_error("File read error: %s\n", path);
         exit(2);
     }
     return c;
@@ -820,6 +822,23 @@ static void make_header_identifier(char *str) {
     }
 }
 
+static void file_pos__init(file_pos_t *pos) {
+    pos->path = NULL;
+    pos->line = VOID_VALUE;
+    pos->col = VOID_VALUE;
+}
+
+static void file_pos__set(file_pos_t *pos, const char *path, size_t line, size_t col) {
+    free(pos->path);
+    pos->path = path ? strdup_e(path) : NULL;
+    pos->line = line;
+    pos->col = col;
+}
+
+static void file_pos__term(file_pos_t *pos) {
+    free(pos->path);
+}
+
 static stream_t stream__wrap(FILE *file, const char *path, size_t line) {
     stream_t s;
     s.file = file;
@@ -831,7 +850,7 @@ static stream_t stream__wrap(FILE *file, const char *path, size_t line) {
 static int stream__putc(stream_t *stream, int c) {
     const int r = fputc(c, stream->file);
     if (r == EOF) {
-        print_error("File write error\n");
+        print_error("File write error: %s\n", stream->path);
         exit(2);
     }
     if (stream->line != VOID_VALUE) {
@@ -843,7 +862,7 @@ static int stream__putc(stream_t *stream, int c) {
 static int stream__puts(stream_t *stream, const char *s) {
     const int r = fputs(s, stream->file);
     if (r == EOF) {
-        print_error("File write error\n");
+        print_error("File write error: %s\n", stream->path);
         exit(2);
     }
     if (stream->line != VOID_VALUE) {
@@ -868,7 +887,7 @@ static int stream__printf(stream_t *stream, const char *format, ...) {
             n = vsnprintf(NULL, 0, format, a);
             va_end(a);
             if (n < 0) {
-                print_error("Internal error\n");
+                print_error("Internal error [%d]\n", __LINE__);
                 exit(2);
             }
             l = (size_t)n + 1;
@@ -880,7 +899,7 @@ static int stream__printf(stream_t *stream, const char *format, ...) {
             n = vsnprintf(p, l, format, a);
             va_end(a);
             if (n < 0 || (size_t)n >= l) {
-                print_error("Internal error\n");
+                print_error("Internal error [%d]\n", __LINE__);
                 exit(2);
             }
         }
@@ -896,7 +915,7 @@ static int stream__printf(stream_t *stream, const char *format, ...) {
         n = vfprintf(stream->file, format, a);
         va_end(a);
         if (n < 0) {
-            print_error("File write error\n");
+            print_error("File write error: %s\n", stream->path);
             exit(2);
         }
         return n;
@@ -1101,11 +1120,11 @@ static void char_array__term(char_array_t *array) {
 static void code_block__init(code_block_t *code) {
     code->text = NULL;
     code->len = 0;
-    code->line = VOID_VALUE;
-    code->col = VOID_VALUE;
+    file_pos__init(&code->fpos);
 }
 
 static void code_block__term(code_block_t *code) {
+    file_pos__term(&code->fpos);
     free(code->text);
 }
 
@@ -1242,16 +1261,14 @@ static node_t *create_node(node_type_t type) {
         node_const_array__init(&node->data.rule.vars);
         node_const_array__init(&node->data.rule.capts);
         node_const_array__init(&node->data.rule.codes);
-        node->data.rule.line = VOID_VALUE;
-        node->data.rule.col = VOID_VALUE;
+        file_pos__init(&node->data.rule.fpos);
         break;
     case NODE_REFERENCE:
         node->data.reference.var = NULL;
         node->data.reference.index = VOID_VALUE;
         node->data.reference.name = NULL;
         node->data.reference.rule = NULL;
-        node->data.reference.line = VOID_VALUE;
-        node->data.reference.col = VOID_VALUE;
+        file_pos__init(&node->data.reference.fpos);
         break;
     case NODE_STRING:
         node->data.string.value = NULL;
@@ -1279,8 +1296,7 @@ static node_t *create_node(node_type_t type) {
         break;
     case NODE_EXPAND:
         node->data.expand.index = VOID_VALUE;
-        node->data.expand.line = VOID_VALUE;
-        node->data.expand.col = VOID_VALUE;
+        file_pos__init(&node->data.expand.fpos);
         break;
     case NODE_ACTION:
         code_block__init(&node->data.action.code);
@@ -1306,6 +1322,7 @@ static void destroy_node(node_t *node) {
     if (node == NULL) return;
     switch (node->type) {
     case NODE_RULE:
+        file_pos__term(&node->data.rule.fpos);
         node_const_array__term(&node->data.rule.codes);
         node_const_array__term(&node->data.rule.capts);
         node_const_array__term(&node->data.rule.vars);
@@ -1313,6 +1330,7 @@ static void destroy_node(node_t *node) {
         free(node->data.rule.name);
         break;
     case NODE_REFERENCE:
+        file_pos__term(&node->data.reference.fpos);
         free(node->data.reference.name);
         free(node->data.reference.var);
         break;
@@ -1338,6 +1356,7 @@ static void destroy_node(node_t *node) {
         destroy_node(node->data.capture.expr);
         break;
     case NODE_EXPAND:
+        file_pos__term(&node->data.expand.fpos);
         break;
     case NODE_ACTION:
         node_const_array__term(&node->data.action.capts);
@@ -1370,7 +1389,7 @@ static void destroy_context(context_t *ctx) {
     free(ctx->atype);
     free(ctx->vtype);
     free(ctx->hid);
-    fclose_e(ctx->ifile);
+    fclose_e(ctx->ifile, ctx->ipath);
     free(ctx->hpath);
     free(ctx->spath);
     free(ctx->ipath);
@@ -1422,7 +1441,8 @@ static void link_references(context_t *ctx, node_t *node) {
         if (node->data.reference.rule == NULL) {
             print_error(
                 "%s:" FMT_LU ":" FMT_LU ": No definition of rule '%s'\n",
-                ctx->ipath, (ulong_t)(node->data.reference.line + 1), (ulong_t)(node->data.reference.col + 1),
+                node->data.reference.fpos.path,
+                (ulong_t)(node->data.reference.fpos.line + 1), (ulong_t)(node->data.reference.fpos.col + 1),
                 node->data.reference.name
             );
             ctx->errnum++;
@@ -1616,7 +1636,8 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
             if (i >= capts->len && node->data.expand.index != VOID_VALUE) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
-                    ctx->ipath, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), (ulong_t)(node->data.expand.index + 1)
+                    node->data.expand.fpos.path,
+                    (ulong_t)(node->data.expand.fpos.line + 1), (ulong_t)(node->data.expand.fpos.col + 1), (ulong_t)(node->data.expand.index + 1)
                 );
                 ctx->errnum++;
             }
@@ -1785,7 +1806,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
 static size_t refill_buffer(context_t *ctx, size_t num) {
     if (ctx->buffer.len >= ctx->bufcur + num) return ctx->buffer.len - ctx->bufcur;
     while (ctx->buffer.len < ctx->bufcur + num) {
-        const int c = fgetc_e(ctx->ifile);
+        const int c = fgetc_e(ctx->ifile, ctx->ipath);
         if (c == EOF) break;
         char_array__add(&ctx->buffer, (char)c);
     }
@@ -2110,8 +2131,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             assert(s >= r);
             n_p->data.reference.name = strndup_e(ctx->buffer.buf + r, s - r);
         }
-        n_p->data.reference.line = l;
-        n_p->data.reference.col = m;
+        file_pos__set(&n_p->data.reference.fpos, ctx->ipath, l, m);
     }
     else if (match_character(ctx, '(')) {
         match_spaces(ctx);
@@ -2160,8 +2180,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             free(s);
             if (n_p->data.expand.index > 0 && n_p->data.expand.index != VOID_VALUE) {
                 n_p->data.expand.index--;
-                n_p->data.expand.line = l;
-                n_p->data.expand.col = m;
+                file_pos__set(&n_p->data.expand.fpos, ctx->ipath, l, m);
             }
         }
         else {
@@ -2213,8 +2232,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         n_p->data.action.code.len = find_trailing_blanks(n_p->data.action.code.text);
-        n_p->data.action.code.line = l;
-        n_p->data.action.code.col = m;
+        file_pos__set(&n_p->data.action.code.fpos, ctx->ipath, l, m);
         n_p->data.action.index = rule->data.rule.codes.len;
         node_const_array__add(&rule->data.rule.codes, n_p);
     }
@@ -2296,8 +2314,7 @@ static node_t *parse_term(context_t *ctx, node_t *rule) {
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             n_t->data.error.code.len = find_trailing_blanks(n_t->data.error.code.text);
-            n_t->data.error.code.line = l;
-            n_t->data.error.code.col = m;
+            file_pos__set(&n_t->data.error.code.fpos, ctx->ipath, l, m);
             n_t->data.error.index = rule->data.rule.codes.len;
             node_const_array__add(&rule->data.rule.codes, n_t);
         }
@@ -2409,8 +2426,7 @@ static node_t *parse_rule(context_t *ctx) {
     if (n_r->data.rule.expr == NULL) goto EXCEPTION;
     assert(q >= p);
     n_r->data.rule.name = strndup_e(ctx->buffer.buf + p, q - p);
-    n_r->data.rule.line = l;
-    n_r->data.rule.col = m;
+    file_pos__set(&n_r->data.rule.fpos, ctx->ipath, l, m);
     return n_r;
 
 EXCEPTION:;
@@ -2454,15 +2470,13 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, code_bl
                 code_block_t *c = code_block_array__create_entry(output1);
                 c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                c->line = l;
-                c->col = m;
+                file_pos__set(&c->fpos, ctx->ipath, l, m);
             }
             if (output2 != NULL) {
                 code_block_t *c = code_block_array__create_entry(output2);
                 c->text = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                c->line = l;
-                c->col = m;
+                file_pos__set(&c->fpos, ctx->ipath, l, m);
             }
         }
         else {
@@ -2598,8 +2612,8 @@ static bool_t parse(context_t *ctx) {
             if (ctx->rules.buf[i]->data.rule.ref == 0) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Never used rule '%s'\n",
-                    ctx->ipath,
-                    (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
+                    ctx->rules.buf[i]->data.rule.fpos.path,
+                    (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.col + 1),
                     ctx->rules.buf[i]->data.rule.name
                 );
                 ctx->errnum++;
@@ -2607,8 +2621,8 @@ static bool_t parse(context_t *ctx) {
             else if (ctx->rules.buf[i]->data.rule.ref < 0) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Multiple definition of rule '%s'\n",
-                    ctx->ipath,
-                    (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
+                    ctx->rules.buf[i]->data.rule.fpos.path,
+                    (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.col + 1),
                     ctx->rules.buf[i]->data.rule.name
                 );
                 ctx->errnum++;
@@ -3334,7 +3348,10 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->eheader.len; i++) {
-                stream__write_code_block(&hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0, ctx->ipath, ctx->eheader.buf[i].line);
+                stream__write_code_block(
+                    &hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0,
+                    ctx->eheader.buf[i].fpos.path, ctx->eheader.buf[i].fpos.line
+                );
             }
         }
         if (ctx->eheader.len > 0) stream__puts(&hstream, "\n");
@@ -3348,7 +3365,10 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->header.len; i++) {
-                stream__write_code_block(&hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0, ctx->ipath, ctx->header.buf[i].line);
+                stream__write_code_block(
+                    &hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0,
+                    ctx->header.buf[i].fpos.path, ctx->header.buf[i].fpos.line
+                );
             }
         }
     }
@@ -3356,7 +3376,10 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->esource.len; i++) {
-                stream__write_code_block(&sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0, ctx->ipath, ctx->esource.buf[i].line);
+                stream__write_code_block(
+                    &sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0,
+                    ctx->esource.buf[i].fpos.path, ctx->esource.buf[i].fpos.line
+                );
             }
         }
         if (ctx->esource.len > 0) stream__puts(&sstream, "\n");
@@ -3393,7 +3416,10 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->source.len; i++) {
-                stream__write_code_block(&sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0, ctx->ipath, ctx->source.buf[i].line);
+                stream__write_code_block(
+                    &sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0,
+                    ctx->source.buf[i].fpos.path, ctx->source.buf[i].fpos.line
+                );
             }
         }
     }
@@ -4683,7 +4709,7 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    stream__write_code_block(&sstream, b->text, b->len, 4, ctx->ipath, b->line);
+                    stream__write_code_block(&sstream, b->text, b->len, 4, b->fpos.path, b->fpos.line);
                     k = c->len;
                     while (k > 0) {
                         k--;
@@ -4918,8 +4944,8 @@ static bool_t generate(context_t *ctx) {
             commit_buffer(ctx);
         }
     }
-    fclose_e(hstream.file);
-    fclose_e(sstream.file);
+    fclose_e(hstream.file, hstream.path);
+    fclose_e(sstream.file, sstream.path);
     if (ctx->errnum) {
         unlink(ctx->hpath);
         unlink(ctx->spath);
@@ -4985,7 +5011,7 @@ int main(int argc, char **argv) {
                     exit(1);
                 }
                 if (opt_o != NULL) {
-                    print_error("Extra output base name '%s'\n", o);
+                    print_error("Extra output base name: '%s'\n", o);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
                     exit(1);
@@ -5008,7 +5034,7 @@ int main(int argc, char **argv) {
                 opt_v = TRUE;
             }
             else {
-                print_error("Invalid option '%s'\n", argv[i]);
+                print_error("Invalid option: '%s'\n", argv[i]);
                 fprintf(stderr, "\n");
                 print_usage(stderr);
                 exit(1);
@@ -5021,7 +5047,7 @@ int main(int argc, char **argv) {
             path = argv[i];
             break;
         default:
-            print_error("Multiple input files\n");
+            print_error("Extra input file: '%s'\n", argv[i + 1]);
             fprintf(stderr, "\n");
             print_usage(stderr);
             exit(1);
