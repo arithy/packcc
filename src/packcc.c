@@ -86,13 +86,13 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #ifdef _WIN64 /* 64-bit Windows including MSVC and MinGW-w64 */
 #define FMT_LU "%llu"
 typedef unsigned long long ulong_t;
-/* NOTE: "%llu" and "long long" are not C89-compliant, but they are required to deal with a 64-bit integer value in 64-bit Windows. */
+/* NOTE: "%llu" and "long long" are not C89-compliant, but we cannot help using them to deal with a 64-bit integer value in 64-bit Windows. */
 #else
 #define FMT_LU "%lu"
 typedef unsigned long ulong_t;
 #endif
 /* FMT_LU and ulong_t are used to print size_t values safely (ex. printf(FMT_LU "\n", (ulong_t)value);) */
-/* NOTE: Neither "%z" nor <inttypes.h> is used since PackCC complies with the C89 standard as much as possible. */
+/* NOTE: Neither "%zu" nor <inttypes.h> is used since PackCC complies with the C89 standard as much as possible. */
 
 typedef enum bool_tag {
     FALSE = 0,
@@ -1420,9 +1420,11 @@ static void link_references(context_t *ctx, node_t *node) {
     case NODE_REFERENCE:
         node->data.reference.rule = lookup_rulehash(ctx, node->data.reference.name);
         if (node->data.reference.rule == NULL) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": No definition of rule '%s'\n",
+            print_error(
+                "%s:" FMT_LU ":" FMT_LU ": No definition of rule '%s'\n",
                 ctx->iname, (ulong_t)(node->data.reference.line + 1), (ulong_t)(node->data.reference.col + 1),
-                node->data.reference.name);
+                node->data.reference.name
+            );
             ctx->errnum++;
         }
         else {
@@ -1612,8 +1614,10 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
                 if (node->data.expand.index == capts->buf[i]->data.capture.index) break;
             }
             if (i >= capts->len && node->data.expand.index != VOID_VALUE) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
-                    ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), (ulong_t)(node->data.expand.index + 1));
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
+                    ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), (ulong_t)(node->data.expand.index + 1)
+                );
                 ctx->errnum++;
             }
         }
@@ -1658,17 +1662,21 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     if (node == NULL) return;
     switch (node->type) {
     case NODE_RULE:
-        fprintf(stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ") {\n",
+        fprintf(
+            stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ") {\n",
             indent, "", node->data.rule.name, node->data.rule.ref,
-            (ulong_t)node->data.rule.vars.len, (ulong_t)node->data.rule.capts.len, (ulong_t)node->data.rule.codes.len);
+            (ulong_t)node->data.rule.vars.len, (ulong_t)node->data.rule.capts.len, (ulong_t)node->data.rule.codes.len
+        );
         dump_node(ctx, node->data.rule.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_REFERENCE:
         fprintf(stdout, "%*sReference(var:'%s', index:", indent, "", node->data.reference.var);
         dump_integer_value(node->data.reference.index);
-        fprintf(stdout, ", name:'%s', rule:'%s')\n", node->data.reference.name,
-            (node->data.reference.rule) ? node->data.reference.rule->data.rule.name : NULL);
+        fprintf(
+            stdout, ", name:'%s', rule:'%s')\n", node->data.reference.name,
+            (node->data.reference.rule) ? node->data.reference.rule->data.rule.name : NULL
+        );
         break;
     case NODE_STRING:
         fprintf(stdout, "%*sString(value:'", indent, "");
@@ -1691,8 +1699,10 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_SEQUENCE:
-        fprintf(stdout, "%*sSequence(max:" FMT_LU ", len:" FMT_LU ") {\n",
-            indent, "", (ulong_t)node->data.sequence.nodes.max, (ulong_t)node->data.sequence.nodes.len);
+        fprintf(
+            stdout, "%*sSequence(max:" FMT_LU ", len:" FMT_LU ") {\n",
+            indent, "", (ulong_t)node->data.sequence.nodes.max, (ulong_t)node->data.sequence.nodes.len
+        );
         {
             size_t i;
             for (i = 0; i < node->data.sequence.nodes.len; i++) {
@@ -1702,8 +1712,10 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_ALTERNATE:
-        fprintf(stdout, "%*sAlternate(max:" FMT_LU ", len:" FMT_LU ") {\n",
-            indent, "", (ulong_t)node->data.alternate.nodes.max, (ulong_t)node->data.alternate.nodes.len);
+        fprintf(
+            stdout, "%*sAlternate(max:" FMT_LU ", len:" FMT_LU ") {\n",
+            indent, "", (ulong_t)node->data.alternate.nodes.max, (ulong_t)node->data.alternate.nodes.len
+        );
         {
             size_t i;
             for (i = 0; i < node->data.alternate.nodes.len; i++) {
@@ -2080,8 +2092,10 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             assert(q >= p);
             n_p->data.reference.var = strndup_e(ctx->buffer.buf + p, q - p);
             if (n_p->data.reference.var[0] == '_') {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
-                    ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var);
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
+                    ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var
+                );
                 ctx->errnum++;
             }
             {
@@ -2582,17 +2596,21 @@ static bool_t parse(context_t *ctx) {
         }
         for (i = 1; i < ctx->rules.len; i++) {
             if (ctx->rules.buf[i]->data.rule.ref == 0) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Never used rule '%s'\n",
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Never used rule '%s'\n",
                     ctx->iname,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
-                    ctx->rules.buf[i]->data.rule.name);
+                    ctx->rules.buf[i]->data.rule.name
+                );
                 ctx->errnum++;
             }
             else if (ctx->rules.buf[i]->data.rule.ref < 0) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple definition of rule '%s'\n",
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Multiple definition of rule '%s'\n",
                     ctx->iname,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
-                    ctx->rules.buf[i]->data.rule.name);
+                    ctx->rules.buf[i]->data.rule.name
+                );
                 ctx->errnum++;
             }
         }
@@ -2692,10 +2710,12 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                     stream__puts(gen->stream, "c = ctx->buffer.buf[ctx->cur];\n");
                     if (i + 3 == n && value[i] != '\\' && value[i + 1] == '-') {
                         stream__write_characters(gen->stream, ' ', indent);
-                        stream__printf(gen->stream,
+                        stream__printf(
+                            gen->stream,
                             a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n"
                               : "if (!(c >= '%s' && c <= '%s')) goto L%04d;\n",
-                            escape_character(value[i], &s), escape_character(value[i + 2], &t), onfail);
+                            escape_character(value[i], &s), escape_character(value[i + 2], &t), onfail
+                        );
                     }
                     else {
                         stream__write_characters(gen->stream, ' ', indent);
@@ -2704,13 +2724,17 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                             stream__write_characters(gen->stream, ' ', indent + 4);
                             if (value[i] == '\\' && i + 1 < n) i++;
                             if (i + 2 < n && value[i + 1] == '-') {
-                                stream__printf(gen->stream, "(c >= '%s' && c <= '%s')%s\n",
-                                    escape_character(value[i], &s), escape_character(value[i + 2], &t), (i + 3 == n) ? "" : " ||");
+                                stream__printf(
+                                    gen->stream, "(c >= '%s' && c <= '%s')%s\n",
+                                    escape_character(value[i], &s), escape_character(value[i + 2], &t), (i + 3 == n) ? "" : " ||"
+                                );
                                 i += 2;
                             }
                             else {
-                                stream__printf(gen->stream, "c == '%s'%s\n",
-                                    escape_character(value[i], &s), (i + 1 == n) ? "" : " ||");
+                                stream__printf(
+                                    gen->stream, "c == '%s'%s\n",
+                                    escape_character(value[i], &s), (i + 1 == n) ? "" : " ||"
+                                );
                             }
                         }
                         stream__write_characters(gen->stream, ' ', indent);
@@ -3117,8 +3141,10 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
         indent += 4;
     }
     stream__write_characters(gen->stream, ' ', indent);
-    stream__printf(gen->stream,
-        "const size_t n = chunk->capts.buf[" FMT_LU "].range.end - chunk->capts.buf[" FMT_LU "].range.start;\n", (ulong_t)index, (ulong_t)index);
+    stream__printf(
+        gen->stream, "const size_t n = chunk->capts.buf[" FMT_LU "].range.end - chunk->capts.buf[" FMT_LU "].range.start;\n",
+        (ulong_t)index, (ulong_t)index
+    );
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
     stream__write_characters(gen->stream, ' ', indent);
@@ -3161,21 +3187,27 @@ static code_reach_t generate_thunking_action_code(
         stream__puts(gen->stream, "pcc_value_t null;\n");
     }
     stream__write_characters(gen->stream, ' ', indent);
-    stream__printf(gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_" FMT_LU ", " FMT_LU ", " FMT_LU ");\n",
-        gen->rule->data.rule.name, (ulong_t)index, (ulong_t)gen->rule->data.rule.vars.len, (ulong_t)gen->rule->data.rule.capts.len);
+    stream__printf(
+        gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_" FMT_LU ", " FMT_LU ", " FMT_LU ");\n",
+        gen->rule->data.rule.name, (ulong_t)index, (ulong_t)gen->rule->data.rule.vars.len, (ulong_t)gen->rule->data.rule.capts.len
+    );
     {
         size_t i;
         for (i = 0; i < vars->len; i++) {
             assert(vars->buf[i]->type == NODE_REFERENCE);
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "thunk->data.leaf.values.buf[" FMT_LU "] = &(chunk->values.buf[" FMT_LU "]);\n",
-                (ulong_t)vars->buf[i]->data.reference.index, (ulong_t)vars->buf[i]->data.reference.index);
+            stream__printf(
+                gen->stream, "thunk->data.leaf.values.buf[" FMT_LU "] = &(chunk->values.buf[" FMT_LU "]);\n",
+                (ulong_t)vars->buf[i]->data.reference.index, (ulong_t)vars->buf[i]->data.reference.index
+            );
         }
         for (i = 0; i < capts->len; i++) {
             assert(capts->buf[i]->type == NODE_CAPTURE);
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "thunk->data.leaf.capts.buf[" FMT_LU "] = &(chunk->capts.buf[" FMT_LU "]);\n",
-                (ulong_t)capts->buf[i]->data.capture.index, (ulong_t)capts->buf[i]->data.capture.index);
+            stream__printf(
+                gen->stream, "thunk->data.leaf.capts.buf[" FMT_LU "] = &(chunk->capts.buf[" FMT_LU "]);\n",
+                (ulong_t)capts->buf[i]->data.capture.index, (ulong_t)capts->buf[i]->data.capture.index
+            );
         }
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "thunk->data.leaf.capt0.range.start = chunk->pos;\n");
@@ -3244,13 +3276,17 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
     case NODE_REFERENCE:
         if (node->data.reference.index != VOID_VALUE) {
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) goto L%04d;\n",
-                node->data.reference.name, (ulong_t)node->data.reference.index, onfail);
+            stream__printf(
+                gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, &(chunk->values.buf[" FMT_LU "]))) goto L%04d;\n",
+                node->data.reference.name, (ulong_t)node->data.reference.index, onfail
+            );
         }
         else {
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, NULL)) goto L%04d;\n",
-                node->data.reference.name, onfail);
+            stream__printf(
+                gen->stream, "if (!pcc_apply_rule(ctx, pcc_evaluate_rule_%s, &chunk->thunks, NULL)) goto L%04d;\n",
+                node->data.reference.name, onfail
+            );
         }
         return CODE_REACH__BOTH;
     case NODE_STRING:
