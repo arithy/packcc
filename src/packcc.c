@@ -100,8 +100,8 @@ typedef enum bool_tag {
 } bool_t;
 
 typedef struct stream_tag {
-    FILE *file;       /* the stream; just a reference */
-    const char *name; /* the file name */
+    FILE *file;       /* the file stream; just a reference */
+    const char *path; /* the file path name */
     size_t line;      /* the current line number (0-based); line counting is disabled if VOID_VALUE */
 } stream_t;
 
@@ -264,10 +264,10 @@ typedef enum code_flag_tag {
 } code_flag_t;
 
 typedef struct context_tag {
-    char *iname;  /* the path name of the PEG file being parsed */
-    char *sname;  /* the path name of the C source file being generated */
-    char *hname;  /* the path name of the C header file being generated */
-    FILE *ifile;  /* the input stream of the PEG file */
+    char *ipath;  /* the path name of the PEG file being parsed */
+    char *spath;  /* the path name of the C source file being generated */
+    char *hpath;  /* the path name of the C header file being generated */
+    FILE *ifile;  /* the input file stream of the PEG file */
     char *hid;    /* the macro name for the include guard of the C header file */
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
@@ -343,8 +343,8 @@ static FILE *fopen_wt_e(const char *path) {
     return f;
 }
 
-static int fclose_e(FILE *stream) {
-    const int r = fclose(stream);
+static int fclose_e(FILE *file) {
+    const int r = fclose(file);
     if (r == EOF) {
         print_error("File closing error\n");
         exit(2);
@@ -352,9 +352,9 @@ static int fclose_e(FILE *stream) {
     return r;
 }
 
-static int fgetc_e(FILE *stream) {
-    const int c = fgetc(stream);
-    if (c == EOF && ferror(stream)) {
+static int fgetc_e(FILE *file) {
+    const int c = fgetc(file);
+    if (c == EOF && ferror(file)) {
         print_error("File read error\n");
         exit(2);
     }
@@ -820,10 +820,10 @@ static void make_header_identifier(char *str) {
     }
 }
 
-static stream_t stream__wrap(FILE *file, const char *name, size_t line) {
+static stream_t stream__wrap(FILE *file, const char *path, size_t line) {
     stream_t s;
     s.file = file;
-    s.name = name;
+    s.path = path;
     s.line = line;
     return s;
 }
@@ -932,13 +932,13 @@ static void stream__write_escaped_string(stream_t *stream, const char *ptr, size
     }
 }
 
-static void stream__write_line_directive(stream_t *stream, const char *fname, size_t lineno) {
+static void stream__write_line_directive(stream_t *stream, const char *path, size_t lineno) {
     stream__printf(stream, "#line " FMT_LU " \"", (ulong_t)(lineno + 1));
-    stream__write_escaped_string(stream, fname, strlen(fname));
+    stream__write_escaped_string(stream, path, strlen(path));
     stream__puts(stream, "\"\n");
 }
 
-static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent, const char *fname, size_t lineno) {
+static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent, const char *path, size_t lineno) {
     bool_t b = FALSE;
     size_t i, j, k;
     if (len == VOID_VALUE) return; /* for safety */
@@ -953,7 +953,7 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
     }
     if (i < j) {
         if (stream->line != VOID_VALUE)
-            stream__write_line_directive(stream, fname, lineno);
+            stream__write_line_directive(stream, path, lineno);
         if (ptr[i] != '#')
             stream__write_characters(stream, ' ', indent);
         stream__write_text(stream, ptr + i, j - i);
@@ -970,7 +970,7 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
             j = find_first_trailing_space(ptr, i, len, &h);
             if (i < j) {
                 if (stream->line != VOID_VALUE && !b)
-                    stream__write_line_directive(stream, fname, lineno);
+                    stream__write_line_directive(stream, path, lineno);
                 if (ptr[i] != '#') {
                     const size_t l = count_indent_spaces(ptr, i, j, NULL);
                     if (m == VOID_VALUE || m > l) m = l;
@@ -1003,7 +1003,7 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
         }
     }
     if (stream->line != VOID_VALUE && b)
-        stream__write_line_directive(stream, stream->name, stream->line);
+        stream__write_line_directive(stream, stream->path, stream->line);
 }
 
 static const char *extract_filename(const char *path) {
@@ -1201,13 +1201,13 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
-static context_t *create_context(const char *iname, const char *oname, const options_t *opts) {
+static context_t *create_context(const char *ipath, const char *opath, const options_t *opts) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
-    ctx->iname = strdup_e((iname && iname[0]) ? iname : "-");
-    ctx->sname = (oname && oname[0]) ? add_fileext(oname, "c") : replace_fileext(ctx->iname, "c");
-    ctx->hname = (oname && oname[0]) ? add_fileext(oname, "h") : replace_fileext(ctx->iname, "h");
-    ctx->ifile = (iname && iname[0]) ? fopen_rb_e(ctx->iname) : stdin;
-    ctx->hid = strdup_e(ctx->hname); make_header_identifier(ctx->hid);
+    ctx->ipath = strdup_e((ipath && ipath[0]) ? ipath : "-");
+    ctx->spath = (opath && opath[0]) ? add_fileext(opath, "c") : replace_fileext(ctx->ipath, "c");
+    ctx->hpath = (opath && opath[0]) ? add_fileext(opath, "h") : replace_fileext(ctx->ipath, "h");
+    ctx->ifile = (ipath && ipath[0]) ? fopen_rb_e(ctx->ipath) : stdin;
+    ctx->hid = strdup_e(ctx->hpath); make_header_identifier(ctx->hid);
     ctx->vtype = NULL;
     ctx->atype = NULL;
     ctx->prefix = NULL;
@@ -1371,9 +1371,9 @@ static void destroy_context(context_t *ctx) {
     free(ctx->vtype);
     free(ctx->hid);
     fclose_e(ctx->ifile);
-    free(ctx->hname);
-    free(ctx->sname);
-    free(ctx->iname);
+    free(ctx->hpath);
+    free(ctx->spath);
+    free(ctx->ipath);
     free(ctx);
 }
 
@@ -1422,7 +1422,7 @@ static void link_references(context_t *ctx, node_t *node) {
         if (node->data.reference.rule == NULL) {
             print_error(
                 "%s:" FMT_LU ":" FMT_LU ": No definition of rule '%s'\n",
-                ctx->iname, (ulong_t)(node->data.reference.line + 1), (ulong_t)(node->data.reference.col + 1),
+                ctx->ipath, (ulong_t)(node->data.reference.line + 1), (ulong_t)(node->data.reference.col + 1),
                 node->data.reference.name
             );
             ctx->errnum++;
@@ -1616,7 +1616,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
             if (i >= capts->len && node->data.expand.index != VOID_VALUE) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
-                    ctx->iname, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), (ulong_t)(node->data.expand.index + 1)
+                    ctx->ipath, (ulong_t)(node->data.expand.line + 1), (ulong_t)(node->data.expand.col + 1), (ulong_t)(node->data.expand.index + 1)
                 );
                 ctx->errnum++;
             }
@@ -1917,7 +1917,7 @@ static bool_t match_section_block_(context_t *ctx, const char *left, const char 
     if (match_string(ctx, left)) {
         while (!match_string(ctx, right)) {
             if (match_eof(ctx)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 ctx->errnum++;
                 break;
             }
@@ -1934,7 +1934,7 @@ static bool_t match_quotation_(context_t *ctx, const char *left, const char *rig
     if (match_string(ctx, left)) {
         while (!match_string(ctx, right)) {
             if (match_eof(ctx)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 ctx->errnum++;
                 break;
             }
@@ -1943,7 +1943,7 @@ static bool_t match_quotation_(context_t *ctx, const char *left, const char *rig
             }
             else {
                 if (match_eol(ctx)) {
-                    print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                     ctx->errnum++;
                     break;
                 }
@@ -2021,7 +2021,7 @@ static bool_t match_code_block(context_t *ctx) {
         int d = 1;
         for (;;) {
             if (match_eof(ctx)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
                 break;
             }
@@ -2094,7 +2094,7 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             if (n_p->data.reference.var[0] == '_') {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
-                    ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var
+                    ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var
                 );
                 ctx->errnum++;
             }
@@ -2145,15 +2145,15 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
             s = strndup_e(ctx->buffer.buf + p, q - p);
             n_p->data.expand.index = string_to_size_t(s);
             if (n_p->data.expand.index == VOID_VALUE) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
                 ctx->errnum++;
             }
             else if (n_p->data.expand.index == 0) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
             }
             else if (s[0] == '0') {
-                print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
                 n_p->data.expand.index = 0;
             }
@@ -2182,11 +2182,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.charclass.value, TRUE)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
         if (!ctx->opts.ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
         if (!ctx->opts.ascii && n_p->data.charclass.value[0] != '\0') {
@@ -2199,11 +2199,11 @@ static node_t *parse_primary(context_t *ctx, node_t *rule) {
         n_p = create_node(NODE_STRING);
         n_p->data.string.value = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.string.value, FALSE)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
         if (!ctx->opts.ascii && !is_valid_utf8_string(n_p->data.string.value)) {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
             ctx->errnum++;
         }
     }
@@ -2466,7 +2466,7 @@ static bool_t parse_directive_include_(context_t *ctx, const char *name, code_bl
             }
         }
         else {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
             ctx->errnum++;
         }
     }
@@ -2489,12 +2489,12 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
             match_spaces(ctx);
             s = strndup_e(ctx->buffer.buf + p + 1, q - p - 2);
             if (!unescape_string(s, FALSE)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
             }
         }
         else {
-            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
             ctx->errnum++;
         }
         if (s != NULL) {
@@ -2504,24 +2504,24 @@ static bool_t parse_directive_string_(context_t *ctx, const char *name, char **o
             remove_trailing_blanks(s);
             assert((mode & ~7) == 0);
             if ((mode & STRING_FLAG__NOTEMPTY) && !is_filled_string(s)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
                 f |= STRING_FLAG__NOTEMPTY;
             }
             if ((mode & STRING_FLAG__NOTVOID) && strcmp(s, "void") == 0) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": 'void' not allowed\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": 'void' not allowed\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 ctx->errnum++;
                 f |= STRING_FLAG__NOTVOID;
             }
             if ((mode & STRING_FLAG__IDENTIFIER) && !is_identifier_string(s)) {
                 if (!(f & STRING_FLAG__NOTEMPTY)) {
-                    print_error("%s:" FMT_LU ":" FMT_LU ": Invalid identifier\n", ctx->iname, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Invalid identifier\n", ctx->ipath, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                     ctx->errnum++;
                 }
                 f |= STRING_FLAG__IDENTIFIER;
             }
             if (*output != NULL) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple %s definition\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple %s definition\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 ctx->errnum++;
                 b = FALSE;
             }
@@ -2561,7 +2561,7 @@ static bool_t parse(context_t *ctx) {
                 b = TRUE;
             }
             else if (match_character(ctx, '%')) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid directive\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                print_error("%s:" FMT_LU ":" FMT_LU ": Invalid directive\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->errnum++;
                 match_identifier(ctx);
                 match_spaces(ctx);
@@ -2571,7 +2571,7 @@ static bool_t parse(context_t *ctx) {
                 node_t *const n_r = parse_rule(ctx);
                 if (n_r == NULL) {
                     if (b) {
-                        print_error("%s:" FMT_LU ":" FMT_LU ": Illegal rule syntax\n", ctx->iname, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                        print_error("%s:" FMT_LU ":" FMT_LU ": Illegal rule syntax\n", ctx->ipath, (ulong_t)(l + 1), (ulong_t)(m + 1));
                         ctx->errnum++;
                         b = FALSE;
                     }
@@ -2598,7 +2598,7 @@ static bool_t parse(context_t *ctx) {
             if (ctx->rules.buf[i]->data.rule.ref == 0) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Never used rule '%s'\n",
-                    ctx->iname,
+                    ctx->ipath,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
                     ctx->rules.buf[i]->data.rule.name
                 );
@@ -2607,7 +2607,7 @@ static bool_t parse(context_t *ctx) {
             else if (ctx->rules.buf[i]->data.rule.ref < 0) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Multiple definition of rule '%s'\n",
-                    ctx->iname,
+                    ctx->ipath,
                     (ulong_t)(ctx->rules.buf[i]->data.rule.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.col + 1),
                     ctx->rules.buf[i]->data.rule.name
                 );
@@ -3326,15 +3326,15 @@ static bool_t generate(context_t *ctx) {
     const char *const at = get_auxil_type(ctx);
     const bool_t vp = is_pointer_type(vt);
     const bool_t ap = is_pointer_type(at);
-    stream_t sstream = stream__wrap(fopen_wt_e(ctx->sname), ctx->sname, ctx->opts.lines ? 0 : VOID_VALUE);
-    stream_t hstream = stream__wrap(fopen_wt_e(ctx->hname), ctx->hname, ctx->opts.lines ? 0 : VOID_VALUE);
+    stream_t sstream = stream__wrap(fopen_wt_e(ctx->spath), ctx->spath, ctx->opts.lines ? 0 : VOID_VALUE);
+    stream_t hstream = stream__wrap(fopen_wt_e(ctx->hpath), ctx->hpath, ctx->opts.lines ? 0 : VOID_VALUE);
     stream__printf(&sstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     stream__printf(&hstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     {
         {
             size_t i;
             for (i = 0; i < ctx->eheader.len; i++) {
-                stream__write_code_block(&hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0, ctx->iname, ctx->eheader.buf[i].line);
+                stream__write_code_block(&hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0, ctx->ipath, ctx->eheader.buf[i].line);
             }
         }
         if (ctx->eheader.len > 0) stream__puts(&hstream, "\n");
@@ -3348,7 +3348,7 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->header.len; i++) {
-                stream__write_code_block(&hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0, ctx->iname, ctx->header.buf[i].line);
+                stream__write_code_block(&hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0, ctx->ipath, ctx->header.buf[i].line);
             }
         }
     }
@@ -3356,7 +3356,7 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->esource.len; i++) {
-                stream__write_code_block(&sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0, ctx->iname, ctx->esource.buf[i].line);
+                stream__write_code_block(&sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0, ctx->ipath, ctx->esource.buf[i].line);
             }
         }
         if (ctx->esource.len > 0) stream__puts(&sstream, "\n");
@@ -3388,12 +3388,12 @@ static bool_t generate(context_t *ctx) {
             &sstream,
             "#include \"%s\"\n"
             "\n",
-            extract_filename(ctx->hname)
+            extract_filename(ctx->hpath)
         );
         {
             size_t i;
             for (i = 0; i < ctx->source.len; i++) {
-                stream__write_code_block(&sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0, ctx->iname, ctx->source.buf[i].line);
+                stream__write_code_block(&sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0, ctx->ipath, ctx->source.buf[i].line);
             }
         }
     }
@@ -4683,7 +4683,7 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    stream__write_code_block(&sstream, b->text, b->len, 4, ctx->iname, b->line);
+                    stream__write_code_block(&sstream, b->text, b->len, 4, ctx->ipath, b->line);
                     k = c->len;
                     while (k > 0) {
                         k--;
@@ -4910,7 +4910,7 @@ static bool_t generate(context_t *ctx) {
         if (!match_eof(ctx)) stream__putc(&sstream, '\n');
         commit_buffer(ctx);
         if (ctx->opts.lines && !match_eof(ctx))
-            stream__write_line_directive(&sstream, ctx->iname, ctx->linenum);
+            stream__write_line_directive(&sstream, ctx->ipath, ctx->linenum);
         while (refill_buffer(ctx, ctx->buffer.max) > 0) {
             const size_t n = ctx->buffer.len;
             stream__write_text(&sstream, ctx->buffer.buf, (n > 0 && ctx->buffer.buf[n - 1] == '\r') ? n - 1 : n);
@@ -4921,8 +4921,8 @@ static bool_t generate(context_t *ctx) {
     fclose_e(hstream.file);
     fclose_e(sstream.file);
     if (ctx->errnum) {
-        unlink(ctx->hname);
-        unlink(ctx->sname);
+        unlink(ctx->hpath);
+        unlink(ctx->spath);
         return FALSE;
     }
     return TRUE;
@@ -4946,8 +4946,8 @@ static void print_usage(FILE *output) {
 }
 
 int main(int argc, char **argv) {
-    const char *iname = NULL;
-    const char *oname = NULL;
+    const char *ipath = NULL;
+    const char *opath = NULL;
     options_t opts;
     opts.ascii = FALSE;
     opts.lines = FALSE;
@@ -4961,7 +4961,7 @@ int main(int argc, char **argv) {
 #endif
     g_cmdname = extract_filename(argv[0]);
     {
-        const char *fname = NULL;
+        const char *path = NULL;
         const char *opt_o = NULL;
         bool_t opt_a = FALSE;
         bool_t opt_l = FALSE;
@@ -5018,7 +5018,7 @@ int main(int argc, char **argv) {
         case 0:
             break;
         case 1:
-            fname = argv[i];
+            path = argv[i];
             break;
         default:
             print_error("Multiple input files\n");
@@ -5032,14 +5032,14 @@ int main(int argc, char **argv) {
             if (opt_h) print_usage(stdout);
             exit(0);
         }
-        iname = (fname != NULL && fname[0] != '\0') ? fname : NULL;
-        oname = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
+        ipath = (path != NULL && path[0] != '\0') ? path : NULL;
+        opath = (opt_o != NULL && opt_o[0] != '\0') ? opt_o : NULL;
         opts.ascii = opt_a;
         opts.lines = opt_l;
         opts.debug = opt_d;
     }
     {
-        context_t *const ctx = create_context(iname, oname, &opts);
+        context_t *const ctx = create_context(ipath, opath, &opts);
         const int b = parse(ctx) && generate(ctx);
         destroy_context(ctx);
         if (!b) exit(10);
