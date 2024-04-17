@@ -207,7 +207,8 @@ typedef struct node_hash_table_tag {
 typedef struct node_rule_tag {
     char *name;
     node_t *expr;
-    int ref; /* mutable */
+    int ref; /* mutable under make_rulehash(), link_references(), and unreference_rules_from_unused_rule() */
+    bool_t used; /* mutable under mark_rules_if_used() */
     node_const_array_t vars;
     node_const_array_t capts;
     node_const_array_t codes;
@@ -1474,6 +1475,7 @@ static node_t *create_node(node_type_t type) {
         node->data.rule.name = NULL;
         node->data.rule.expr = NULL;
         node->data.rule.ref = 0;
+        node->data.rule.used = FALSE;
         node_const_array__init(&node->data.rule.vars);
         node_const_array__init(&node->data.rule.capts);
         node_const_array__init(&node->data.rule.codes);
@@ -1601,13 +1603,15 @@ static void make_rulehash(context_t *ctx) {
         ctx->rulehash.buf[i] = NULL;
     }
     for (i = 0; i < ctx->rules.len; i++) {
+        node_rule_t *const rule = &ctx->rules.buf[i]->data.rule;
         assert(ctx->rules.buf[i]->type == NODE_RULE);
-        j = hash_string(ctx->rules.buf[i]->data.rule.name) & ctx->rulehash.mod;
+        j = hash_string(rule->name) & ctx->rulehash.mod;
         while (ctx->rulehash.buf[j] != NULL) {
-            if (strcmp(ctx->rules.buf[i]->data.rule.name, ctx->rulehash.buf[j]->data.rule.name) == 0) {
-                assert(ctx->rules.buf[i]->data.rule.ref == 0);
-                assert(ctx->rulehash.buf[j]->data.rule.ref == 0);
-                ctx->rules.buf[i]->data.rule.ref = -1;
+            if (strcmp(rule->name, ctx->rulehash.buf[j]->data.rule.name) == 0) {
+                assert(rule->ref == 0);
+                assert(ctx->rulehash.buf[j]->data.rule.ref <= 0); /* always 0 or -1 */
+                rule->ref = -1; /* marks as duplicate */
+                ((node_t *)ctx->rulehash.buf[j])->data.rule.ref = -1; /* marks as duplicate */
                 goto EXCEPTION;
             }
             j = (j + 1) & ctx->rulehash.mod;
@@ -1643,7 +1647,7 @@ static void link_references(context_t *ctx, node_t *node) {
             );
             ctx->errnum++;
         }
-        else {
+        else if (node->data.reference.rule->data.rule.ref >= 0) { /* the target rule is not defined multiple times */
             assert(node->data.reference.rule->type == NODE_RULE);
             ((node_t *)node->data.reference.rule)->data.rule.ref++;
         }
@@ -1683,6 +1687,112 @@ static void link_references(context_t *ctx, node_t *node) {
         break;
     case NODE_ERROR:
         link_references(ctx, node->data.error.expr);
+        break;
+    default:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
+    }
+}
+
+static void mark_rules_if_used(context_t *ctx, node_t *node) {
+    if (node == NULL) return;
+    switch (node->type) {
+    case NODE_RULE:
+        if (!node->data.rule.used) {
+            node->data.rule.used = TRUE;
+            mark_rules_if_used(ctx, node->data.rule.expr);
+        }
+        break;
+    case NODE_REFERENCE:
+        mark_rules_if_used(ctx, (node_t *)node->data.reference.rule);
+        break;
+    case NODE_STRING:
+        break;
+    case NODE_CHARCLASS:
+        break;
+    case NODE_QUANTITY:
+        mark_rules_if_used(ctx, node->data.quantity.expr);
+        break;
+    case NODE_PREDICATE:
+        mark_rules_if_used(ctx, node->data.predicate.expr);
+        break;
+    case NODE_SEQUENCE:
+        {
+            size_t i;
+            for (i = 0; i < node->data.sequence.nodes.len; i++) {
+                mark_rules_if_used(ctx, node->data.sequence.nodes.buf[i]);
+            }
+        }
+        break;
+    case NODE_ALTERNATE:
+        {
+            size_t i;
+            for (i = 0; i < node->data.alternate.nodes.len; i++) {
+                mark_rules_if_used(ctx, node->data.alternate.nodes.buf[i]);
+            }
+        }
+        break;
+    case NODE_CAPTURE:
+        mark_rules_if_used(ctx, node->data.capture.expr);
+        break;
+    case NODE_EXPAND:
+        break;
+    case NODE_ACTION:
+        break;
+    case NODE_ERROR:
+        mark_rules_if_used(ctx, node->data.error.expr);
+        break;
+    default:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
+    }
+}
+
+static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
+    if (node == NULL) return;
+    switch (node->type) {
+    case NODE_RULE:
+        unreference_rules_from_unused_rule(ctx, node->data.rule.expr);
+        break;
+    case NODE_REFERENCE:
+        if (node->data.reference.rule && node->data.reference.rule->data.rule.ref > 0)
+            ((node_t *)node->data.reference.rule)->data.rule.ref--;
+        break;
+    case NODE_STRING:
+        break;
+    case NODE_CHARCLASS:
+        break;
+    case NODE_QUANTITY:
+        unreference_rules_from_unused_rule(ctx, node->data.quantity.expr);
+        break;
+    case NODE_PREDICATE:
+        unreference_rules_from_unused_rule(ctx, node->data.predicate.expr);
+        break;
+    case NODE_SEQUENCE:
+        {
+            size_t i;
+            for (i = 0; i < node->data.sequence.nodes.len; i++) {
+                unreference_rules_from_unused_rule(ctx, node->data.sequence.nodes.buf[i]);
+            }
+        }
+        break;
+    case NODE_ALTERNATE:
+        {
+            size_t i;
+            for (i = 0; i < node->data.alternate.nodes.len; i++) {
+                unreference_rules_from_unused_rule(ctx, node->data.alternate.nodes.buf[i]);
+            }
+        }
+        break;
+    case NODE_CAPTURE:
+        unreference_rules_from_unused_rule(ctx, node->data.capture.expr);
+        break;
+    case NODE_EXPAND:
+        break;
+    case NODE_ACTION:
+        break;
+    case NODE_ERROR:
+        unreference_rules_from_unused_rule(ctx, node->data.error.expr);
         break;
     default:
         print_error("Internal error [%d]\n", __LINE__);
@@ -2836,38 +2946,47 @@ static void parse_file_(context_t *ctx) {
 
 static bool_t parse(context_t *ctx) {
     parse_file_(ctx);
+    make_rulehash(ctx);
     {
         size_t i;
-        make_rulehash(ctx);
         for (i = 0; i < ctx->rules.len; i++) {
-            link_references(ctx, ctx->rules.buf[i]->data.rule.expr);
-        }
-        for (i = 1; i < ctx->rules.len; i++) {
-            if (ctx->rules.buf[i]->data.rule.ref == 0) {
-                print_error(
-                    "%s:" FMT_LU ":" FMT_LU ": Never used rule '%s'\n",
-                    ctx->rules.buf[i]->data.rule.fpos.path,
-                    (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.col + 1),
-                    ctx->rules.buf[i]->data.rule.name
-                );
-                ctx->errnum++;
-            }
-            else if (ctx->rules.buf[i]->data.rule.ref < 0) {
+            node_rule_t *const rule = &ctx->rules.buf[i]->data.rule;
+            if (rule->ref < 0) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Multiple definitions of rule: '%s'\n",
-                    ctx->rules.buf[i]->data.rule.fpos.path,
-                    (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.line + 1), (ulong_t)(ctx->rules.buf[i]->data.rule.fpos.col + 1),
-                    ctx->rules.buf[i]->data.rule.name
+                    rule->fpos.path, (ulong_t)(rule->fpos.line + 1), (ulong_t)(rule->fpos.col + 1),
+                    rule->name
                 );
                 ctx->errnum++;
+                continue;
             }
+            link_references(ctx, rule->expr);
         }
+    }
+    mark_rules_if_used(ctx, ctx->rules.buf[0]);
+    {
+        size_t i;
+        for (i = 0; i < ctx->rules.len; i++) {
+            if (!ctx->rules.buf[i]->data.rule.used)
+                unreference_rules_from_unused_rule(ctx, ctx->rules.buf[i]);
+        }
+    }
+    {
+        size_t i, j;
+        for (i = 0, j = 0; i < ctx->rules.len; i++) {
+            if (!ctx->rules.buf[i]->data.rule.used)
+                destroy_node(ctx->rules.buf[i]);
+            else
+                ctx->rules.buf[j++] = ctx->rules.buf[i];
+        }
+        ctx->rules.len = j;
     }
     {
         size_t i;
         for (i = 0; i < ctx->rules.len; i++) {
-            verify_variables(ctx, ctx->rules.buf[i]->data.rule.expr, NULL);
-            verify_captures(ctx, ctx->rules.buf[i]->data.rule.expr, NULL);
+            const node_rule_t *const rule = &ctx->rules.buf[i]->data.rule;
+            verify_variables(ctx, rule->expr, NULL);
+            verify_captures(ctx, rule->expr, NULL);
         }
     }
     if (ctx->opts.debug) {
@@ -4875,23 +4994,23 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i, j, k;
             for (i = 0; i < ctx->rules.len; i++) {
-                const node_rule_t *const r = &ctx->rules.buf[i]->data.rule;
-                for (j = 0; j < r->codes.len; j++) {
+                const node_rule_t *const rule = &ctx->rules.buf[i]->data.rule;
+                for (j = 0; j < rule->codes.len; j++) {
                     const code_block_t *b;
                     size_t d;
                     const node_const_array_t *v, *c;
-                    switch (r->codes.buf[j]->type) {
+                    switch (rule->codes.buf[j]->type) {
                     case NODE_ACTION:
-                        b = &r->codes.buf[j]->data.action.code;
-                        d = r->codes.buf[j]->data.action.index;
-                        v = &r->codes.buf[j]->data.action.vars;
-                        c = &r->codes.buf[j]->data.action.capts;
+                        b = &rule->codes.buf[j]->data.action.code;
+                        d = rule->codes.buf[j]->data.action.index;
+                        v = &rule->codes.buf[j]->data.action.vars;
+                        c = &rule->codes.buf[j]->data.action.capts;
                         break;
                     case NODE_ERROR:
-                        b = &r->codes.buf[j]->data.error.code;
-                        d = r->codes.buf[j]->data.error.index;
-                        v = &r->codes.buf[j]->data.error.vars;
-                        c = &r->codes.buf[j]->data.error.capts;
+                        b = &rule->codes.buf[j]->data.error.code;
+                        d = rule->codes.buf[j]->data.error.index;
+                        v = &rule->codes.buf[j]->data.error.vars;
+                        c = &rule->codes.buf[j]->data.error.capts;
                         break;
                     default:
                         print_error("Internal error [%d]\n", __LINE__);
@@ -4900,7 +5019,7 @@ static bool_t generate(context_t *ctx) {
                     stream__printf(
                         &sstream,
                         "static void pcc_action_%s_" FMT_LU "(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
-                        r->name, (ulong_t)d, get_prefix(ctx)
+                        rule->name, (ulong_t)d, get_prefix(ctx)
                     );
                     stream__puts(
                         &sstream,
@@ -4996,10 +5115,11 @@ static bool_t generate(context_t *ctx) {
         {
             size_t i;
             for (i = 0; i < ctx->rules.len; i++) {
+                const node_rule_t *const rule = &ctx->rules.buf[i]->data.rule;
                 stream__printf(
                     &sstream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(pcc_context_t *ctx);\n",
-                    ctx->rules.buf[i]->data.rule.name
+                    rule->name
                 );
             }
             stream__puts(
@@ -5009,6 +5129,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->rules.len; i++) {
                 code_reach_t r;
                 generate_t g;
+                const node_rule_t *const rule = &ctx->rules.buf[i]->data.rule;
                 g.stream = &sstream;
                 g.rule = ctx->rules.buf[i];
                 g.label = 0;
@@ -5016,7 +5137,7 @@ static bool_t generate(context_t *ctx) {
                 stream__printf(
                     &sstream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(pcc_context_t *ctx) {\n",
-                    ctx->rules.buf[i]->data.rule.name
+                    rule->name
                 );
                 stream__printf(
                     &sstream,
@@ -5024,33 +5145,33 @@ static bool_t generate(context_t *ctx) {
                     "    chunk->pos = ctx->cur;\n"
                     "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->buffer.len - chunk->pos));\n"
                     "    ctx->level++;\n",
-                    ctx->rules.buf[i]->data.rule.name
+                    rule->name
                 );
-                if (ctx->rules.buf[i]->data.rule.capts.len > 0) {
+                if (rule->capts.len > 0) {
                     stream__printf(
                         &sstream,
                         "    pcc_capture_table__resize(ctx->auxil, &chunk->capts, " FMT_LU ");\n",
-                        (ulong_t)ctx->rules.buf[i]->data.rule.capts.len
+                        (ulong_t)rule->capts.len
                     );
                 }
-                if (ctx->rules.buf[i]->data.rule.vars.len > 0) {
+                if (rule->vars.len > 0) {
                     stream__printf(
                         &sstream,
                         "    pcc_value_table__resize(ctx->auxil, &chunk->values, " FMT_LU ");\n",
-                        (ulong_t)ctx->rules.buf[i]->data.rule.vars.len
+                        (ulong_t)rule->vars.len
                     );
                     stream__puts(
                         &sstream,
                         "    pcc_value_table__clear(ctx->auxil, &chunk->values);\n"
                     );
                 }
-                r = generate_code(&g, ctx->rules.buf[i]->data.rule.expr, 0, 4, FALSE);
+                r = generate_code(&g, rule->expr, 0, 4, FALSE);
                 stream__printf(
                     &sstream,
                     "    ctx->level--;\n"
                     "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                     "    return chunk;\n",
-                    ctx->rules.buf[i]->data.rule.name
+                    rule->name
                 );
                 if (r != CODE_REACH__ALWAYS_SUCCEED) {
                     stream__printf(
@@ -5060,7 +5181,7 @@ static bool_t generate(context_t *ctx) {
                         "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.buf + chunk->pos), (ctx->cur - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx, chunk);\n"
                         "    return NULL;\n",
-                        ctx->rules.buf[i]->data.rule.name
+                        rule->name
                     );
                 }
                 stream__puts(
