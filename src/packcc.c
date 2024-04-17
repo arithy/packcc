@@ -1029,7 +1029,11 @@ static const char *extract_filename(const char *path) {
     size_t i = strlen(path);
     while (i > 0) {
         i--;
-        if (path[i] == '/' || path[i] == '\\' || path[i] == ':') return path + i + 1;
+#ifdef _WIN32
+        if (strchr("/\\:", path[i])) return path + i + 1;
+#else
+        if (path[i] == '/') return path + i + 1;
+#endif
     }
     return path;
 }
@@ -1039,7 +1043,11 @@ static const char *extract_fileext(const char *path) {
     size_t i = n;
     while (i > 0) {
         i--;
-        if (path[i] == '/' || path[i] == '\\' || path[i] == ':') break;
+#ifdef _WIN32
+        if (strchr("/\\:", path[i])) break;
+#else
+        if (path[i] == '/') break;
+#endif
         if (path[i] == '.') return path + i;
     }
     return path + n;
