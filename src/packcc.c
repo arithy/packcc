@@ -3228,13 +3228,24 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "const size_t n0 = chunk->thunks.len;\n");
         }
-        stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "int i;\n");
-        stream__write_characters(gen->stream, ' ', indent);
-        if (max < 0)
-            stream__puts(gen->stream, "for (i = 0;; i++) {\n");
-        else
+        if (max < 0) {
+            if (min > 0) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "int i;\n");
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "for (i = 0;; i++) {\n");
+            }
+            else {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "for (;;) {\n");
+            }
+        }
+        else {
+            stream__write_characters(gen->stream, ' ', indent);
+            stream__puts(gen->stream, "int i;\n");
+            stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "for (i = 0; i < %d; i++) {\n", max);
+        }
         stream__write_characters(gen->stream, ' ', indent + 4);
         stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
         stream__write_characters(gen->stream, ' ', indent + 4);

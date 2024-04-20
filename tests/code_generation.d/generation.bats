@@ -7,12 +7,7 @@ load "$TESTDIR/utils.sh"
 }
 
 @test "Testing code_generation.d - compilation" {
-    test_compile \
-        -D pcc_create=my_create \
-        -D pcc_destroy=my_destroy \
-        -D pcc_parse=my_parse \
-        -D pcc_context_t=my_context_t \
-        -D RET_TYPE=double
+    ${CC:-cc} -I "$BATS_TEST_DIRNAME" "$BATS_TEST_DIRNAME/parser.c" "$BATS_TEST_DIRNAME/main.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
 }
 
 @test "Testing code_generation.d - earlyheader" {

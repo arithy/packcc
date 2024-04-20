@@ -43,7 +43,7 @@ _      <- [ \t]*
 EOL    <- '\n' / '\r\n' / '\r' / ';'
 
 %%
-int main() {
+int main(int argc, char **argv) {
     calc_context_t *ctx = calc_create(NULL);
     while (calc_parse(ctx, NULL));
     calc_destroy(ctx);

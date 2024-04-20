@@ -1,7 +1,7 @@
 %header { /* HEADER ONLY */ }
 
 %source {
-    int custom_function() {
+    int custom_function(void) {
         return 42;
     }
 }
