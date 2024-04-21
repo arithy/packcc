@@ -1,6 +1,6 @@
-# PackCC #
+# PackCC
 
-## Overview ##
+## Overview
 
 **PackCC** is a parser generator for C.
 Its main features are as follows:
@@ -41,14 +41,14 @@ This feature is irrelevant to common users, but helpful for PackCC developers to
 
 PackCC itself is under MIT license, but you can distribute your generated code under any license you like.
 
-## Installation ##
+## Installation
 
 You can obtain the executable `packcc` by compiling [`src/packcc.c`](src/packcc.c) using your favorite C compiler.
 For convenience, the build environments using GCC, Clang, and Microsoft Visual Studio are prepared under [`build`](build) directory.
 
-### Using GCC ###
+### Using GCC
 
-#### Other than MinGW ####
+#### Other than MinGW
 
 `packcc` will be built in both directories `build/gcc/debug/bin` and `build/gcc/release/bin` using `gcc` by executing the following commands:
 
@@ -60,7 +60,7 @@ make check  # bats-core and uncrustify are required (see tests/README.md)
 
 `packcc` in the directory `build/gcc/release/bin` is suitable for practical use.
 
-#### MinGW ####
+#### MinGW
 
 `packcc` will be built in both directories `build/mingw-gcc/debug/bin` and `build/mingw-gcc/release/bin` using `gcc` by executing the following commands:
 
@@ -72,9 +72,9 @@ make check  # bats-core and uncrustify are required (see tests/README.md)
 
 `packcc` in the directory `build/mingw-gcc/release/bin` is suitable for practical use.
 
-### Using Clang ###
+### Using Clang
 
-#### Other than MinGW ####
+#### Other than MinGW
 
 `packcc` will be built in both directories `build/clang/debug/bin` and `build/clang/release/bin` using `clang` by executing the following commands:
 
@@ -86,7 +86,7 @@ make check  # bats-core and uncrustify are required (see tests/README.md)
 
 `packcc` in the directory `build/clang/release/bin` is suitable for practical use.
 
-#### MinGW ####
+#### MinGW
 
 `packcc` will be built in both directories `build/mingw-clang/debug/bin` and `build/mingw-clang/release/bin` using `clang` by executing the following commands:
 
@@ -98,10 +98,11 @@ make check  # bats-core and uncrustify are required (see tests/README.md)
 
 `packcc` in the directory `build/mingw-clang/release/bin` is suitable for practical use.
 
-### Using Microsoft Visual Studio ###
+### Using Microsoft Visual Studio
 
 You have to install Microsoft Visual Studio 2019 in advance.
 After that, you can build `packcc.exe` by the following instructions:
+
 - Open the solution file `build\msvc\msvc.sln`,
 - Select a preferred solution configuration (*Debug* or *Release*) and a preferred solution platform (*x64* or *x86*),
 - Invoke the *Build Solution* menu item.
@@ -110,12 +111,13 @@ After that, you can build `packcc.exe` by the following instructions:
 Here, `XXX` is `x64` or `x86`, and `YYY` is `Debug` or `Release`.
 `packcc.exe` in the directory `build\msvc\XXX\Release` is suitable for practical use.
 
-## Usage ##
+## Usage
 
-### Command ###
+### Command
 
-You must prepare a PEG source file (see the following section).
-Let the file name `example.peg` for example.
+You must prepare a PEG source file in advance.
+For details of the PEG source syntax, see the section "Syntax".
+Here, let the file name `example.peg` for example.
 
 ```
 packcc example.peg
@@ -123,7 +125,7 @@ packcc example.peg
 
 By running this, the parser source `example.h` and `example.c` are generated.
 
-If no PEG file name is specified, the PEG source is read from the standard input, and `-.h` and `-.c` are generated.
+If no PEG file name is specified, the PEG source is read from the standard input, and `-.h` and `-.c` will be generated.
 
 The base name of the parser source files can be changed by `-o` option.
 
@@ -132,6 +134,19 @@ packcc -o parser example.peg
 ```
 
 By running this, the parser source `parser.h` and `parser.c` are generated.
+This option can be specified only once.
+
+A directory to search for import files can be added by `-I` option (version 2.0.0 or later).
+This option can be specified as many times as needed.
+The firstly specified directory will be searched first, the secondly specified directory will be searched next, and so on.
+
+```
+packcc -I foo -I bar/baz example.peg
+```
+
+By running this, the directory `foo` is searched first, and the directory `bar/baz` is searched next.
+The directories specified by this option have higher priority than those specified in the environment variable `PCC_IMPORT_PATH` and the default directories.
+For more details of import, see the explanation of `%import` written in the section "Syntax".
 
 If you want to disable UTF-8 support, specify the command line option `-a` or `--ascii` (version 1.4.0 or later).
 
@@ -144,7 +159,7 @@ If you want to confirm the version of the `packcc` command, execute the below.
 packcc -v
 ```
 
-### Syntax ###
+### Syntax
 
 A grammar consists of a set of named rules.
 A rule definition can be split into multiple lines.
@@ -317,37 +332,37 @@ All matched actions are guaranteed to be executed only once.
 
 In the action, the C source code can use the predefined variables below.
 
-- **`$$`**
+- **`$$`** :
     The output variable, to which the result of the rule is stored.
     The data type is the one specified by `%value`.
     The default data type is `int`.
-- **`auxil`**
+- **`auxil`** :
     The user-defined data that has been given via the API function `pcc_create()`.
     The data type is the one specified by `%auxil`.
     The default data type is `void *`.
-- _variable_
+- _variable_ :
     The result of another rule that has already been evaluated.
     If the rule has not been evaluated, it is ensured that the value is zero-cleared (version 1.7.1 or later).
     The data type is the one specified by `%value`.
     The default data type is `int`.
-- **`$`**_n_
+- **`$`**_n_ :
     The string of the captured text.
     The _n_ is the positive integer that corresponds to the order of capturing.
     The variable `$1` holds the string of the first captured text.
-- **`$`**_n_**`s`**
+- **`$`**_n_**`s`** :
     The start position in the input of the captured text, inclusive.
     The _n_ is the positive integer that corresponds to the order of capturing.
     The variable `$1s` holds the start position of the first captured text.
-- **`$`**_n_**`e`**
+- **`$`**_n_**`e`** :
     The end position in the input of the captured text, exclusive.
     The _n_ is the positive integer that corresponds to the order of capturing.
     The variable `$1e` holds the end position of the first captured text.
-- **`$0`**
+- **`$0`** :
     The string of the text between the start position in the input at which the rule pattern begins to match
     and the current position in the input at which the element immediately before the action ends to match.
-- **`$0s`**
+- **`$0s`** :
     The start position in the input at which the rule pattern begins to match.
-- **`$0e`**
+- **`$0e`** :
     The current position in the input at which the element immediately before the action ends to match.
 
 An example is shown below.
@@ -390,17 +405,20 @@ rule2 <- (e1 e2 e3) ~{ error("one of e[123] has failed"); }
 The specified C source code is copied verbatim to the C header file before the generated parser API function declarations.
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+When `%header` is used multiple times, the respective C source codes are copied in order of their appearance.
 
 **`%source` `{` _c source code_ `}`**
 
 The specified C source code is copied verbatim to the C source file before the generated parser implementation code.
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+When `%source` is used multiple times, the respective C source codes are copied in order of their appearance.
 
 **`%common` `{` _c source code_ `}`**
 
 The specified C source code is copied verbatim to both of the C header file and the C source file
 before the generated parser API function declarations and the implementation code respectively.
+This has the same effect as `%header {` _c source code_ `} %source {` _c source code_ `}`.
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
@@ -419,15 +437,42 @@ This can be useful for example when it is necessary to modify behavior of standa
 
 The type of output data, which is output as `$$` in each action and can be retrieved from the parser API function `pcc_parse()`,
 is changed to the specified one from the default `int`.
+This can be used only once and cannot be used in imported files.
 
 **`%auxil` `"`_user-defined data type_`"`**
 
 The type of user-defined data, which is passed to the parser API function `pcc_create()`,
 is changed to the specified one from the default `void *`.
+This can be used only once and cannot be used in imported files.
 
 **`%prefix` `"`_prefix_`"`**
 
 The prefix of the parser API functions is changed to the specified one from the default `pcc`.
+This can be used only once and cannot be used in imported files.
+
+**`%import` `"`_import file name_`"`**
+
+The content of the specified import file is expanded at the text location of `%import` (version 2.0.0 or later).
+This can be used multiple times anywhere and can be used also in imported files.
+The _import file name_ can be a relative path to the current directory or an absolute path.
+If it is a relative path, the directories listed below are searched for the import file in the listed order.
+
+1. the directory where the file that imports the import file is located
+2. the directories specified with `-I` options
+   - They are prioritized in order of their appearance in the command line.
+3. the directories specified by the environment variable `PCC_IMPORT_PATH`
+   - They are prioritized in order of their appearance in the value of this variable.
+   - The character used as a delimiter between directory names is the colon `':'` if PackCC is built for a Unix-like platform such as Linux, macOS, and MinGW.
+     The character is the semicolon `';'` if PackCC is built as a native Windows executable.
+     (This is exactly the same manner as the environment variable `PATH`.)
+4. the per-user default directory
+   - This is the subdirectory `.packcc/import` in the home directory if PackCC is built for a Unix-like platform,
+     and in the user profile directory, "`C:\Users\`_username_" for example, if PackCC is built as a native Windows executable.
+5. the system-wide default directory
+   - This is the directory `/usr/share/packcc/import` if PackCC is built for a Unix-like platform,
+     and is the subdirectory `packcc/import` in the common application data directory, "`C:\ProgramData`" for example.
+
+Note that the file imported once is silently ignored when it is attempted to be imported again.
 
 **`#`_comment_**
 
@@ -440,7 +485,16 @@ All text following `%%` is copied verbatim to the C source file after the genera
 
 <small>(The specification is determined by referring to [peg/leg](http://piumarta.com/software/peg/) developed by Ian Piumarta.)</small>
 
-### Macros ###
+### Import Files
+
+The following import files are currently bundled.
+
+- [`import/char/ascii_character_group.peg`](import/char/ascii_character_group.peg) :
+    This contains various rules to match an ASCII character belonging to a specific character group.
+- [`import/char/unicode_general_category.peg`](import/char/unicode_general_category.peg) :
+    This contains various rules to match a Unicode character belonging to a specific [general category](https://unicode.org/reports/tr44/#General_Category_Values).
+
+### Macros
 
 Some macros are prepared to customize the parser.
 The macro definition should be in <u>`%source` section</u> in the PEG source.
@@ -560,9 +614,10 @@ For other events, `buffer` and `length` indicate a part of the currently loaded 
 The user-defined data passed to the API function `pcc_create()` can be retrieved from this argument.
 
 There are currently three supported events:
- - `PCC_DBG_EVALUATE` (= 0) - called when the parser starts to evaluate `rule`
- - `PCC_DBG_MATCH` (= 1) - called when `rule` is matched, at which point buffer holds entire matched string
- - `PCC_DBG_NOMATCH` (= 2) - called when the parser determines that the input does not match currently evaluated `rule`
+
+- `PCC_DBG_EVALUATE` (= 0) - called when the parser starts to evaluate `rule`
+- `PCC_DBG_MATCH` (= 1) - called when `rule` is matched, at which point buffer holds entire matched string
+- `PCC_DBG_NOMATCH` (= 2) - called when the parser determines that the input does not match currently evaluated `rule`
 
 A very simple implementation could look like this:
 
@@ -590,7 +645,7 @@ The initial size (the number of elements) of the internal arrays other than the 
 The arrays are expanded as needed.
 The default is `2`.
 
-### API ###
+### API
 
 The parser API has only 3 simple functions below.
 
@@ -653,9 +708,9 @@ while (pcc_parse(ctx, &ret));
 pcc_destroy(ctx);
 ```
 
-## Examples ##
+## Examples
 
-### Desktop calculator ###
+### Desktop calculator
 
 A simple example which provides interactive four arithmetic operations of integers is shown here.
 Note that **left-recursive** grammar rules are defined in this example.
@@ -700,7 +755,7 @@ int main() {
 }
 ```
 
-### AST builder for Tiny-C ###
+### AST builder for Tiny-C
 
 You can find the more practical example in the directory [`examples/ast-tinyc`](examples/ast-tinyc).
 It builds an AST (abstract syntax tree) from an input source file

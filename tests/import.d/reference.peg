@@ -1,0 +1,526 @@
+%header { /* :t_input_HEADER: */ }
+
+%source {
+    /* :t_input_SOURCE: */
+}
+
+%common {
+    /* :t_input_COMMON: */
+}
+
+%earlyheader { /* :t_input_EARLYHEADER: */ }
+
+%earlysource { /* :t_input_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_input_EARLYCOMMON: */
+}
+
+t_input_FILE
+   <- t_input_RULE1
+    {
+        /* :t_input_RULE1: */
+    }
+    / t_input_RULE2
+    { /* :t_input_RULE2: */ }
+    / t_input_RULE3 { /* :t_input_RULE3: */ }
+    / t_imp_0_FILE
+
+t_input_RULE1 <- '1'
+
+%header { /* :t_imp_0_HEADER: */ }
+
+%source {
+    /* :t_imp_0_SOURCE: */
+}
+
+%common {
+    /* :t_imp_0_COMMON: */
+}
+
+%earlyheader { /* :t_imp_0_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_0_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_0_EARLYCOMMON: */
+}
+
+t_imp_0_FILE
+   <- t_imp_0_RULE1
+    {
+        /* :t_imp_0_RULE1: */
+    }
+    / t_imp_0_RULE2
+    { /* :t_imp_0_RULE2: */ }
+    / t_imp_0_RULE3 { /* :t_imp_0_RULE3: */ }
+    / t_imp_1_FILE
+
+t_imp_0_RULE1 <- '1'
+
+%header { /* :t_imp_1_HEADER: */ }
+
+%source {
+    /* :t_imp_1_SOURCE: */
+}
+
+%common {
+    /* :t_imp_1_COMMON: */
+}
+
+%earlyheader { /* :t_imp_1_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_1_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_1_EARLYCOMMON: */
+}
+
+t_imp_1_FILE
+   <- t_imp_1_RULE1
+    {
+        /* :t_imp_1_RULE1: */
+    }
+    / t_imp_1_RULE2
+    { /* :t_imp_1_RULE2: */ }
+    / t_imp_1_RULE3 { /* :t_imp_1_RULE3: */ }
+    / t_imp_2_FILE
+
+t_imp_1_RULE1 <- '1'
+
+t_imp_1_RULE2 <- '2'
+
+t_imp_1_RULE3 <- '3'
+
+%header { /* :t_imp_2_HEADER: */ }
+
+%source {
+    /* :t_imp_2_SOURCE: */
+}
+
+%common {
+    /* :t_imp_2_COMMON: */
+}
+
+%earlyheader { /* :t_imp_2_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_2_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_2_EARLYCOMMON: */
+}
+
+t_imp_2_FILE
+   <- t_imp_2_RULE1
+    {
+        /* :t_imp_2_RULE1: */
+    }
+    / t_imp_2_RULE2
+    { /* :t_imp_2_RULE2: */ }
+    / t_imp_2_RULE3 { /* :t_imp_2_RULE3: */ }
+    / t_imp_3_FILE
+
+t_imp_2_RULE1 <- '1'
+
+%header { /* :t_imp_3_HEADER: */ }
+
+%source {
+    /* :t_imp_3_SOURCE: */
+}
+
+%common {
+    /* :t_imp_3_COMMON: */
+}
+
+%earlyheader { /* :t_imp_3_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_3_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_3_EARLYCOMMON: */
+}
+
+t_imp_3_FILE
+   <- t_imp_3_RULE1
+    {
+        /* :t_imp_3_RULE1: */
+    }
+    / t_imp_3_RULE2
+    { /* :t_imp_3_RULE2: */ }
+    / t_imp_3_RULE3 { /* :t_imp_3_RULE3: */ }
+    / t_imp_4_FILE
+
+t_imp_3_RULE1 <- '1'
+
+t_imp_3_RULE2 <- '2'
+
+t_imp_3_RULE3 <- '3'
+
+t_imp_2_RULE2 <- '2'
+
+t_imp_2_RULE3 <- '3'
+
+t_imp_0_RULE2 <- '2'
+
+t_imp_0_RULE3 <- '3'
+
+
+t_input_RULE2 <- '2'
+
+t_input_RULE3 <- '3'
+
+%header { /* :t_imp_4_HEADER: */ }
+
+%source {
+    /* :t_imp_4_SOURCE: */
+}
+
+%common {
+    /* :t_imp_4_COMMON: */
+}
+
+%earlyheader { /* :t_imp_4_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_4_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_4_EARLYCOMMON: */
+}
+
+t_imp_4_FILE
+   <- t_imp_4_RULE1
+    {
+        /* :t_imp_4_RULE1: */
+    }
+    / t_imp_4_RULE2
+    { /* :t_imp_4_RULE2: */ }
+    / t_imp_4_RULE3 { /* :t_imp_4_RULE3: */ }
+    / t_imp_5_FILE
+
+t_imp_4_RULE1 <- '1'
+
+%header { /* :t_imp_5_HEADER: */ }
+
+%source {
+    /* :t_imp_5_SOURCE: */
+}
+
+%common {
+    /* :t_imp_5_COMMON: */
+}
+
+%earlyheader { /* :t_imp_5_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_5_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_5_EARLYCOMMON: */
+}
+
+t_imp_5_FILE
+   <- t_imp_5_RULE1
+    {
+        /* :t_imp_5_RULE1: */
+    }
+    / t_imp_5_RULE2
+    { /* :t_imp_5_RULE2: */ }
+    / t_imp_5_RULE3 { /* :t_imp_5_RULE3: */ }
+    / t_imp_6_FILE
+
+%header { /* :t_imp_6_HEADER: */ }
+
+%source {
+    /* :t_imp_6_SOURCE: */
+}
+
+%common {
+    /* :t_imp_6_COMMON: */
+}
+
+%earlyheader { /* :t_imp_6_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_6_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_6_EARLYCOMMON: */
+}
+
+t_imp_6_FILE
+   <- t_imp_6_RULE1
+    {
+        /* :t_imp_6_RULE1: */
+    }
+    / t_imp_6_RULE2
+    { /* :t_imp_6_RULE2: */ }
+    / t_imp_6_RULE3 { /* :t_imp_6_RULE3: */ }
+    / t_imp_7_FILE
+
+t_imp_6_RULE1 <- '1'
+
+t_imp_6_RULE2 <- '2'
+
+t_imp_6_RULE3 <- '3'
+
+t_imp_5_RULE1 <- '1'
+
+%header { /* :t_imp_7_HEADER: */ }
+
+%source {
+    /* :t_imp_7_SOURCE: */
+}
+
+%common {
+    /* :t_imp_7_COMMON: */
+}
+
+%earlyheader { /* :t_imp_7_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_7_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_7_EARLYCOMMON: */
+}
+
+t_imp_7_FILE
+   <- t_imp_7_RULE1
+    {
+        /* :t_imp_7_RULE1: */
+    }
+    / t_imp_7_RULE2
+    { /* :t_imp_7_RULE2: */ }
+    / t_imp_7_RULE3 { /* :t_imp_7_RULE3: */ }
+    / t_imp_8_FILE
+
+%header { /* :t_imp_8_HEADER: */ }
+
+%source {
+    /* :t_imp_8_SOURCE: */
+}
+
+%common {
+    /* :t_imp_8_COMMON: */
+}
+
+%earlyheader { /* :t_imp_8_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_8_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_8_EARLYCOMMON: */
+}
+
+t_imp_8_FILE
+   <- t_imp_8_RULE1
+    {
+        /* :t_imp_8_RULE1: */
+    }
+    / t_imp_8_RULE2
+    { /* :t_imp_8_RULE2: */ }
+    / t_imp_8_RULE3 { /* :t_imp_8_RULE3: */ }
+    / t_imp_9_FILE
+
+t_imp_8_RULE1 <- '1'
+
+%header { /* :t_imp_9_HEADER: */ }
+
+%source {
+    /* :t_imp_9_SOURCE: */
+}
+
+%common {
+    /* :t_imp_9_COMMON: */
+}
+
+%earlyheader { /* :t_imp_9_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_9_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_9_EARLYCOMMON: */
+}
+
+t_imp_9_FILE
+   <- t_imp_9_RULE1
+    {
+        /* :t_imp_9_RULE1: */
+    }
+    / t_imp_9_RULE2
+    { /* :t_imp_9_RULE2: */ }
+    / t_imp_9_RULE3 { /* :t_imp_9_RULE3: */ }
+    / t_imp_a_FILE
+
+t_imp_9_RULE1 <- '1'
+
+t_imp_9_RULE2 <- '2'
+
+t_imp_9_RULE3 <- '3'
+
+t_imp_8_RULE2 <- '2'
+
+t_imp_8_RULE3 <- '3'
+
+t_imp_7_RULE1 <- '1'
+
+%header { /* :t_imp_a_HEADER: */ }
+
+%source {
+    /* :t_imp_a_SOURCE: */
+}
+
+%common {
+    /* :t_imp_a_COMMON: */
+}
+
+%earlyheader { /* :t_imp_a_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_a_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_a_EARLYCOMMON: */
+}
+
+t_imp_a_FILE
+   <- t_imp_a_RULE1
+    {
+        /* :t_imp_a_RULE1: */
+    }
+    / t_imp_a_RULE2
+    { /* :t_imp_a_RULE2: */ }
+    / t_imp_a_RULE3 { /* :t_imp_a_RULE3: */ }
+    / t_imp_b_FILE
+
+t_imp_a_RULE1 <- '1'
+
+%header { /* :t_imp_b_HEADER: */ }
+
+%source {
+    /* :t_imp_b_SOURCE: */
+}
+
+%common {
+    /* :t_imp_b_COMMON: */
+}
+
+%earlyheader { /* :t_imp_b_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_b_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_b_EARLYCOMMON: */
+}
+
+t_imp_b_FILE
+   <- t_imp_b_RULE1
+    {
+        /* :t_imp_b_RULE1: */
+    }
+    / t_imp_b_RULE2
+    { /* :t_imp_b_RULE2: */ }
+    / t_imp_b_RULE3 { /* :t_imp_b_RULE3: */ }
+    / t_imp_c_FILE
+
+%header { /* :t_imp_c_HEADER: */ }
+
+%source {
+    /* :t_imp_c_SOURCE: */
+}
+
+%common {
+    /* :t_imp_c_COMMON: */
+}
+
+%earlyheader { /* :t_imp_c_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_c_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_c_EARLYCOMMON: */
+}
+
+t_imp_c_FILE
+   <- t_imp_c_RULE1
+    {
+        /* :t_imp_c_RULE1: */
+    }
+    / t_imp_c_RULE2
+    { /* :t_imp_c_RULE2: */ }
+    / t_imp_c_RULE3 { /* :t_imp_c_RULE3: */ }
+    / t_imp_d_FILE
+
+t_imp_c_RULE1 <- '1'
+
+t_imp_c_RULE2 <- '2'
+
+t_imp_c_RULE3 <- '3'
+
+t_imp_b_RULE1 <- '1'
+
+%header { /* :t_imp_d_HEADER: */ }
+
+%source {
+    /* :t_imp_d_SOURCE: */
+}
+
+%common {
+    /* :t_imp_d_COMMON: */
+}
+
+%earlyheader { /* :t_imp_d_EARLYHEADER: */ }
+
+%earlysource { /* :t_imp_d_EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :t_imp_d_EARLYCOMMON: */
+}
+
+t_imp_d_FILE
+   <- t_imp_d_RULE1
+    {
+        /* :t_imp_d_RULE1: */
+    }
+    / t_imp_d_RULE2
+    { /* :t_imp_d_RULE2: */ }
+    / t_imp_d_RULE3 { /* :t_imp_d_RULE3: */ }
+
+t_imp_d_RULE1 <- '1'
+
+t_imp_d_RULE2 <- '2'
+
+t_imp_d_RULE3 <- '3'
+
+t_imp_b_RULE2 <- '2'
+
+t_imp_b_RULE3 <- '3'
+
+t_imp_a_RULE2 <- '2'
+
+t_imp_a_RULE3 <- '3'
+
+t_imp_7_RULE2 <- '2'
+
+t_imp_7_RULE3 <- '3'
+
+t_imp_5_RULE2 <- '2'
+
+t_imp_5_RULE3 <- '3'
+
+t_imp_4_RULE2 <- '2'
+
+t_imp_4_RULE3 <- '3'
+
+%%
+/* :t_imp_3_CODE: */
+/* :t_imp_2_CODE: */
+/* :t_imp_1_CODE: */
+/* :t_imp_0_CODE: */
+/* :t_imp_6_CODE: */
+/* :t_imp_9_CODE: */
+/* :t_imp_8_CODE: */
+/* :t_imp_c_CODE: */
+/* :t_imp_d_CODE: */
+/* :t_imp_b_CODE: */
+/* :t_imp_a_CODE: */
+/* :t_imp_7_CODE: */
+/* :t_imp_5_CODE: */
+/* :t_imp_4_CODE: */
+/* :t_input_CODE: */

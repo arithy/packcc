@@ -41,7 +41,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <limits.h>
+#include <errno.h>
 #include <assert.h>
 
 #ifndef _MSC_VER
@@ -68,10 +68,19 @@ static size_t strnlen_(const char *str, size_t maxlen) {
 #ifdef _WIN32 /* Windows including MSVC and MinGW */
 #include <io.h> /* _get_osfhandle() */
 /* NOTE: The header "fileapi.h" causes a compiler error due to an illegal anonymous union. */
+#define DECLSPEC_IMPORT __declspec(dllimport)
 #define WINAPI __stdcall
+#define S_OK 0
+#define CSIDL_PROFILE 0x0028
+#define CSIDL_COMMON_APPDATA 0x0023
+#define SHGFP_TYPE_DEFAULT 1
+#define MAX_PATH 260
 typedef int BOOL;
 typedef unsigned long DWORD;
+typedef char *LPSTR;
+typedef long HRESULT;
 typedef void *HANDLE;
+typedef void *HWND;
 typedef struct _FILETIME {
     DWORD dwLowDateTime;
     DWORD dwHighDateTime;
@@ -88,7 +97,8 @@ typedef struct _BY_HANDLE_FILE_INFORMATION {
     DWORD nFileIndexHigh;
     DWORD nFileIndexLow;
 } BY_HANDLE_FILE_INFORMATION, *LPBY_HANDLE_FILE_INFORMATION;
-BOOL WINAPI GetFileInformationByHandle(HANDLE hFile, LPBY_HANDLE_FILE_INFORMATION lpFileInformation);
+DECLSPEC_IMPORT BOOL WINAPI GetFileInformationByHandle(HANDLE hFile, LPBY_HANDLE_FILE_INFORMATION lpFileInformation);
+DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hToken, DWORD dwFlags, LPSTR pszPath);
 #else /* !_WIN32 */
 #include <sys/stat.h> /* for fstat() */
 #endif
@@ -99,6 +109,24 @@ BOOL WINAPI GetFileInformationByHandle(HANDLE hFile, LPBY_HANDLE_FILE_INFORMATIO
 
 #undef TRUE  /* to avoid macro definition conflicts with the system header file of IBM AIX */
 #undef FALSE
+
+#ifdef _MSC_VER
+#define IMPORT_DIR_SYSTEM "packcc/import" /* should be a relative path */
+#else
+#define IMPORT_DIR_SYSTEM "/usr/share/packcc/import" /* should be an absolute path */
+#endif
+
+#define IMPORT_DIR_USER ".packcc/import"
+
+#ifdef _WIN32 /* Windows including MSVC and MinGW (MinGW automatically converts paths to those in Windows style) */
+#define PATH_SEP ';'
+#else
+#define PATH_SEP ':'
+#endif
+
+#define ENVVAR_IMPORT_PATH "PCC_IMPORT_PATH"
+
+#define WEBSITE "https://github.com/arithy/packcc"
 
 #define VERSION "2.0.0"
 
@@ -156,6 +184,12 @@ typedef struct char_array_tag {
     size_t max;
     size_t len;
 } char_array_t;
+
+typedef struct string_array_tag {
+    char **buf;
+    size_t max;
+    size_t len;
+} string_array_t;
 
 typedef struct code_block_tag {
     char *text;
@@ -330,6 +364,7 @@ typedef struct context_tag {
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
     char *prefix; /* the prefix of the API function names (NULL means the default) */
+    const string_array_t *dirs; /* the path names of directories to search for import files */
     options_t opts;       /* the options */
     code_flag_t flags;    /* the bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;        /* the current number of PEG parsing errors */
@@ -1157,6 +1192,36 @@ static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, 
     }
 }
 
+static char *get_home_directory(void) {
+#ifdef _MSC_VER
+    char s[MAX_PATH];
+    return (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_DEFAULT, s) == S_OK) ? strdup_e(s) : NULL;
+#else
+    const char *const s = getenv("HOME");
+    return (s && s[0]) ? strdup_e(s) : NULL;
+#endif
+}
+
+#ifdef _MSC_VER
+
+static char *get_appdata_directory(void) {
+    char s[MAX_PATH];
+    return (SHGetFolderPathA(NULL, CSIDL_COMMON_APPDATA, NULL, SHGFP_TYPE_DEFAULT, s) == S_OK) ? strdup_e(s) : NULL;
+}
+
+#endif /* _MSC_VER */
+
+static bool_t is_absolute_path(const char *path) {
+#ifdef _WIN32
+    return (
+        path[0] == '\\' ||
+        (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':')
+    ) ? TRUE : FALSE;
+#else
+    return (path[0] == '/') ? TRUE : FALSE;
+#endif
+}
+
 static const char *extract_filename(const char *path) {
     size_t i = strlen(path);
     while (i > 0) {
@@ -1168,6 +1233,31 @@ static const char *extract_filename(const char *path) {
 #endif
     }
     return path;
+}
+
+static char *replace_filename(const char *path, const char *name) {
+    const char *const p = extract_filename(path);
+    const size_t m = p - path;
+    const size_t n = strlen(name);
+    char *const s = (char *)malloc_e(m + n + 1);
+    memcpy(s, path, m);
+    memcpy(s + m, name, n + 1);
+    return s;
+}
+
+static char *add_filename(const char *path, const char *name) {
+    const size_t m = strlen(path);
+    const size_t n = strlen(name);
+#ifdef _WIN32
+    const size_t d = (m > 0 && strchr("/\\:", path[m - 1]) == NULL) ? 1 : 0;
+#else
+    const size_t d = (m > 0 && path[m - 1] != '/') ? 1 : 0;
+#endif
+    char *const s = (char *)malloc_e(m + d + n + 1);
+    memcpy(s, path, m);
+    if (d) s[m] = '/';
+    memcpy(s + m + d, name, n + 1);
+    return s;
 }
 
 static const char *extract_fileext(const char *path) {
@@ -1253,7 +1343,7 @@ static bool_t file_id_array__add_if_not_yet(file_id_array_t *array, const file_i
         if (m == 0) m = BUFFER_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
-        array->buf = (file_id_t *)realloc_e(array->buf, m);
+        array->buf = (file_id_t *)realloc_e(array->buf, sizeof(file_id_t) * m);
         array->max = m;
     }
     array->buf[array->len++] = *id;
@@ -1284,6 +1374,31 @@ static void char_array__add(char_array_t *array, char ch) {
 }
 
 static void char_array__term(char_array_t *array) {
+    free(array->buf);
+}
+
+static void string_array__init(string_array_t *array) {
+    array->len = 0;
+    array->max = 0;
+    array->buf = NULL;
+}
+
+static void string_array__add(string_array_t *array, const char *str, size_t len) {
+    if (array->max <= array->len) {
+        const size_t n = array->len + 1;
+        size_t m = array->max;
+        if (m == 0) m = BUFFER_MIN_SIZE;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n; /* in case of shift overflow */
+        array->buf = (char **)realloc_e(array->buf, sizeof(char *) * m);
+        array->max = m;
+    }
+    array->buf[array->len++] = (len == VOID_VALUE) ? strdup_e(str) : strndup_e(str, len);
+}
+
+static void string_array__term(string_array_t *array) {
+    size_t i;
+    for (i = 0; i < array->len; i++) free(array->buf[i]);
     free(array->buf);
 }
 
@@ -1422,14 +1537,15 @@ static bool_t is_in_imported_input(const input_state_t *input) {
     return input->parent ? TRUE : FALSE;
 }
 
-static context_t *create_context(const char *ipath, const char *opath, const options_t *opts) {
+static context_t *create_context(const char *ipath, const char *opath, const string_array_t *dirs, const options_t *opts) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
     ctx->spath = (opath && opath[0]) ? add_fileext(opath, "c") : replace_fileext((ipath && ipath[0]) ? ipath : "-", "c");
     ctx->hpath = (opath && opath[0]) ? add_fileext(opath, "h") : replace_fileext((ipath && ipath[0]) ? ipath : "-", "h");
-    ctx->hid = strdup_e(ctx->hpath); make_header_identifier(ctx->hid);
+    ctx->hid = strdup_e(extract_filename(ctx->hpath)); make_header_identifier(ctx->hid);
     ctx->vtype = NULL;
     ctx->atype = NULL;
     ctx->prefix = NULL;
+    ctx->dirs = dirs;
     ctx->opts = *opts;
     ctx->flags = CODE_FLAG__NONE;
     ctx->errnum = 0;
@@ -2893,13 +3009,79 @@ static void parse_file_(context_t *ctx) {
         bool_t b = TRUE;
         match_spaces(ctx->input);
         for (;;) {
+            char *s = NULL;
             size_t l, m, n, o;
             if (match_eof(ctx->input) || parse_footer_(ctx->input, &ctx->fsource)) break;
             l = ctx->input->linenum;
             m = column_number(ctx->input);
             n = ctx->input->charnum;
             o = ctx->input->linepos;
-            if (
+            if (parse_directive_string_(ctx->input, "%import", &s, STRING_FLAG__NOTEMPTY)) {
+                if (s) {
+                    if (is_absolute_path(s)) {
+                        FILE *const file = fopen(s, "rb");
+                        if (file) {
+                            ctx->input = create_input_state(s, file, ctx->input, &ctx->opts);
+                            parse_file_(ctx);
+                            ctx->input = destroy_input_state(ctx->input);
+                        }
+                        else {
+                            if (errno != ENOENT) {
+                                print_error(
+                                    "%s:" FMT_LU ":" FMT_LU ": Cannot open file to read: %s\n",
+                                    ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                                    s
+                                );
+                            }
+                            else {
+                                print_error(
+                                    "%s:" FMT_LU ":" FMT_LU ": File not found: %s\n",
+                                    ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                                    s
+                                );
+                            }
+                            ctx->input->errnum++;
+                        }
+                    }
+                    else {
+                        size_t i = 0;
+                        char *path = replace_filename(ctx->input->path, s);
+                        FILE *file = fopen(path, "rb");
+                        while (file == NULL) {
+                            if (errno != ENOENT) {
+                                print_error(
+                                    "%s:" FMT_LU ":" FMT_LU ": Cannot open file to read: %s\n",
+                                    ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                                    path
+                                );
+                                ctx->input->errnum++;
+                                break;
+                            }
+                            if (i >= ctx->dirs->len) {
+                                print_error(
+                                    "%s:" FMT_LU ":" FMT_LU ": File not found: %s\n",
+                                    ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                                    s
+                                );
+                                ctx->input->errnum++;
+                                break;
+                            }
+                            free(path);
+                            path = add_filename(ctx->dirs->buf[i++], s);
+                            file = fopen(path, "rb");
+                        }
+                        if (file) {
+                            ctx->input = create_input_state(path, file, ctx->input, &ctx->opts);
+                            parse_file_(ctx);
+                            ctx->input = destroy_input_state(ctx->input);
+                        }
+                        free(path);
+                    }
+                    free(s);
+                }
+                b = TRUE;
+            }
+            else if (
                 parse_directive_block_(ctx->input, "%earlysource", &ctx->esource, NULL) ||
                 parse_directive_block_(ctx->input, "%earlyheader", &ctx->eheader, NULL) ||
                 parse_directive_block_(ctx->input, "%earlycommon", &ctx->esource, &ctx->eheader) ||
@@ -5319,28 +5501,32 @@ static bool_t generate(context_t *ctx) {
 
 static void print_version(FILE *output) {
     fprintf(output, "%s version %s\n", g_cmdname, VERSION);
-    fprintf(output, "Copyright (c) 2014, 2019-2022 Arihiro Yoshida. All rights reserved.\n");
+    fprintf(output, "Copyright (c) 2014, 2019-2024 Arihiro Yoshida. All rights reserved.\n");
 }
 
 static void print_usage(FILE *output) {
     fprintf(output, "Usage: %s [OPTIONS] [FILE]\n", g_cmdname);
     fprintf(output, "Generates a packrat parser for C.\n");
     fprintf(output, "\n");
-    fprintf(output, "  -o BASENAME    specify a base name of output source and header files\n");
+    fprintf(output, "Options:\n");
+    fprintf(output, "  -o BASENAME    specify a base name of output source and header files;\n");
+    fprintf(output, "                   can be used only once\n");
+    fprintf(output, "  -I DIRNAME     specify a directory name to search for import files;\n");
+    fprintf(output, "                   can be used as many times as needed to add directories\n");
     fprintf(output, "  -a, --ascii    disable UTF-8 support\n");
     fprintf(output, "  -l, --lines    add #line directives\n");
     fprintf(output, "  -d, --debug    with debug information\n");
     fprintf(output, "  -h, --help     print this help message and exit\n");
     fprintf(output, "  -v, --version  print the version and exit\n");
+    fprintf(output, "\n");
+    fprintf(output, "Environment Variable:\n");
+    fprintf(output, "  %s\n", ENVVAR_IMPORT_PATH);
+    fprintf(output, "      specify directory names to search for import files, delimited by '%c'\n", PATH_SEP);
+    fprintf(output, "\n");
+    fprintf(output, "Full documentation at: <%s>\n", WEBSITE);
 }
 
 int main(int argc, char **argv) {
-    const char *ipath = NULL;
-    const char *opath = NULL;
-    options_t opts;
-    opts.ascii = FALSE;
-    opts.lines = FALSE;
-    opts.debug = FALSE;
 #ifdef _MSC_VER
 #ifdef _DEBUG
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -5350,88 +5536,148 @@ int main(int argc, char **argv) {
 #endif
     g_cmdname = extract_filename(argv[0]);
     {
-        const char *path = NULL;
-        const char *opt_o = NULL;
-        bool_t opt_a = FALSE;
-        bool_t opt_l = FALSE;
-        bool_t opt_d = FALSE;
-        bool_t opt_h = FALSE;
-        bool_t opt_v = FALSE;
-        int i;
-        for (i = 1; i < argc; i++) {
-            if (argv[i][0] != '-') {
+        const char *ipath = NULL;
+        const char *opath = NULL;
+        options_t opts = { 0 };
+        string_array_t dirs;
+        string_array__init(&dirs);
+        opts.ascii = FALSE;
+        opts.lines = FALSE;
+        opts.debug = FALSE;
+        {
+            const char *path = NULL;
+            const char *opt_o = NULL;
+            bool_t opt_a = FALSE;
+            bool_t opt_l = FALSE;
+            bool_t opt_d = FALSE;
+            bool_t opt_h = FALSE;
+            bool_t opt_v = FALSE;
+            int i;
+            for (i = 1; i < argc; i++) {
+                if (argv[i][0] != '-') {
+                    break;
+                }
+                else if (strcmp(argv[i], "--") == 0) {
+                    i++; break;
+                }
+                else if (argv[i][1] == 'I') {
+                    const char *const v = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
+                    if (v == NULL || v[0] == '\0') {
+                        print_error("Import directory name missing\n");
+                        fprintf(stderr, "\n");
+                        print_usage(stderr);
+                        exit(1);
+                    }
+                    string_array__add(&dirs, v, VOID_VALUE);
+                }
+                else if (argv[i][1] == 'o') {
+                    const char *const v = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
+                    if (v == NULL || v[0] == '\0') {
+                        print_error("Output base name missing\n");
+                        fprintf(stderr, "\n");
+                        print_usage(stderr);
+                        exit(1);
+                    }
+                    if (opt_o != NULL) {
+                        print_error("Extra output base name: '%s'\n", v);
+                        fprintf(stderr, "\n");
+                        print_usage(stderr);
+                        exit(1);
+                    }
+                    opt_o = v;
+                }
+                else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--ascii") == 0) {
+                    opt_a = TRUE;
+                }
+                else if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--lines") == 0) {
+                    opt_l = TRUE;
+                }
+                else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+                    opt_d = TRUE;
+                }
+                else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+                    opt_h = TRUE;
+                }
+                else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+                    opt_v = TRUE;
+                }
+                else {
+                    print_error("Invalid option: '%s'\n", argv[i]);
+                    fprintf(stderr, "\n");
+                    print_usage(stderr);
+                    exit(1);
+                }
+            }
+            switch (argc - i) {
+            case 0:
                 break;
-            }
-            else if (strcmp(argv[i], "--") == 0) {
-                i++; break;
-            }
-            else if (argv[i][1] == 'o') {
-                const char *const o = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
-                if (o == NULL) {
-                    print_error("Output base name missing\n");
-                    fprintf(stderr, "\n");
-                    print_usage(stderr);
-                    exit(1);
-                }
-                if (opt_o != NULL) {
-                    print_error("Extra output base name: '%s'\n", o);
-                    fprintf(stderr, "\n");
-                    print_usage(stderr);
-                    exit(1);
-                }
-                opt_o = o;
-            }
-            else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--ascii") == 0) {
-                opt_a = TRUE;
-            }
-            else if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--lines") == 0) {
-                opt_l = TRUE;
-            }
-            else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
-                opt_d = TRUE;
-            }
-            else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-                opt_h = TRUE;
-            }
-            else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
-                opt_v = TRUE;
-            }
-            else {
-                print_error("Invalid option: '%s'\n", argv[i]);
+            case 1:
+                path = argv[i];
+                break;
+            default:
+                print_error("Extra input file: '%s'\n", argv[i + 1]);
                 fprintf(stderr, "\n");
                 print_usage(stderr);
                 exit(1);
             }
+            if (opt_h || opt_v) {
+                if (opt_v) print_version(stdout);
+                if (opt_v && opt_h) fprintf(stdout, "\n");
+                if (opt_h) print_usage(stdout);
+                exit(0);
+            }
+            ipath = (path && path[0]) ? path : NULL;
+            opath = (opt_o && opt_o[0]) ? opt_o : NULL;
+            opts.ascii = opt_a;
+            opts.lines = opt_l;
+            opts.debug = opt_d;
         }
-        switch (argc - i) {
-        case 0:
-            break;
-        case 1:
-            path = argv[i];
-            break;
-        default:
-            print_error("Extra input file: '%s'\n", argv[i + 1]);
-            fprintf(stderr, "\n");
-            print_usage(stderr);
-            exit(1);
+        {
+            const char *const v = getenv(ENVVAR_IMPORT_PATH);
+            if (v) {
+                size_t i = 0, h = 0;
+                for (;;) {
+                    if (v[i] == '\0') {
+                        if (i > h) string_array__add(&dirs, v + h, i - h);
+                        break;
+                    }
+                    else if (v[i] == PATH_SEP) {
+                        if (i > h) string_array__add(&dirs, v + h, i - h);
+                        h = i + 1;
+                    }
+                    i++;
+                }
+            }
         }
-        if (opt_h || opt_v) {
-            if (opt_v) print_version(stdout);
-            if (opt_v && opt_h) fprintf(stdout, "\n");
-            if (opt_h) print_usage(stdout);
-            exit(0);
+        {
+            char *const s = get_home_directory();
+            if (s) {
+                char *const t = add_filename(s, IMPORT_DIR_USER);
+                string_array__add(&dirs, t, VOID_VALUE);
+                free(t);
+                free(s);
+            }
         }
-        ipath = (path && path[0]) ? path : NULL;
-        opath = (opt_o && opt_o[0]) ? opt_o : NULL;
-        opts.ascii = opt_a;
-        opts.lines = opt_l;
-        opts.debug = opt_d;
-    }
-    {
-        context_t *const ctx = create_context(ipath, opath, &opts);
-        const int b = parse(ctx) && generate(ctx);
-        destroy_context(ctx);
-        if (!b) exit(10);
+        {
+#ifdef _MSC_VER
+            char *const s = get_appdata_directory();
+            if (s) {
+                char *const t = add_filename(s, IMPORT_DIR_SYSTEM);
+                string_array__add(&dirs, t, VOID_VALUE);
+                free(t);
+                free(s);
+            }
+#else
+            string_array__add(&dirs, IMPORT_DIR_SYSTEM, VOID_VALUE);
+#endif
+        }
+        {
+            context_t *const ctx = create_context(ipath, opath, &dirs, &opts);
+            const int b = parse(ctx) && generate(ctx);
+            destroy_context(ctx);
+            if (!b) exit(10);
+        }
+        string_array__term(&dirs);
     }
     return 0;
 }

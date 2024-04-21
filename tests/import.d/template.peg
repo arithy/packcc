@@ -1,0 +1,37 @@
+%header { /* :${ID}HEADER: */ }
+
+%source {
+    /* :${ID}SOURCE: */
+}
+
+%common {
+    /* :${ID}COMMON: */
+}
+
+%earlyheader { /* :${ID}EARLYHEADER: */ }
+
+%earlysource { /* :${ID}EARLYSOURCE: */ }
+
+%earlycommon {
+    /* :${ID}EARLYCOMMON: */
+}
+
+${ID}FILE
+   <- ${ID}RULE1
+    {
+        /* :${ID}RULE1: */
+    }
+    / ${ID}RULE2
+    { /* :${ID}RULE2: */ }
+    / ${ID}RULE3 { /* :${ID}RULE3: */ }
+${MORE}
+${IMPORT_0}
+${ID}RULE1 <- '1'
+${IMPORT_1}
+${ID}RULE2 <- '2'
+${IMPORT_2}
+${ID}RULE3 <- '3'
+${IMPORT_3}
+
+%%
+/* :${ID}CODE: */
