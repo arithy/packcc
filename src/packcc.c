@@ -3898,9 +3898,9 @@ static bool_t generate(context_t *ctx) {
                     &hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0,
                     ctx->eheader.buf[i].fpos.path, ctx->eheader.buf[i].fpos.line
                 );
+                stream__puts(&hstream, "\n");
             }
         }
-        if (ctx->eheader.len > 0) stream__puts(&hstream, "\n");
         stream__printf(
             &hstream,
             "#ifndef PCC_INCLUDED_%s\n"
@@ -3915,6 +3915,7 @@ static bool_t generate(context_t *ctx) {
                     &hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0,
                     ctx->header.buf[i].fpos.path, ctx->header.buf[i].fpos.line
                 );
+                stream__puts(&hstream, "\n");
             }
         }
     }
@@ -3926,9 +3927,9 @@ static bool_t generate(context_t *ctx) {
                     &sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0,
                     ctx->esource.buf[i].fpos.path, ctx->esource.buf[i].fpos.line
                 );
+                stream__puts(&sstream, "\n");
             }
         }
-        if (ctx->esource.len > 0) stream__puts(&sstream, "\n");
         stream__puts(
             &sstream,
             "#ifdef _MSC_VER\n"
@@ -3967,6 +3968,7 @@ static bool_t generate(context_t *ctx) {
                     ctx->source.buf[i].fpos.path, ctx->source.buf[i].fpos.line
                 );
             }
+            stream__puts(&sstream, "\n");
         }
     }
     {
