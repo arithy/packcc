@@ -45,10 +45,10 @@ $(BINDIR_R)/examples/%: $(TMPDIR_R)/examples/%.c $(TMPDIR_R)/examples/%.h
 	mkdir -p $(dir $@) && $(CC) $(CFLAGS_R) -I. -o $@ $< $(LDFLAGS_R)
 
 $(TMPDIR_D)/examples/%.c $(TMPDIR_D)/examples/%.h: $(EXDIR)/%.peg $(BINDIR_D)/packcc
-	mkdir -p $(dir $@) && $(BINDIR_D)/packcc -o $(basename $@) $<
+	mkdir -p $(dir $@) && $(BINDIR_D)/packcc -I$(ROOTDIR)/import -o $(basename $@) $<
 
 $(TMPDIR_R)/examples/%.c $(TMPDIR_R)/examples/%.h: $(EXDIR)/%.peg $(BINDIR_R)/packcc
-	mkdir -p $(dir $@) && $(BINDIR_R)/packcc -o $(basename $@) $<
+	mkdir -p $(dir $@) && $(BINDIR_R)/packcc -I$(ROOTDIR)/import -o $(basename $@) $<
 
 check: $(BINDIR_D)/packcc $(BINDIR_R)/packcc
 	@echo "== Debug Version =="   && PACKCC=$$PWD/$(BINDIR_D)/packcc CC="$(CC) $(CFLAGS_D)" $(TESTDIR)/test.sh
