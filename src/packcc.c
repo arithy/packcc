@@ -128,7 +128,7 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 
 #define WEBSITE "https://github.com/arithy/packcc"
 
-#define VERSION "2.0.1"
+#define VERSION "2.0.2"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -3189,14 +3189,14 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             size_t i;
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "if (\n");
-            stream__write_characters(gen->stream, ' ', indent + 4);
-            stream__printf(gen->stream, "pcc_refill_buffer(ctx, " FMT_LU ") < " FMT_LU " ||\n", (ulong_t)n, (ulong_t)n);
-            for (i = 0; i < n - 1; i++) {
+            for (i = 0; i < n; i++) {
                 stream__write_characters(gen->stream, ' ', indent + 4);
-                stream__printf(gen->stream, "(ctx->buffer.buf + ctx->cur)[" FMT_LU "] != '%s' ||\n", (ulong_t)i, escape_character(value[i], &s));
+                stream__printf(
+                    gen->stream,
+                    "pcc_refill_buffer(ctx, " FMT_LU ") < " FMT_LU " || (ctx->buffer.buf + ctx->cur)[" FMT_LU "] != '%s'%s\n",
+                    (ulong_t)i + 1, (ulong_t)i + 1, (ulong_t)i, escape_character(value[i], &s), (i < n - 1) ? " ||" : ""
+                );
             }
-            stream__write_characters(gen->stream, ' ', indent + 4);
-            stream__printf(gen->stream, "(ctx->buffer.buf + ctx->cur)[" FMT_LU "] != '%s'\n", (ulong_t)i, escape_character(value[i], &s));
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, ") goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
