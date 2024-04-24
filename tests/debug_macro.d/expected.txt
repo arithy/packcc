@@ -1,5 +1,5 @@
-Evaluating rule TOP @0 []
-  Evaluating rule RULE_A @0 []
+Evaluating rule TOP @0 [A]
+  Evaluating rule RULE_A @0 [A]
   Matched rule RULE_A @0 [Aaa]
   Evaluating rule EOL @3 [
 ]

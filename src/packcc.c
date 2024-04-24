@@ -128,7 +128,7 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 
 #define WEBSITE "https://github.com/arithy/packcc"
 
-#define VERSION "2.0.0"
+#define VERSION "2.0.1"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -5404,6 +5404,10 @@ static bool_t generate(context_t *ctx) {
             get_prefix(ctx), get_prefix(ctx),
             vt, vp ? "" : " "
         );
+        stream__printf(
+            &sstream,
+            "    if (pcc_refill_buffer(ctx, 1) < 1) return 0;\n"
+        );
         if (ctx->rules.len > 0) {
             stream__printf(
                 &sstream,
@@ -5421,7 +5425,7 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "    pcc_thunk_array__revert(ctx->auxil, &ctx->thunks, 0);\n"
-            "    return pcc_refill_buffer(ctx, 1) >= 1;\n"
+            "    return 1;\n"
             "}\n"
             "\n"
         );
