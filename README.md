@@ -505,7 +505,7 @@ For details, see [here](import).
 Some macros are prepared to customize the parser.
 The macro definition should be **in `%source` section** in the PEG source.
 
-```
+```c
 %source {
 #define PCC_GETCHAR(auxil) get_character((auxil)->input)
 #define PCC_BUFFERSIZE 1024

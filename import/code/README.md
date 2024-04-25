@@ -114,6 +114,51 @@ The concrete usage procedure is shown below.
    }
    ```
 
+#### Macros
+
+Some macros are prepared to customize the behavior of memory allocation for AST nodes.
+The macro definition should be **in `%source` section** in the PEG source.
+
+The following macros are available.
+
+**`PCC_AST_MALLOC(`**_mgr_**`,`**_size_**`)`**
+
+The function macro to allocate a memory block.
+The pointer to the instance of `pcc_ast_manager_t` that was passed to the API function `pcc_create()` can be retrieved from the argument _auxil_.
+It can be ignored if the instance does not concern memory allocation.
+The argument _size_ is the number of bytes to allocate.
+This macro must return a pointer to the allocated memory block, or `NULL` if no sufficient memory is available.
+
+The default is defined as `PCC_MALLOC(mgr, size)`, which is used in the generated parser.
+
+**`PCC_AST_REALLOC(`**_mgr_**`,`**_ptr_**`,`**_size_**`)`**
+
+The function macro to reallocate the existing memory block.
+The pointer to the instance of `pcc_ast_manager_t` that was passed to the API function `pcc_create()` can be retrieved from the argument _auxil_.
+It can be ignored if the instance does not concern memory allocation.
+The argument _ptr_ is the pointer to the previously allocated memory block.
+The argument _size_ is the new number of bytes to reallocate.
+This macro must return a pointer to the reallocated memory block, or `NULL` if no sufficient memory is available.
+The contents of the memory block should be left unchanged in any case even if the reallocation fails.
+
+The default is defined as `PCC_REALLOC(mgr, ptr, size)`, which is used in the generated parser.
+
+**`PCC_AST_FREE(`**_mgr_**`,`**_ptr_**`)`**
+
+The function macro to free the existing memory block.
+The pointer to the instance of `pcc_ast_manager_t` that was passed to the API function `pcc_create()` can be retrieved from the argument _auxil_.
+It can be ignored if the instance does not concern memory allocation.
+The argument _ptr_ is the pointer to the previously allocated memory block.
+This macro need not return a value.
+
+The default is defined as `PCC_FREE(mgr, ptr)`, which is used in the generated parser.
+
+**`PCC_AST_NODE_ARRAY_MIN_SIZE`**
+
+The initial size (the number of nods) of the node arrays used in AST nodes.
+The arrays are expanded as needed.
+The default is `4`.
+
 #### Example
 
 An example which builds an AST and dumps it is shown here.
