@@ -498,6 +498,8 @@ The following import files are currently bundled.
   - [`code/pcc_ast.peg`](import/code/pcc_ast.peg) :
     This provides codes to make it easier to build an AST (abstract syntax tree).
 
+For details, see [here](import).
+
 ### Macros
 
 Some macros are prepared to customize the parser.
