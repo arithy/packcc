@@ -489,15 +489,19 @@ All text following `%%` is copied verbatim to the C source file after the genera
 
 The following import files are currently bundled.
 
-- [`import/char/ascii_character_group.peg`](import/char/ascii_character_group.peg) :
-    This contains various rules to match an ASCII character belonging to a specific character group.
-- [`import/char/unicode_general_category.peg`](import/char/unicode_general_category.peg) :
-    This contains various rules to match a Unicode character belonging to a specific [general category](https://unicode.org/reports/tr44/#General_Category_Values).
+- **Character Matching Rules**
+  - [`char/ascii_character_group.peg`](import/char/ascii_character_group.peg) :
+    This provides various rules to match an ASCII character belonging to a specific character group.
+  - [`char/unicode_general_category.peg`](import/char/unicode_general_category.peg) :
+    This provides various rules to match a Unicode character belonging to a specific [general category](https://unicode.org/reports/tr44/#General_Category_Values).
+- **Utility Codes**
+  - [`code/pcc_ast.peg`](import/code/pcc_ast.peg) :
+    This provides codes to make it easier to build an AST (abstract syntax tree).
 
 ### Macros
 
 Some macros are prepared to customize the parser.
-The macro definition should be in <u>`%source` section</u> in the PEG source.
+The macro definition should be **in `%source` section** in the PEG source.
 
 ```
 %source {
@@ -517,7 +521,7 @@ This macro must return a character code as an `int` type, or `-1` if the input e
 
 The default is defined as below.
 
-```C
+```c
 #define PCC_GETCHAR(auxil) getchar()
 ```
 
@@ -531,7 +535,7 @@ It may abort the process (by using `exit()` for example) when a fatal error occu
 
 The default is defined as below.
 
-```C
+```c
 #define PCC_ERROR(auxil) pcc_error()
 static void pcc_error(void) {
     fprintf(stderr, "Syntax error\n");
@@ -549,7 +553,7 @@ This macro must return a pointer to the allocated memory block, or `NULL` if no 
 
 The default is defined as below.
 
-```C
+```c
 #define PCC_MALLOC(auxil, size) pcc_malloc_e(size)
 static void *pcc_malloc_e(size_t size) {
     void *p = malloc(size);
@@ -573,7 +577,7 @@ The contents of the memory block should be left unchanged in any case even if th
 
 The default is defined as below.
 
-```C
+```c
 #define PCC_REALLOC(auxil, ptr, size) pcc_realloc_e(ptr, size)
 static void *pcc_realloc_e(void *ptr, size_t size) {
     void *p = realloc(ptr, size);
@@ -595,7 +599,7 @@ This macro need not return a value.
 
 The default is defined as below.
 
-```C
+```c
 #define PCC_FREE(auxil, ptr) free(ptr)
 ```
 
@@ -621,7 +625,7 @@ There are currently three supported events:
 
 A very simple implementation could look like this:
 
-```C
+```c
 static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning rule" };
 #define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) \
     fprintf(stderr, "%*s%s %s @%zu [%.*s]\n", (int)((level) * 2), "", dbg_str[event], rule, pos, (int)(length), buffer)
@@ -629,7 +633,7 @@ static const char *dbg_str[] = { "Evaluating rule", "Matched rule", "Abandoning 
 
 The default is to do nothing:
 
-```C
+```c
 #define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) ((void)0)
 ```
 
@@ -649,7 +653,7 @@ The default is `2`.
 
 The parser API has only 3 simple functions below.
 
-```C
+```c
 pcc_context_t *pcc_create(void *auxil);
 ```
 
@@ -658,7 +662,7 @@ This context needs to be passed to the functions below.
 The `auxil` can be used to pass user-defined data to be bound to the context.
 `NULL` can be specified if no user-defined data.
 
-```C
+```c
 int pcc_parse(pcc_context_t *ctx, int *ret);
 ```
 
@@ -666,7 +670,7 @@ Parses an input text (from standard input by default) and returns the result in 
 The `ret` can be `NULL` if no output data is needed.
 This function returns `0` if no text is left to be parsed, or a nonzero value otherwise.
 
-```C
+```c
 void pcc_destroy(pcc_context_t *ctx);
 ```
 
@@ -687,21 +691,21 @@ The default is `pcc`.
 
 After the above settings, the API functions change like below.
 
-```C
+```c
 foo_context_t *foo_create(long auxil);
 ```
 
-```C
+```c
 int foo_parse(foo_context_t *ctx, char **ret);
 ```
 
-```C
+```c
 void foo_destroy(foo_context_t *ctx);
 ```
 
 The typical usage of the API functions is shown below.
 
-```C
+```c
 int ret;
 pcc_context_t *ctx = pcc_create(NULL);
 while (pcc_parse(ctx, &ret));
@@ -710,12 +714,12 @@ pcc_destroy(ctx);
 
 ## Examples
 
-### Desktop calculator
+### Desktop Calculator
 
 A simple example which provides interactive four arithmetic operations of integers is shown here.
 Note that **left-recursive** grammar rules are defined in this example.
 
-```
+```c
 %prefix "calc"
 
 %source {
@@ -755,8 +759,172 @@ int main() {
 }
 ```
 
-### AST builder for Tiny-C
+An execution example is as follows.
+
+```
+$ ./calc↵
+1+2*(3+4*(5+6))↵
+answer=95
+5*6*7*8/(1*2*3*4)↵
+answer=70
+```
+
+### Simple AST builder
+
+An example which builds an AST (abstract syntax tree) and dumps it is shown here.
+This example accepts the same inputs as *Desktop Calculator* shown above.
+
+```c
+%prefix "calc"
+
+%value "pcc_ast_node_t *"    # <-- must be set
+
+%auxil "pcc_ast_manager_t *" # <-- must be set
+
+%header {
+#define PCC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
+
+typedef struct text_data_tag { /* <-- node custom data type */
+    char *text;
+} pcc_ast_node_custom_data_t;
+}
+
+%source {
+#include <stdio.h>
+#include <string.h>
+}
+
+statement <- _ e:expression _ EOL { $$ = e; }
+           / ( !EOL . )* EOL      { $$ = NULL; }
+
+expression <- e:term { $$ = e; }
+
+term <- l:term _ '+' _ r:factor { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("+"); }
+      / l:term _ '-' _ r:factor { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("-"); }
+      / e:factor                { $$ = e; }
+
+factor <- l:factor _ '*' _ r:unary { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("*"); }
+        / l:factor _ '/' _ r:unary { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("/"); }
+        / e:unary                  { $$ = e; }
+
+unary <- '+' _ e:unary { $$ = pcc_ast_node__create_1(e); $$->custom.text = strdup("+"); }
+       / '-' _ e:unary { $$ = pcc_ast_node__create_1(e); $$->custom.text = strdup("-"); }
+       / e:primary     { $$ = e; }
+
+primary <- < [0-9]+ >               { $$ = pcc_ast_node__create_0(); $$->custom.text = strdup($1); }
+         / '(' _ e:expression _ ')' { $$ = e; }
+
+_      <- [ \t]*
+EOL    <- '\n' / '\r\n' / '\r' / ';'
+
+%import "code/pcc_ast.peg"   # <-- provides AST build functions
+
+%%
+void pcc_ast_node_custom_data__initialize(pcc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
+    obj->text = NULL;
+}
+
+void pcc_ast_node_custom_data__finalize(pcc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
+    free(obj->text);
+}
+
+static void dump_ast(const pcc_ast_node_t *obj, int depth) {
+    if (obj) {
+        switch (obj->type) {
+        case PCC_AST_NODE_TYPE_NULLARY:
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "nullary", obj->custom.text);
+            break;
+        case PCC_AST_NODE_TYPE_UNARY:
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "unary", obj->custom.text);
+            dump_ast(obj->data.unary.node, depth + 1);
+            break;
+        case PCC_AST_NODE_TYPE_BINARY:
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "binary", obj->custom.text);
+            dump_ast(obj->data.binary.node[0], depth + 1);
+            dump_ast(obj->data.binary.node[1], depth + 1);
+            break;
+        case PCC_AST_NODE_TYPE_TERNARY:
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "ternary", obj->custom.text);
+            dump_ast(obj->data.ternary.node[0], depth + 1);
+            dump_ast(obj->data.ternary.node[1], depth + 1);
+            dump_ast(obj->data.ternary.node[2], depth + 1);
+            break;
+        case PCC_AST_NODE_TYPE_VARIADIC:
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "variadic", obj->custom.text);
+            {
+                size_t i;
+                for (i = 0; i < obj->data.variadic.len; i++) {
+                    dump_ast(obj->data.variadic.node[i], depth + 1);
+                }
+            }
+            break;
+        default:
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "(unknown)", obj->custom.text);
+            break;
+        }
+    }
+    else {
+        printf("%*s(null)\n", 2 * depth, "");
+    }
+}
+
+int main(int argc, char **argv) {
+    pcc_ast_manager_t mgr;
+    pcc_ast_manager__initialize(&mgr);
+    {
+        calc_context_t *ctx = calc_create(&mgr);
+        pcc_ast_node_t *ast = NULL;
+        while (calc_parse(ctx, &ast)) {
+            dump_ast(ast, 0);
+            pcc_ast_node__destroy(ast);
+        }
+        calc_destroy(ctx);
+    }
+    pcc_ast_manager__finalize(&mgr);
+    return 0;
+}
+```
+
+The key point is the line `%import "code/pcc_ast.peg"`.
+The import file [`code/pcc_ast.peg`](import/code) makes it easier to build ASTs.
+For more details, see [here](import/code/README.md).
+
+An execution example is as follows.
+
+```
+$ ./ast-calc↵
+1+2*(3+4*(5+6))↵
+binary: "+"
+  nullary: "1"
+  binary: "*"
+    nullary: "2"
+    binary: "+"
+      nullary: "3"
+      binary: "*"
+        nullary: "4"
+        binary: "+"
+          nullary: "5"
+          nullary: "6"
+5*6*7*8/(1*2*3*4)↵
+binary: "/"
+  binary: "*"
+    binary: "*"
+      binary: "*"
+        nullary: "5"
+        nullary: "6"
+      nullary: "7"
+    nullary: "8"
+  binary: "*"
+    binary: "*"
+      binary: "*"
+        nullary: "1"
+        nullary: "2"
+      nullary: "3"
+    nullary: "4"
+```
+
+### AST Builder for Tiny-C
 
 You can find the more practical example in the directory [`examples/ast-tinyc`](examples/ast-tinyc).
-It builds an AST (abstract syntax tree) from an input source file
-written in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) and dump the AST.
+It builds an AST from an input source file
+written in [Tiny-C](http://www.iro.umontreal.ca/~felipe/IFT2030-Automne2002/Complements/tinyc.c) and dumps the AST.
