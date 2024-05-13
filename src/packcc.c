@@ -128,7 +128,7 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 
 #define WEBSITE "https://github.com/arithy/packcc"
 
-#define VERSION "2.0.2"
+#define VERSION "2.0.3"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -3145,7 +3145,8 @@ static bool_t parse(context_t *ctx) {
             link_references(ctx, rule->expr);
         }
     }
-    mark_rules_if_used(ctx, ctx->rules.buf[0]);
+    if (ctx->rules.len > 0)
+        mark_rules_if_used(ctx, ctx->rules.buf[0]);
     {
         size_t i;
         for (i = 0; i < ctx->rules.len; i++) {
