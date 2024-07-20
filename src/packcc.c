@@ -128,7 +128,7 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 
 #define WEBSITE "https://github.com/arithy/packcc"
 
-#define VERSION "2.0.3"
+#define VERSION "2.1.0"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -3961,6 +3961,24 @@ static bool_t generate(context_t *ctx) {
             "\n",
             extract_filename(ctx->hpath)
         );
+        if (ctx->opts.ascii || ctx->opts.lines) {
+            if (ctx->opts.ascii) {
+                stream__puts(
+                    &sstream,
+                    "#define PCC_OPTION_ASCII_ENABLED\n"
+                );
+            }
+            if (ctx->opts.lines) {
+                stream__puts(
+                    &sstream,
+                    "#define PCC_OPTION_LINES_ENABLED\n"
+                );
+            }
+            stream__puts(
+                &sstream,
+                "\n"
+            );
+        }
         {
             size_t i;
             for (i = 0; i < ctx->source.len; i++) {
