@@ -1,0 +1,134 @@
+%header {
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}
+}
+
+%source {
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}
+}
+
+%common {
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}
+}
+
+%earlyheader {
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}
+}
+
+%earlysource {
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}
+}
+
+%earlycommon {
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}
+}
+
+%value "double"
+
+%auxil "long"
+
+%prefix "foo1"
+
+FILE
+   <- '_'
+    {
+        $$.
+        $$$
+        $$0
+        $0.
+        $0$
+        $01
+        $0s.
+        $0s$
+        $0s1
+        $01s
+        $0e.
+        $0e$
+        $0e1
+        $01e
+        $123.
+        $123$
+        $123_
+        $123s.
+        $123s$
+        $123s_
+        $123e.
+        $123e$
+        $123e_
+        ${prefix}
+        ${PREFIX}
+        ${bar}
+    }
+    / '$'  {$$}
+    / '0'  {$0}
+    / '0s' {$0s}
+    / '0e' {$0e}
+    / '123'  {$123}
+    / '123s' {$123s}
+    / '123e' {$123e}
+
+%%
+
+$$
+$0
+$0s
+$0e
+$123
+$123s
+$123e
+${prefix}
+${PREFIX}
+${bar}

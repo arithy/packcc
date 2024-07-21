@@ -137,6 +137,8 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 #define ARRAY_MIN_SIZE 2
 #endif
 
+#define SUBST_MARKER '$'
+
 #define VOID_VALUE (~(size_t)0)
 
 #ifdef _WIN64 /* 64-bit Windows including MSVC and MinGW-w64 */
@@ -340,6 +342,17 @@ typedef enum code_flag_tag {
     CODE_FLAG__UTF8_CHARCLASS_USED = 1
 } code_flag_t;
 
+typedef struct subst_entry_tag {
+    char *istr; /* the string to be replaced */
+    char *ostr; /* the string to be used for replacement */
+} subst_entry_t;
+
+typedef struct subst_map_tag {
+    subst_entry_t *buf;
+    size_t max;
+    size_t len;
+} subst_map_t;
+
 typedef struct input_state_tag input_state_t;
 
 struct input_state_tag {
@@ -370,6 +383,7 @@ typedef struct context_tag {
     size_t errnum;        /* the current number of PEG parsing errors */
     input_state_t *input; /* the current input state */
     file_id_array_t done; /* the unique identifiers of the PEG file already parsed or being parsed */
+    subst_map_t subst;    /* the text substitution data */
     node_array_t rules;   /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
     code_block_array_t esource; /* the code blocks from %earlysource and %earlycommon directives to be added into the generated source file */
@@ -483,6 +497,14 @@ static char *strndup_e(const char *str, size_t len) {
     memcpy(s, str, m);
     s[m] = '\0';
     return s;
+}
+
+static char *to_uppercase(char *str) {
+    size_t i;
+    for (i = 0; str[i]; i++) {
+        if (str[i] >= 'a' && str[i] <= 'z') str[i] -= 'a' - 'A';
+    }
+    return str;
 }
 
 static size_t string_to_size_t(const char *str) {
@@ -1042,13 +1064,65 @@ static void stream__write_characters(stream_t *stream, char ch, size_t len) {
     for (i = 0; i < len; i++) stream__putc(stream, ch);
 }
 
-static void stream__write_text(stream_t *stream, const char *ptr, size_t len) {
+static bool_t can_character_follow_action_variable_(char ch) {
+    return (
+        ch != SUBST_MARKER && ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
+    ) ? TRUE : FALSE;
+}
+
+static void stream__write_text(stream_t *stream, const char *ptr, size_t len, bool_t isact, const subst_map_t *subst) {
     size_t i;
     if (len == VOID_VALUE) return; /* for safety */
     for (i = 0; i < len; i++) {
         if (ptr[i] == '\r') {
             if (i + 1 < len && ptr[i + 1] == '\n') i++;
             stream__putc(stream, '\n');
+        }
+        else if (ptr[i] == SUBST_MARKER) {
+            bool_t b = FALSE;
+            size_t j = i + 1;
+            if (j < len) {
+                char c = ptr[j++];
+                if (isact && c == SUBST_MARKER) { /* "$$" */
+                    if (j >= len || can_character_follow_action_variable_(ptr[j])) {
+                        stream__putc(stream, '_');
+                        stream__putc(stream, '_');
+                        b = TRUE; i++;
+                    }
+                }
+                else if (isact && c == '0') { /* "$0" */
+                    if (j < len && (ptr[j] == 's' || ptr[j] == 'e')) j++;
+                    if (j >= len || can_character_follow_action_variable_(ptr[j])) {
+                        stream__putc(stream, '_');
+                        while (i + 1 < j) stream__putc(stream, ptr[++i]);
+                        b = TRUE;
+                    }
+                }
+                else if (isact && c >= '1' && c <= '9') { /* "$n" (n: a string to express a natural number) */
+                    while (j < len && ptr[j] >= '0' && ptr[j] <= '9') j++;
+                    if (j < len && (ptr[j] == 's' || ptr[j] == 'e')) j++;
+                    if (j >= len || can_character_follow_action_variable_(ptr[j])) {
+                        stream__putc(stream, '_');
+                        while (i + 1 < j) stream__putc(stream, ptr[++i]);
+                        b = TRUE;
+                    }
+                }
+                else if (subst && c == '{') { /* "${str}" (str: a string to be replaced) */
+                    size_t is;
+                    for (is = 0; is < subst->len; is++) {
+                        const subst_entry_t *const p = &subst->buf[is];
+                        size_t k;
+                        for (k = 0; p->istr[k] && j + k < len && p->istr[k] == ptr[j + k]; k++);
+                        if (!p->istr[k] && j + k < len && ptr[j + k] == '}') {
+                            size_t l;
+                            for (l = 0; p->ostr[l]; l++) stream__putc(stream, p->ostr[l]);
+                            b = TRUE; i = j + k;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!b) stream__putc(stream, '$');
         }
         else {
             stream__putc(stream, ptr[i]);
@@ -1071,7 +1145,9 @@ static void stream__write_line_directive(stream_t *stream, const char *path, siz
     stream__puts(stream, "\"\n");
 }
 
-static void stream__write_code_block(stream_t *stream, const char *ptr, size_t len, size_t indent, const char *path, size_t lineno) {
+static void stream__write_code_block(
+    stream_t *stream, const char *ptr, size_t len, size_t indent, const char *path, size_t lineno, bool_t isact, const subst_map_t *subst
+) {
     bool_t b = FALSE;
     size_t i, j, k;
     if (len == VOID_VALUE) return; /* for safety */
@@ -1089,7 +1165,7 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
             stream__write_line_directive(stream, path, lineno);
         if (ptr[i] != '#')
             stream__write_characters(stream, ' ', indent);
-        stream__write_text(stream, ptr + i, j - i);
+        stream__write_text(stream, ptr + i, j - i, isact, subst);
         stream__putc(stream, '\n');
         b = TRUE;
     }
@@ -1126,7 +1202,7 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
                     assert(l >= m);
                     stream__write_characters(stream, ' ', l - m + indent);
                 }
-                stream__write_text(stream, ptr + i, j - i);
+                stream__write_text(stream, ptr + i, j - i, isact, subst);
                 stream__putc(stream, '\n');
                 b = TRUE;
             }
@@ -1139,7 +1215,7 @@ static void stream__write_code_block(stream_t *stream, const char *ptr, size_t l
         stream__write_line_directive(stream, stream->path, stream->line);
 }
 
-static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, const char *path, size_t lineno) {
+static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, const char *path, size_t lineno, const subst_map_t *subst) {
     bool_t b = FALSE;
     size_t i, j, k;
     if (len == VOID_VALUE) return; /* for safety */
@@ -1155,7 +1231,7 @@ static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, 
     if (i < j) {
         if (stream->line != VOID_VALUE)
             stream__write_line_directive(stream, path, lineno);
-        stream__write_text(stream, ptr + i, j - i);
+        stream__write_text(stream, ptr + i, j - i, FALSE, subst);
         stream__putc(stream, '\n');
         b = TRUE;
     }
@@ -1182,7 +1258,7 @@ static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, 
         for (i = k; i < len; i = h) {
             j = find_first_trailing_space(ptr, i, len, &h);
             if (i < j) {
-                stream__write_text(stream, ptr + i, j - i);
+                stream__write_text(stream, ptr + i, j - i, FALSE, subst);
                 stream__putc(stream, '\n');
             }
             else if (h < len) {
@@ -1505,6 +1581,42 @@ static void node_const_array__term(node_const_array_t *array) {
     free((node_t **)array->buf);
 }
 
+static void subst_map__init(subst_map_t *map) {
+    map->len = 0;
+    map->max = 0;
+    map->buf = NULL;
+}
+
+static void subst_map__add(subst_map_t *map, const char *istr, const char *ostr) {
+    if (map->max <= map->len) {
+        const size_t n = map->len + 1;
+        size_t m = map->max;
+        if (m == 0) m = ARRAY_MIN_SIZE;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n; /* in case of shift overflow */
+        map->buf = (subst_entry_t *)realloc_e(map->buf, sizeof(subst_entry_t) * m);
+        map->max = m;
+    }
+    {
+        subst_entry_t *const p = &map->buf[map->len++];
+        p->istr = strdup_e(istr);
+        p->ostr = strdup_e(ostr);
+    }
+}
+
+static void subst_map__clear(subst_map_t *map) {
+    map->len = 0;
+}
+
+static void subst_map__term(subst_map_t *map) {
+    while (map->len > 0) {
+        subst_entry_t *const p = &map->buf[--map->len];
+        free(p->istr);
+        free(p->ostr);
+    }
+    free(map->buf);
+}
+
 static input_state_t *create_input_state(const char *path, FILE *file, input_state_t *parent, const options_t *opts) {
     input_state_t *const input = (input_state_t *)malloc_e(sizeof(input_state_t));
     input->path = strdup_e((path && path[0]) ? path : "<stdin>");
@@ -1551,6 +1663,7 @@ static context_t *create_context(const char *ipath, const char *opath, const str
     ctx->errnum = 0;
     ctx->input = create_input_state(ipath, NULL, NULL, opts);
     file_id_array__init(&ctx->done);
+    subst_map__init(&ctx->subst);
     node_array__init(&ctx->rules);
     ctx->rulehash.mod = 0;
     ctx->rulehash.max = 0;
@@ -1572,6 +1685,7 @@ static void destroy_context(context_t *ctx) {
     code_block_array__term(&ctx->esource);
     free((node_t **)ctx->rulehash.buf);
     node_array__term(&ctx->rules);
+    subst_map__term(&ctx->subst);
     file_id_array__term(&ctx->done);
     while (ctx->input) ctx->input = destroy_input_state(ctx->input);
     free(ctx->prefix);
@@ -2483,15 +2597,8 @@ static bool_t match_code_block(input_state_t *input) {
                 d--;
                 if (d == 0) break;
             }
-            else {
-                if (!match_eol(input)) {
-                    if (match_character(input, '$')) {
-                        input->buffer.buf[input->bufcur - 1] = '_';
-                    }
-                    else {
-                        match_character_any(input);
-                    }
-                }
+            else if (!match_eol(input)) {
+                match_character_any(input);
             }
         }
         return TRUE;
@@ -3892,12 +3999,18 @@ static bool_t generate(context_t *ctx) {
     stream__printf(&sstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     stream__printf(&hstream, "/* A packrat parser generated by PackCC %s */\n\n", VERSION);
     {
+        subst_map__clear(&ctx->subst);
+        subst_map__add(&ctx->subst, "prefix", get_prefix(ctx));
+        subst_map__add(&ctx->subst, "PREFIX", get_prefix(ctx));
+        to_uppercase(ctx->subst.buf[ctx->subst.len - 1].ostr);
+    }
+    {
         {
             size_t i;
             for (i = 0; i < ctx->eheader.len; i++) {
                 stream__write_code_block(
                     &hstream, ctx->eheader.buf[i].text, ctx->eheader.buf[i].len, 0,
-                    ctx->eheader.buf[i].fpos.path, ctx->eheader.buf[i].fpos.line
+                    ctx->eheader.buf[i].fpos.path, ctx->eheader.buf[i].fpos.line, FALSE, &ctx->subst
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -3914,7 +4027,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->header.len; i++) {
                 stream__write_code_block(
                     &hstream, ctx->header.buf[i].text, ctx->header.buf[i].len, 0,
-                    ctx->header.buf[i].fpos.path, ctx->header.buf[i].fpos.line
+                    ctx->header.buf[i].fpos.path, ctx->header.buf[i].fpos.line, FALSE, &ctx->subst
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -3926,7 +4039,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->esource.len; i++) {
                 stream__write_code_block(
                     &sstream, ctx->esource.buf[i].text, ctx->esource.buf[i].len, 0,
-                    ctx->esource.buf[i].fpos.path, ctx->esource.buf[i].fpos.line
+                    ctx->esource.buf[i].fpos.path, ctx->esource.buf[i].fpos.line, FALSE, &ctx->subst
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -3984,10 +4097,10 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->source.len; i++) {
                 stream__write_code_block(
                     &sstream, ctx->source.buf[i].text, ctx->source.buf[i].len, 0,
-                    ctx->source.buf[i].fpos.path, ctx->source.buf[i].fpos.line
+                    ctx->source.buf[i].fpos.path, ctx->source.buf[i].fpos.line, FALSE, &ctx->subst
                 );
+                stream__puts(&sstream, "\n");
             }
-            stream__puts(&sstream, "\n");
         }
     }
     {
@@ -5276,7 +5389,7 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    stream__write_code_block(&sstream, b->text, b->len, 4, b->fpos.path, b->fpos.line);
+                    stream__write_code_block(&sstream, b->text, b->len, 4, b->fpos.path, b->fpos.line, TRUE, &ctx->subst);
                     k = c->len;
                     while (k > 0) {
                         k--;
@@ -5510,7 +5623,7 @@ static bool_t generate(context_t *ctx) {
             stream__putc(&sstream, '\n');
             stream__write_footer(
                 &sstream, ctx->fsource.buf[i].text, ctx->fsource.buf[i].len,
-                ctx->fsource.buf[i].fpos.path, ctx->fsource.buf[i].fpos.line
+                ctx->fsource.buf[i].fpos.path, ctx->fsource.buf[i].fpos.line, &ctx->subst
             );
         }
     }
