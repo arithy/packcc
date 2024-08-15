@@ -88,3 +88,34 @@ The following PEG rules are available.
 | `Unicode_Surrogate`             | Matches a surrogate code point. |
 | `Unicode_Private_Use`           | Matches a private-use character. |
 | `Unicode_Other`                 | Matches a character of other type (= `Unicode_Control / Unicode_Format / Unicode_Surrogate / Unicode_Private_Use`). |
+
+### `char/unicode_derived_core.peg`
+
+#### Synopsis
+
+An import file that defines rules to match a Unicode character belonging to a specific [derived core property](https://www.unicode.org/reports/tr44/#DerivedCoreProperties.txt).
+
+#### PEG Rules
+
+The following PEG rules are available.
+
+| Rule Name | Description |
+| --- | --- |
+| `Unicode_Lowercase`                    | Matches a character with the Lowercase property. |
+| `Unicode_Uppercase`                    | Matches a character with the Uppercase property. |
+| `Unicode_Cased`                        | Matches a character which is considered to be either uppercase, lowercase or titlecase characters. |
+| `Unicode_Case_Ignorable`               | Matches a character which is ignored for casing purposes. |
+| `Unicode_Changes_When_Lowercased`      | Matches a character whose normalized form is not stable under a toLowercase mapping. |
+| `Unicode_Changes_When_Uppercased`      | Matches a character whose normalized form is not stable under a toUppercase mapping. |
+| `Unicode_Changes_When_Titlecased`      | Matches a character whose normalized form is not stable under a toTitlecase mapping. |
+| `Unicode_Changes_When_Casefolded`      | Matches a character whose normalized form is not stable under case folding. |
+| `Unicode_Changes_When_Casemapped`      | Matches a character which may change when it undergoes case mapping. |
+| `Unicode_Alphabetic`                   | Matches a character with the Alphabetic property. |
+| `Unicode_Default_Ignorable_Code_Point` | Matches a character which should be ignored in rendering unless explicitly supported by programs. |
+| `Unicode_Grapheme_Base`                | Matches a character with the property used to define "Grapheme base". |
+| `Unicode_Grapheme_Extend`              | Matches a character with the property used to define "Grapheme extender". |
+| `Unicode_Math`                         | Matches a character with the Math property. |
+| `Unicode_ID_Start`                     | Matches a character which may be used as the first letter of an identifier in a programming language. |
+| `Unicode_ID_Continue`                  | Matches a character which may be used as the second and subsequent letters of an identifier in a programming language. |
+| `Unicode_XID_Start`                    | Matches a character which can be mapped to a `Unicode_ID_Start` character under NFKC-normalization. |
+| `Unicode_XID_Continue`                 | Matches a character which can be mapped to a `Unicode_ID_Continue` character under NFKC-normalization. |
