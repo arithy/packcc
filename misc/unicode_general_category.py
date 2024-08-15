@@ -24,7 +24,7 @@ import os
 import requests
 import re
 
-ucd_url = 'https://www.unicode.org/Public/14.0.0/ucd/UnicodeData.txt'
+ucd_url = 'https://www.unicode.org/Public/15.1.0/ucd/UnicodeData.txt'
 ucd_gc_list = [
     'Lu', 'Ll', 'Lt', 'Lm', 'Lo', 'Mn', 'Mc', 'Me', 'Nd', 'Nl', 'No',
     'Pc', 'Pd', 'Ps', 'Pe', 'Pi', 'Pf', 'Po', 'Sm', 'Sc', 'Sk', 'So',
