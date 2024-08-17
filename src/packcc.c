@@ -210,6 +210,7 @@ typedef enum node_type_tag {
     NODE_REFERENCE,
     NODE_STRING,
     NODE_CHARCLASS,
+    NODE_POSITION,
     NODE_QUANTITY,
     NODE_PREDICATE,
     NODE_SEQUENCE,
@@ -267,6 +268,10 @@ typedef struct node_charclass_tag {
     char *value; /* NULL means any character */
 } node_charclass_t;
 
+typedef struct node_position_tag {
+    size_t value;
+} node_position_t;
+
 typedef struct node_quantity_tag {
     int min;
     int max;
@@ -316,6 +321,7 @@ typedef union node_data_tag {
     node_reference_t reference;
     node_string_t    string;
     node_charclass_t charclass;
+    node_position_t  position;
     node_quantity_t  quantity;
     node_predicate_t predicate;
     node_sequence_t  sequence;
@@ -1724,6 +1730,9 @@ static node_t *create_node(node_type_t type) {
     case NODE_CHARCLASS:
         node->data.charclass.value = NULL;
         break;
+    case NODE_POSITION:
+        node->data.position.value = 0;
+        break;
     case NODE_QUANTITY:
         node->data.quantity.min = node->data.quantity.max = 0;
         node->data.quantity.expr = NULL;
@@ -1787,6 +1796,8 @@ static void destroy_node(node_t *node) {
         break;
     case NODE_CHARCLASS:
         free(node->data.charclass.value);
+        break;
+    case NODE_POSITION:
         break;
     case NODE_QUANTITY:
         destroy_node(node->data.quantity.expr);
@@ -1886,6 +1897,8 @@ static void link_references(context_t *ctx, node_t *node) {
         break;
     case NODE_CHARCLASS:
         break;
+    case NODE_POSITION:
+        break;
     case NODE_QUANTITY:
         link_references(ctx, node->data.quantity.expr);
         break;
@@ -1940,6 +1953,8 @@ static void mark_rules_if_used(context_t *ctx, node_t *node) {
         break;
     case NODE_CHARCLASS:
         break;
+    case NODE_POSITION:
+        break;
     case NODE_QUANTITY:
         mark_rules_if_used(ctx, node->data.quantity.expr);
         break;
@@ -1991,6 +2006,8 @@ static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
     case NODE_STRING:
         break;
     case NODE_CHARCLASS:
+        break;
+    case NODE_POSITION:
         break;
     case NODE_QUANTITY:
         unreference_rules_from_unused_rule(ctx, node->data.quantity.expr);
@@ -2055,6 +2072,8 @@ static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *v
     case NODE_STRING:
         break;
     case NODE_CHARCLASS:
+        break;
+    case NODE_POSITION:
         break;
     case NODE_QUANTITY:
         verify_variables(ctx, node->data.quantity.expr, vars);
@@ -2127,6 +2146,8 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     case NODE_STRING:
         break;
     case NODE_CHARCLASS:
+        break;
+    case NODE_POSITION:
         break;
     case NODE_QUANTITY:
         verify_captures(ctx, node->data.quantity.expr, capts);
@@ -2245,6 +2266,9 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*sCharclass(value:'", indent, "");
         dump_escaped_string(node->data.charclass.value);
         fprintf(stdout, "')\n");
+        break;
+    case NODE_POSITION:
+        fprintf(stdout, "%*sLocation(value:" FMT_LU ")\n", indent, "", (ulong_t)node->data.position.value);
         break;
     case NODE_QUANTITY:
         fprintf(stdout, "%*sQuantity(min:%d, max:%d) {\n", indent, "", node->data.quantity.min, node->data.quantity.max);
@@ -2716,6 +2740,11 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         else {
             goto EXCEPTION;
         }
+    }
+    else if (match_character(input, '^')) {
+        match_spaces(input);
+        n_p = create_node(NODE_POSITION);
+        n_p->data.position.value = 0;
     }
     else if (match_character(input, '.')) {
         match_spaces(input);
@@ -3502,6 +3531,12 @@ static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const
     }
 }
 
+static code_reach_t generate_position_code(generate_t *gen, size_t value, int onfail, size_t indent, bool_t bare) {
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(gen->stream, "if (ctx->pos + ctx->cur != " FMT_LU ") goto L%04d;\n", value, onfail);
+    return CODE_REACH__BOTH;
+}
+
 static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, size_t indent, bool_t bare);
 
 static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *expr, int min, int max, int onfail, size_t indent, bool_t bare) {
@@ -3963,6 +3998,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return gen->ascii ?
                generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
                generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
+    case NODE_POSITION:
+        return generate_position_code(gen, node->data.position.value, onfail, indent, bare);
     case NODE_QUANTITY:
         return generate_quantifying_code(gen, node->data.quantity.expr, node->data.quantity.min, node->data.quantity.max, onfail, indent, bare);
     case NODE_PREDICATE:

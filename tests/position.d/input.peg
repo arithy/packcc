@@ -1,0 +1,6 @@
+FILE <- (NUMBER_AT_START_POSITION / NUMBER_NOT_AT_START_POSITION / .)*
+
+NUMBER_AT_START_POSITION
+   <- ^  ( [0] / [1-9][0-9]+ ) { printf("NUMBER AT START POSITION: %s\n", $0); }
+NUMBER_NOT_AT_START_POSITION
+   <- !^ ( [0] / [1-9][0-9]+ ) { printf("NUMBER NOT AT START POSITION: %s\n", $0); }
