@@ -1,5 +1,5 @@
 test_generate () {
-    (cd "$BATS_TEST_DIRNAME" && "$PACKCC" "${PACKCC_OPTS[@]}" -o "parser" "${1:-input.peg}")
+    (cd "$BATS_TEST_DIRNAME" && "$PACKCC" -I "$ROOTDIR/import" "${PACKCC_OPTS[@]}" -o "parser" "${1:-input.peg}")
 }
 
 test_compile() {
