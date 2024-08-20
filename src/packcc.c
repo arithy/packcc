@@ -3589,7 +3589,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 stream__write_characters(gen->stream, ' ', indent + 4);
                 stream__puts(gen->stream, "ctx->cur = p;\n");
                 stream__write_characters(gen->stream, ' ', indent + 4);
-                stream__puts(gen->stream, "pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n");
+                stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &chunk->thunks, n);\n");
                 stream__write_characters(gen->stream, ' ', indent + 4);
                 stream__puts(gen->stream, "break;\n");
             }
@@ -3602,7 +3602,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__write_characters(gen->stream, ' ', indent + 4);
             stream__puts(gen->stream, "ctx->cur = p0;\n");
             stream__write_characters(gen->stream, ' ', indent + 4);
-            stream__puts(gen->stream, "pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n0);\n");
+            stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &chunk->thunks, n0);\n");
             stream__write_characters(gen->stream, ' ', indent + 4);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
@@ -3644,7 +3644,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__puts(gen->stream, "ctx->cur = p;\n");
                     stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n");
+                    stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &chunk->thunks, n);\n");
                     if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
                     stream__printf(gen->stream, "L%04d:;\n", m);
                 }
@@ -3794,7 +3794,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "ctx->cur = p;\n");
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_thunk_array__revert(ctx->auxil, &chunk->thunks, n);\n");
+        stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &chunk->thunks, n);\n");
         if (!c) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -3830,6 +3830,8 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     stream__printf(gen->stream, "chunk->capts.buf[" FMT_LU "].range.start = p;\n", (ulong_t)index);
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "chunk->capts.buf[" FMT_LU "].range.end = q;\n", (ulong_t)index);
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(gen->stream, "pcc_char_array__resize(ctx->auxil, &chunk->capts.buf[" FMT_LU "].string, 0);\n", (ulong_t)index);
     if (!bare) {
         indent -= 4;
         stream__write_characters(gen->stream, ' ', indent);
@@ -3892,7 +3894,7 @@ static code_reach_t generate_thunking_action_code(
     }
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(
-        gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx->auxil, pcc_action_%s_" FMT_LU ", " FMT_LU ", " FMT_LU ");\n",
+        gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx, pcc_action_%s_" FMT_LU ", " FMT_LU ", " FMT_LU ");\n",
         gen->rule->data.rule.name, (ulong_t)index, (ulong_t)gen->rule->data.rule.vars.len, (ulong_t)gen->rule->data.rule.capts.len
     );
     {
@@ -3917,6 +3919,8 @@ static code_reach_t generate_thunking_action_code(
         stream__puts(gen->stream, "thunk->data.leaf.capt0.range.start = chunk->pos;\n");
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "thunk->data.leaf.capt0.range.end = ctx->cur;\n");
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "pcc_char_array__resize(ctx->auxil, &thunk->data.leaf.capt0.string, 0);\n");
     }
     if (error) {
         stream__write_characters(gen->stream, ' ', indent);
@@ -3924,11 +3928,11 @@ static code_reach_t generate_thunking_action_code(
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "thunk->data.leaf.action(ctx, thunk, &null);\n");
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_thunk__destroy(ctx->auxil, thunk);\n");
+        stream__puts(gen->stream, "pcc_thunk__destroy(ctx, thunk);\n");
     }
     else {
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_thunk_array__add(ctx->auxil, &chunk->thunks, thunk);\n");
+        stream__puts(gen->stream, "pcc_thunk_array__add(ctx, &chunk->thunks, thunk);\n");
     }
     if (!bare) {
         indent -= 4;
@@ -4092,19 +4096,6 @@ static bool_t generate(context_t *ctx) {
             "#include <stdlib.h>\n"
             "#include <string.h>\n"
             "\n"
-            "#ifndef _MSC_VER\n"
-            "#if defined __GNUC__ && defined _WIN32 /* MinGW */\n"
-            "#ifndef PCC_USE_SYSTEM_STRNLEN\n"
-            "#define strnlen(str, maxlen) pcc_strnlen(str, maxlen)\n"
-            "static size_t pcc_strnlen(const char *str, size_t maxlen) {\n"
-            "    size_t i;\n"
-            "    for (i = 0; i < maxlen && str[i]; i++);\n"
-            "    return i;\n"
-            "}\n"
-            "#endif /* !PCC_USE_SYSTEM_STRNLEN */\n"
-            "#endif /* defined __GNUC__ && defined _WIN32 */\n"
-            "#endif /* !_MSC_VER */\n"
-            "\n"
         );
         stream__printf(
             &sstream,
@@ -4231,7 +4222,7 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "typedef struct pcc_capture_tag {\n"
             "    pcc_range_t range;\n"
-            "    char *string; /* mutable */\n"
+            "    pcc_char_array_t string; /* mutable */\n"
             "} pcc_capture_t;\n"
             "\n"
             "typedef struct pcc_capture_table_tag {\n"
@@ -4338,6 +4329,7 @@ static bool_t generate(context_t *ctx) {
             "typedef struct pcc_lr_memo_tag {\n"
             "    pcc_rule_t rule;\n"
             "    pcc_lr_answer_t *answer;\n"
+            "    size_t next; /* the index of the next instance with the same hash value */\n"
             "} pcc_lr_memo_t;\n"
             "\n"
             "typedef struct pcc_lr_memo_map_tag {\n"
@@ -4406,9 +4398,12 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_stack_t lrstack;\n"
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_auxil_t auxil;\n"
+            "    pcc_memory_recycler_t thunk_recycler;\n"
             "    pcc_memory_recycler_t thunk_chunk_recycler;\n"
             "    pcc_memory_recycler_t lr_head_recycler;\n"
             "    pcc_memory_recycler_t lr_answer_recycler;\n"
+            "    pcc_memory_recycler_t lr_table_entry_recycler;\n"
+            "    pcc_memory_recycler_t lr_entry_recycler;\n"
             "};\n"
             "\n",
             get_prefix(ctx)
@@ -4460,14 +4455,6 @@ static bool_t generate(context_t *ctx) {
             "#define PCC_DEBUG(auxil, event, rule, level, pos, buffer, length) ((void)0)\n"
             "#endif /* !PCC_DEBUG */\n"
             "\n"
-            "static char *pcc_strndup_e(pcc_auxil_t auxil, const char *str, size_t len) {\n"
-            "    const size_t m = strnlen(str, len);\n"
-            "    char *const s = (char *)PCC_MALLOC(auxil, m + 1);\n"
-            "    memcpy(s, str, m);\n"
-            "    s[m] = '\\0';\n"
-            "    return s;\n"
-            "}\n"
-            "\n"
         );
         stream__puts(
             &sstream,
@@ -4475,6 +4462,18 @@ static bool_t generate(context_t *ctx) {
             "    array->len = 0;\n"
             "    array->max = 0;\n"
             "    array->buf = NULL;\n"
+            "}\n"
+            "\n"
+            "static void pcc_char_array__resize(pcc_auxil_t auxil, pcc_char_array_t *array, size_t len) {\n"
+            "    if (array->max < len) {\n"
+            "        size_t m = array->max;\n"
+            "        if (m == 0) m = PCC_BUFFER_MIN_SIZE;\n"
+            "        while (m < len && m != 0) m <<= 1;\n"
+            "        if (m == 0) m = len;\n"
+            "        array->buf = (char *)PCC_REALLOC(auxil, array->buf, m);\n"
+            "        array->max = m;\n"
+            "    }\n"
+            "    array->len = len;\n"
             "}\n"
             "\n"
             "static void pcc_char_array__add(pcc_auxil_t auxil, pcc_char_array_t *array, char ch) {\n"
@@ -4555,6 +4554,19 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
+            "static void pcc_capture__init(pcc_auxil_t auxil, pcc_capture_t *capt) {\n"
+            "    capt->range.start = 0;\n"
+            "    capt->range.end = 0;\n"
+            "    pcc_char_array__init(auxil, &capt->string);\n"
+            "}\n"
+            "\n"
+            "static void pcc_capture__term(pcc_auxil_t auxil, pcc_capture_t *capt) {\n"
+            "    pcc_char_array__term(auxil, &capt->string);\n"
+            "}\n"
+            "\n"
+        );
+        stream__puts(
+            &sstream,
             "static void pcc_capture_table__init(pcc_auxil_t auxil, pcc_capture_table_t *table) {\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
@@ -4564,7 +4576,7 @@ static bool_t generate(context_t *ctx) {
             "MARK_FUNC_AS_USED\n"
             "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *table, size_t len) {\n"
             "    size_t i;\n"
-            "    for (i = len; i < table->len; i++) PCC_FREE(auxil, table->buf[i].string);\n"
+            "    for (i = len; i < table->len; i++) pcc_capture__term(auxil, &table->buf[i]);\n"
             "    if (table->max < len) {\n"
             "        size_t m = table->max;\n"
             "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
@@ -4573,18 +4585,14 @@ static bool_t generate(context_t *ctx) {
             "        table->buf = (pcc_capture_t *)PCC_REALLOC(auxil, table->buf, sizeof(pcc_capture_t) * m);\n"
             "        table->max = m;\n"
             "    }\n"
-            "    for (i = table->len; i < len; i++) {\n"
-            "        table->buf[i].range.start = 0;\n"
-            "        table->buf[i].range.end = 0;\n"
-            "        table->buf[i].string = NULL;\n"
-            "    }\n"
+            "    for (i = table->len; i < len; i++) pcc_capture__init(auxil, &table->buf[i]);\n"
             "    table->len = len;\n"
             "}\n"
             "\n"
             "static void pcc_capture_table__term(pcc_auxil_t auxil, pcc_capture_table_t *table) {\n"
             "    while (table->len > 0) {\n"
             "        table->len--;\n"
-            "        PCC_FREE(auxil, table->buf[table->len].string);\n"
+            "        pcc_capture__term(auxil, &table->buf[table->len]);\n"
             "    }\n"
             "    PCC_FREE(auxil, table->buf);\n"
             "}\n"
@@ -4614,85 +4622,6 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "static void pcc_capture_const_table__term(pcc_auxil_t auxil, pcc_capture_const_table_t *table) {\n"
             "    PCC_FREE(auxil, (void *)table->buf);\n"
-            "}\n"
-            "\n"
-        );
-        stream__puts(
-            &sstream,
-            "MARK_FUNC_AS_USED\n"
-            "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_auxil_t auxil, pcc_action_t action, size_t valuec, size_t captc) {\n"
-            "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
-            "    thunk->type = PCC_THUNK_LEAF;\n"
-            "    pcc_value_refer_table__init(auxil, &thunk->data.leaf.values);\n"
-            "    pcc_value_refer_table__resize(auxil, &thunk->data.leaf.values, valuec);\n"
-            "    pcc_capture_const_table__init(auxil, &thunk->data.leaf.capts);\n"
-            "    pcc_capture_const_table__resize(auxil, &thunk->data.leaf.capts, captc);\n"
-            "    thunk->data.leaf.capt0.range.start = 0;\n"
-            "    thunk->data.leaf.capt0.range.end = 0;\n"
-            "    thunk->data.leaf.capt0.string = NULL;\n"
-            "    thunk->data.leaf.action = action;\n"
-            "    return thunk;\n"
-            "}\n"
-            "\n"
-            "static pcc_thunk_t *pcc_thunk__create_node(pcc_auxil_t auxil, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n"
-            "    pcc_thunk_t *const thunk = (pcc_thunk_t *)PCC_MALLOC(auxil, sizeof(pcc_thunk_t));\n"
-            "    thunk->type = PCC_THUNK_NODE;\n"
-            "    thunk->data.node.thunks = thunks;\n"
-            "    thunk->data.node.value = value;\n"
-            "    return thunk;\n"
-            "}\n"
-            "\n"
-            "static void pcc_thunk__destroy(pcc_auxil_t auxil, pcc_thunk_t *thunk) {\n"
-            "    if (thunk == NULL) return;\n"
-            "    switch (thunk->type) {\n"
-            "    case PCC_THUNK_LEAF:\n"
-            "        PCC_FREE(auxil, thunk->data.leaf.capt0.string);\n"
-            "        pcc_capture_const_table__term(auxil, &thunk->data.leaf.capts);\n"
-            "        pcc_value_refer_table__term(auxil, &thunk->data.leaf.values);\n"
-            "        break;\n"
-            "    case PCC_THUNK_NODE:\n"
-            "        break;\n"
-            "    default: /* unknown */\n"
-            "        break;\n"
-            "    }\n"
-            "    PCC_FREE(auxil, thunk);\n"
-            "}\n"
-            "\n"
-        );
-        stream__puts(
-            &sstream,
-            "static void pcc_thunk_array__init(pcc_auxil_t auxil, pcc_thunk_array_t *array) {\n"
-            "    array->len = 0;\n"
-            "    array->max = 0;\n"
-            "    array->buf = NULL;\n"
-            "}\n"
-            "\n"
-            "static void pcc_thunk_array__add(pcc_auxil_t auxil, pcc_thunk_array_t *array, pcc_thunk_t *thunk) {\n"
-            "    if (array->max <= array->len) {\n"
-            "        const size_t n = array->len + 1;\n"
-            "        size_t m = array->max;\n"
-            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
-            "        while (m < n && m != 0) m <<= 1;\n"
-            "        if (m == 0) m = n;\n"
-            "        array->buf = (pcc_thunk_t **)PCC_REALLOC(auxil, array->buf, sizeof(pcc_thunk_t *) * m);\n"
-            "        array->max = m;\n"
-            "    }\n"
-            "    array->buf[array->len++] = thunk;\n"
-            "}\n"
-            "\n"
-            "static void pcc_thunk_array__revert(pcc_auxil_t auxil, pcc_thunk_array_t *array, size_t len) {\n"
-            "    while (array->len > len) {\n"
-            "        array->len--;\n"
-            "        pcc_thunk__destroy(auxil, array->buf[array->len]);\n"
-            "    }\n"
-            "}\n"
-            "\n"
-            "static void pcc_thunk_array__term(pcc_auxil_t auxil, pcc_thunk_array_t *array) {\n"
-            "    while (array->len > 0) {\n"
-            "        array->len--;\n"
-            "        pcc_thunk__destroy(auxil, array->buf[array->len]);\n"
-            "    }\n"
-            "    PCC_FREE(auxil, array->buf);\n"
             "}\n"
             "\n"
         );
@@ -4748,18 +4677,95 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "MARK_FUNC_AS_USED\n"
+            "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_context_t *ctx, pcc_action_t action, size_t valuec, size_t captc) {\n"
+            "    pcc_thunk_t *const thunk = (pcc_thunk_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->thunk_recycler);\n"
+            "    thunk->type = PCC_THUNK_LEAF;\n"
+            "    pcc_value_refer_table__init(ctx->auxil, &thunk->data.leaf.values);\n"
+            "    pcc_value_refer_table__resize(ctx->auxil, &thunk->data.leaf.values, valuec);\n"
+            "    pcc_capture_const_table__init(ctx->auxil, &thunk->data.leaf.capts);\n"
+            "    pcc_capture_const_table__resize(ctx->auxil, &thunk->data.leaf.capts, captc);\n"
+            "    pcc_capture__init(ctx->auxil, &thunk->data.leaf.capt0);\n"
+            "    thunk->data.leaf.action = action;\n"
+            "    return thunk;\n"
+            "}\n"
+            "\n"
+            "static pcc_thunk_t *pcc_thunk__create_node(pcc_context_t *ctx, const pcc_thunk_array_t *thunks, pcc_value_t *value) {\n"
+            "    pcc_thunk_t *const thunk = (pcc_thunk_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->thunk_recycler);\n"
+            "    thunk->type = PCC_THUNK_NODE;\n"
+            "    thunk->data.node.thunks = thunks;\n"
+            "    thunk->data.node.value = value;\n"
+            "    return thunk;\n"
+            "}\n"
+            "\n"
+            "static void pcc_thunk__destroy(pcc_context_t *ctx, pcc_thunk_t *thunk) {\n"
+            "    if (thunk == NULL) return;\n"
+            "    switch (thunk->type) {\n"
+            "    case PCC_THUNK_LEAF:\n"
+            "        pcc_capture__term(ctx->auxil, &thunk->data.leaf.capt0);\n"
+            "        pcc_capture_const_table__term(ctx->auxil, &thunk->data.leaf.capts);\n"
+            "        pcc_value_refer_table__term(ctx->auxil, &thunk->data.leaf.values);\n"
+            "        break;\n"
+            "    case PCC_THUNK_NODE:\n"
+            "        break;\n"
+            "    default: /* unknown */\n"
+            "        break;\n"
+            "    }\n"
+            "    pcc_memory_recycler__recycle(ctx->auxil, &ctx->thunk_recycler, thunk);\n"
+            "}\n"
+            "\n"
+        );
+        stream__puts(
+            &sstream,
+            "static void pcc_thunk_array__init(pcc_context_t *ctx, pcc_thunk_array_t *array) {\n"
+            "    array->len = 0;\n"
+            "    array->max = 0;\n"
+            "    array->buf = NULL;\n"
+            "}\n"
+            "\n"
+            "static void pcc_thunk_array__add(pcc_context_t *ctx, pcc_thunk_array_t *array, pcc_thunk_t *thunk) {\n"
+            "    if (array->max <= array->len) {\n"
+            "        const size_t n = array->len + 1;\n"
+            "        size_t m = array->max;\n"
+            "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
+            "        while (m < n && m != 0) m <<= 1;\n"
+            "        if (m == 0) m = n;\n"
+            "        array->buf = (pcc_thunk_t **)PCC_REALLOC(ctx->auxil, array->buf, sizeof(pcc_thunk_t *) * m);\n"
+            "        array->max = m;\n"
+            "    }\n"
+            "    array->buf[array->len++] = thunk;\n"
+            "}\n"
+            "\n"
+            "static void pcc_thunk_array__revert(pcc_context_t *ctx, pcc_thunk_array_t *array, size_t len) {\n"
+            "    while (array->len > len) {\n"
+            "        array->len--;\n"
+            "        pcc_thunk__destroy(ctx, array->buf[array->len]);\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "static void pcc_thunk_array__term(pcc_context_t *ctx, pcc_thunk_array_t *array) {\n"
+            "    while (array->len > 0) {\n"
+            "        array->len--;\n"
+            "        pcc_thunk__destroy(ctx, array->buf[array->len]);\n"
+            "    }\n"
+            "    PCC_FREE(ctx->auxil, array->buf);\n"
+            "}\n"
+            "\n"
+        );
+        stream__puts(
+            &sstream,
+            "MARK_FUNC_AS_USED\n"
             "static pcc_thunk_chunk_t *pcc_thunk_chunk__create(pcc_context_t *ctx) {\n"
             "    pcc_thunk_chunk_t *const chunk = (pcc_thunk_chunk_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->thunk_chunk_recycler);\n"
             "    pcc_value_table__init(ctx->auxil, &chunk->values);\n"
             "    pcc_capture_table__init(ctx->auxil, &chunk->capts);\n"
-            "    pcc_thunk_array__init(ctx->auxil, &chunk->thunks);\n"
+            "    pcc_thunk_array__init(ctx, &chunk->thunks);\n"
             "    chunk->pos = 0;\n"
             "    return chunk;\n"
             "}\n"
             "\n"
             "static void pcc_thunk_chunk__destroy(pcc_context_t *ctx, pcc_thunk_chunk_t *chunk) {\n"
             "    if (chunk == NULL) return;\n"
-            "    pcc_thunk_array__term(ctx->auxil, &chunk->thunks);\n"
+            "    pcc_thunk_array__term(ctx, &chunk->thunks);\n"
             "    pcc_capture_table__term(ctx->auxil, &chunk->capts);\n"
             "    pcc_value_table__term(ctx->auxil, &chunk->values);\n"
             "    pcc_memory_recycler__recycle(ctx->auxil, &ctx->thunk_chunk_recycler, chunk);\n"
@@ -4845,7 +4851,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr);\n"
+            "static void pcc_lr_entry__destroy(pcc_context_t *ctx, pcc_lr_entry_t *lr);\n"
             "\n"
             "static pcc_lr_answer_t *pcc_lr_answer__create(pcc_context_t *ctx, pcc_lr_answer_type_t type, size_t pos) {\n"
             "    pcc_lr_answer_t *answer = (pcc_lr_answer_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->lr_answer_recycler);\n"
@@ -4860,7 +4866,7 @@ static bool_t generate(context_t *ctx) {
             "        answer->data.chunk = NULL;\n"
             "        break;\n"
             "    default: /* unknown */\n"
-            "        PCC_FREE(ctx->auxil, answer);\n"
+            "        pcc_memory_recycler__recycle(ctx->auxil, &ctx->lr_answer_recycler, answer);\n"
             "        answer = NULL;\n"
             "    }\n"
             "    return answer;\n"
@@ -4889,7 +4895,7 @@ static bool_t generate(context_t *ctx) {
             "        pcc_lr_answer_t *const a = answer->hold;\n"
             "        switch (answer->type) {\n"
             "        case PCC_LR_ANSWER_LR:\n"
-            "            pcc_lr_entry__destroy(ctx->auxil, answer->data.lr);\n"
+            "            pcc_lr_entry__destroy(ctx, answer->data.lr);\n"
             "            break;\n"
             "        case PCC_LR_ANSWER_CHUNK:\n"
             "            pcc_thunk_chunk__destroy(ctx, answer->data.chunk);\n"
@@ -4905,7 +4911,7 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static void pcc_lr_memo_map__init(pcc_auxil_t auxil, pcc_lr_memo_map_t *map) {\n"
+            "static void pcc_lr_memo_map__init(pcc_context_t *ctx, pcc_lr_memo_map_t *map) {\n"
             "    map->len = 0;\n"
             "    map->max = 0;\n"
             "    map->buf = NULL;\n"
@@ -4958,9 +4964,9 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "static pcc_lr_table_entry_t *pcc_lr_table_entry__create(pcc_context_t *ctx) {\n"
-            "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)PCC_MALLOC(ctx->auxil, sizeof(pcc_lr_table_entry_t));\n"
+            "    pcc_lr_table_entry_t *const entry = (pcc_lr_table_entry_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->lr_table_entry_recycler);\n"
             "    entry->head = NULL;\n"
-            "    pcc_lr_memo_map__init(ctx->auxil, &entry->memos);\n"
+            "    pcc_lr_memo_map__init(ctx, &entry->memos);\n"
             "    entry->hold_a = NULL;\n"
             "    entry->hold_h = NULL;\n"
             "    return entry;\n"
@@ -4971,13 +4977,13 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_head__destroy(ctx, entry->hold_h);\n"
             "    pcc_lr_answer__destroy(ctx, entry->hold_a);\n"
             "    pcc_lr_memo_map__term(ctx, &entry->memos);\n"
-            "    PCC_FREE(ctx->auxil, entry);\n"
+            "    pcc_memory_recycler__recycle(ctx->auxil, &ctx->lr_table_entry_recycler, entry);\n"
             "}\n"
             "\n"
         );
         stream__puts(
             &sstream,
-            "static void pcc_lr_table__init(pcc_auxil_t auxil, pcc_lr_table_t *table) {\n"
+            "static void pcc_lr_table__init(pcc_context_t *ctx, pcc_lr_table_t *table) {\n"
             "    table->ofs = 0;\n"
             "    table->len = 0;\n"
             "    table->max = 0;\n"
@@ -5063,16 +5069,16 @@ static bool_t generate(context_t *ctx) {
         );
         stream__puts(
             &sstream,
-            "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_auxil_t auxil, pcc_rule_t rule) {\n"
-            "    pcc_lr_entry_t *const lr = (pcc_lr_entry_t *)PCC_MALLOC(auxil, sizeof(pcc_lr_entry_t));\n"
+            "static pcc_lr_entry_t *pcc_lr_entry__create(pcc_context_t *ctx, pcc_rule_t rule) {\n"
+            "    pcc_lr_entry_t *const lr = (pcc_lr_entry_t *)pcc_memory_recycler__supply(ctx->auxil, &ctx->lr_entry_recycler);\n"
             "    lr->rule = rule;\n"
             "    lr->seed = NULL;\n"
             "    lr->head = NULL;\n"
             "    return lr;\n"
             "}\n"
             "\n"
-            "static void pcc_lr_entry__destroy(pcc_auxil_t auxil, pcc_lr_entry_t *lr) {\n"
-            "    PCC_FREE(auxil, lr);\n"
+            "static void pcc_lr_entry__destroy(pcc_context_t *ctx, pcc_lr_entry_t *lr) {\n"
+            "    pcc_memory_recycler__recycle(ctx->auxil, &ctx->lr_entry_recycler, lr);\n"
             "}\n"
             "\n"
         );
@@ -5114,12 +5120,15 @@ static bool_t generate(context_t *ctx) {
             "    ctx->cur = 0;\n"
             "    ctx->level = 0;\n"
             "    pcc_char_array__init(auxil, &ctx->buffer);\n"
-            "    pcc_lr_table__init(auxil, &ctx->lrtable);\n"
+            "    pcc_lr_table__init(ctx, &ctx->lrtable);\n"
             "    pcc_lr_stack__init(auxil, &ctx->lrstack);\n"
-            "    pcc_thunk_array__init(auxil, &ctx->thunks);\n"
+            "    pcc_thunk_array__init(ctx, &ctx->thunks);\n"
+            "    pcc_memory_recycler__init(auxil, &ctx->thunk_recycler, sizeof(pcc_thunk_t));\n"
             "    pcc_memory_recycler__init(auxil, &ctx->thunk_chunk_recycler, sizeof(pcc_thunk_chunk_t));\n"
             "    pcc_memory_recycler__init(auxil, &ctx->lr_head_recycler, sizeof(pcc_lr_head_t));\n"
             "    pcc_memory_recycler__init(auxil, &ctx->lr_answer_recycler, sizeof(pcc_lr_answer_t));\n"
+            "    pcc_memory_recycler__init(auxil, &ctx->lr_table_entry_recycler, sizeof(pcc_lr_table_entry_t));\n"
+            "    pcc_memory_recycler__init(auxil, &ctx->lr_entry_recycler, sizeof(pcc_lr_entry_t));\n"
             "    ctx->auxil = auxil;\n"
             "    return ctx;\n"
             "}\n"
@@ -5129,13 +5138,16 @@ static bool_t generate(context_t *ctx) {
             &sstream,
             "static void pcc_context__destroy(pcc_context_t *ctx) {\n"
             "    if (ctx == NULL) return;\n"
-            "    pcc_thunk_array__term(ctx->auxil, &ctx->thunks);\n"
+            "    pcc_thunk_array__term(ctx, &ctx->thunks);\n"
             "    pcc_lr_stack__term(ctx->auxil, &ctx->lrstack);\n"
             "    pcc_lr_table__term(ctx, &ctx->lrtable);\n"
             "    pcc_char_array__term(ctx->auxil, &ctx->buffer);\n"
+            "    pcc_memory_recycler__term(ctx->auxil, &ctx->thunk_recycler);\n"
             "    pcc_memory_recycler__term(ctx->auxil, &ctx->thunk_chunk_recycler);\n"
             "    pcc_memory_recycler__term(ctx->auxil, &ctx->lr_head_recycler);\n"
             "    pcc_memory_recycler__term(ctx->auxil, &ctx->lr_answer_recycler);\n"
+            "    pcc_memory_recycler__term(ctx->auxil, &ctx->lr_table_entry_recycler);\n"
+            "    pcc_memory_recycler__term(ctx->auxil, &ctx->lr_entry_recycler);\n"
             "    PCC_FREE(ctx->auxil, ctx);\n"
             "}\n"
             "\n"
@@ -5169,10 +5181,14 @@ static bool_t generate(context_t *ctx) {
             &sstream,
             "MARK_FUNC_AS_USED\n"
             "static const char *pcc_get_capture_string(pcc_context_t *ctx, const pcc_capture_t *capt) {\n"
-            "    if (capt->string == NULL)\n"
-            "        ((pcc_capture_t *)capt)->string =\n"
-            "            pcc_strndup_e(ctx->auxil, ctx->buffer.buf + capt->range.start, capt->range.end - capt->range.start);\n"
-            "    return capt->string;\n"
+            "    if (capt->string.len == 0) {\n"
+            "        const size_t n = capt->range.end - capt->range.start;\n"
+            "        pcc_capture_t *const p = (pcc_capture_t *)capt;\n"
+            "        pcc_char_array__resize(ctx->auxil, &p->string, n + 1);\n"
+            "        if (n > 0) memcpy(p->string.buf, ctx->buffer.buf + capt->range.start, n);\n"
+            "        p->string.buf[n] = '\\0';\n"
+            "    }\n"
+            "    return capt->string.buf;\n"
             "}\n"
             "\n"
         );
@@ -5284,7 +5300,7 @@ static bool_t generate(context_t *ctx) {
             "            }\n"
             "        }\n"
             "        else {\n"
-            "            pcc_lr_entry_t *const e = pcc_lr_entry__create(ctx->auxil, rule);\n"
+            "            pcc_lr_entry_t *const e = pcc_lr_entry__create(ctx, rule);\n"
             "            pcc_lr_stack__push(ctx->auxil, &ctx->lrstack, e);\n"
             "            a = pcc_lr_answer__create(ctx, PCC_LR_ANSWER_LR, p);\n"
             "            a->data.lr = e;\n"
@@ -5331,7 +5347,7 @@ static bool_t generate(context_t *ctx) {
             "    if (c == NULL) return PCC_FALSE;\n"
             "    if (value == NULL) value = &null;\n"
             "    memset(value, 0, sizeof(pcc_value_t)); /* in case */\n"
-            "    pcc_thunk_array__add(ctx->auxil, thunks, pcc_thunk__create_node(ctx->auxil, &c->thunks, value));\n"
+            "    pcc_thunk_array__add(ctx, thunks, pcc_thunk__create_node(ctx, &c->thunks, value));\n"
             "    return PCC_TRUE;\n"
             "}\n"
             "\n"
@@ -5595,7 +5611,7 @@ static bool_t generate(context_t *ctx) {
         }
         stream__puts(
             &sstream,
-            "    pcc_thunk_array__revert(ctx->auxil, &ctx->thunks, 0);\n"
+            "    pcc_thunk_array__revert(ctx, &ctx->thunks, 0);\n"
             "    return 1;\n"
             "}\n"
             "\n"
