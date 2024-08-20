@@ -1577,6 +1577,7 @@ static void node_const_array__clear(node_const_array_t *array) {
 
 static void node_const_array__copy(node_const_array_t *array, const node_const_array_t *src) {
     size_t i;
+    if (array == src) return;
     node_const_array__clear(array);
     for (i = 0; i < src->len; i++) {
         node_const_array__add(array, src->buf[i]);
@@ -4810,6 +4811,7 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "static void pcc_rule_set__copy(pcc_auxil_t auxil, pcc_rule_set_t *set, const pcc_rule_set_t *src) {\n"
             "    size_t i;\n"
+            "    if (set == src) return;\n"
             "    pcc_rule_set__clear(auxil, set);\n"
             "    for (i = 0; i < src->len; i++) {\n"
             "        pcc_rule_set__add(auxil, set, src->buf[i]);\n"
