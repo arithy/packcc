@@ -14,16 +14,16 @@
 
 %prefix "calc"
 
-%value "pcc_ast_node_t *"    # <-- must be set
+%value "calc_ast_node_t *"    # <-- must be set
 
-%auxil "pcc_ast_manager_t *" # <-- must be set
+%auxil "calc_ast_manager_t *" # <-- must be set
 
 %header {
-#define PCC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
+#define CALC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
 
 typedef struct text_data_tag { /* <-- node custom data type */
     char *text;
-} pcc_ast_node_custom_data_t;
+} calc_ast_node_custom_data_t;
 }
 
 %source {
@@ -36,19 +36,19 @@ statement <- _ e:expression _ EOL { $$ = e; }
 
 expression <- e:term { $$ = e; }
 
-term <- l:term _ '+' _ r:factor { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("+"); }
-      / l:term _ '-' _ r:factor { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("-"); }
+term <- l:term _ '+' _ r:factor { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("+"); }
+      / l:term _ '-' _ r:factor { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("-"); }
       / e:factor                { $$ = e; }
 
-factor <- l:factor _ '*' _ r:unary { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("*"); }
-        / l:factor _ '/' _ r:unary { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("/"); }
+factor <- l:factor _ '*' _ r:unary { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("*"); }
+        / l:factor _ '/' _ r:unary { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("/"); }
         / e:unary                  { $$ = e; }
 
-unary <- '+' _ e:unary { $$ = pcc_ast_node__create_1(e); $$->custom.text = strdup("+"); }
-       / '-' _ e:unary { $$ = pcc_ast_node__create_1(e); $$->custom.text = strdup("-"); }
+unary <- '+' _ e:unary { $$ = calc_ast_node__create_1(e); $$->custom.text = strdup("+"); }
+       / '-' _ e:unary { $$ = calc_ast_node__create_1(e); $$->custom.text = strdup("-"); }
        / e:primary     { $$ = e; }
 
-primary <- < [0-9]+ >               { $$ = pcc_ast_node__create_0(); $$->custom.text = strdup($1); }
+primary <- < [0-9]+ >               { $$ = calc_ast_node__create_0(); $$->custom.text = strdup($1); }
          / '(' _ e:expression _ ')' { $$ = e; }
 
 _      <- [ \t]*
@@ -57,36 +57,36 @@ EOL    <- '\n' / '\r\n' / '\r' / ';'
 %import "code/pcc_ast.peg"   # <-- provides AST build functions
 
 %%
-void pcc_ast_node_custom_data__initialize(pcc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__initialize(calc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
     obj->text = NULL;
 }
 
-void pcc_ast_node_custom_data__finalize(pcc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__finalize(calc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
     free(obj->text);
 }
 
-static void dump_ast(const pcc_ast_node_t *obj, int depth) {
+static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
         switch (obj->type) {
-        case PCC_AST_NODE_TYPE_NULLARY:
+        case CALC_AST_NODE_TYPE_NULLARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "nullary", obj->custom.text);
             break;
-        case PCC_AST_NODE_TYPE_UNARY:
+        case CALC_AST_NODE_TYPE_UNARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "unary", obj->custom.text);
             dump_ast(obj->data.unary.node, depth + 1);
             break;
-        case PCC_AST_NODE_TYPE_BINARY:
+        case CALC_AST_NODE_TYPE_BINARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "binary", obj->custom.text);
             dump_ast(obj->data.binary.node[0], depth + 1);
             dump_ast(obj->data.binary.node[1], depth + 1);
             break;
-        case PCC_AST_NODE_TYPE_TERNARY:
+        case CALC_AST_NODE_TYPE_TERNARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "ternary", obj->custom.text);
             dump_ast(obj->data.ternary.node[0], depth + 1);
             dump_ast(obj->data.ternary.node[1], depth + 1);
             dump_ast(obj->data.ternary.node[2], depth + 1);
             break;
-        case PCC_AST_NODE_TYPE_VARIADIC:
+        case CALC_AST_NODE_TYPE_VARIADIC:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "variadic", obj->custom.text);
             {
                 size_t i;
@@ -106,17 +106,17 @@ static void dump_ast(const pcc_ast_node_t *obj, int depth) {
 }
 
 int main(int argc, char **argv) {
-    pcc_ast_manager_t mgr;
-    pcc_ast_manager__initialize(&mgr);
+    calc_ast_manager_t mgr;
+    calc_ast_manager__initialize(&mgr);
     {
         calc_context_t *ctx = calc_create(&mgr);
-        pcc_ast_node_t *ast = NULL;
+        calc_ast_node_t *ast = NULL;
         while (calc_parse(ctx, &ast)) {
             dump_ast(ast, 0);
-            pcc_ast_node__destroy(ast);
+            calc_ast_node__destroy(ast);
         }
         calc_destroy(ctx);
     }
-    pcc_ast_manager__finalize(&mgr);
+    calc_ast_manager__finalize(&mgr);
     return 0;
 }

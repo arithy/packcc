@@ -18,102 +18,96 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-# PackCC AST import file version: 1.0.0
+# AST utility import file: version 2.0.0
 
 %header {
-#define pcc_ast_node__create_0() pcc_ast_node__create_nullary(auxil)
-#define pcc_ast_node__create_1(node) pcc_ast_node__create_unary(auxil, node)
-#define pcc_ast_node__create_2(node0, node1) pcc_ast_node__create_binary(auxil, node0, node1)
-#define pcc_ast_node__create_3(node0, node1, node2) pcc_ast_node__create_ternary(auxil, node0, node1, node2)
-#define pcc_ast_node__create_v() pcc_ast_node__create_variadic(auxil)
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct pcc_ast_manager_tag pcc_ast_manager_t;
-typedef struct pcc_ast_node_tag pcc_ast_node_t;
+typedef struct ${prefix}_ast_manager_tag ${prefix}_ast_manager_t;
+typedef struct ${prefix}_ast_node_tag ${prefix}_ast_node_t;
 
-typedef enum pcc_ast_node_type_tag {
-    PCC_AST_NODE_TYPE_NULLARY,
-    PCC_AST_NODE_TYPE_UNARY,
-    PCC_AST_NODE_TYPE_BINARY,
-    PCC_AST_NODE_TYPE_TERNARY,
-    PCC_AST_NODE_TYPE_VARIADIC
-} pcc_ast_node_type_t;
+typedef enum ${prefix}_ast_node_type_tag {
+    ${PREFIX}_AST_NODE_TYPE_NULLARY,
+    ${PREFIX}_AST_NODE_TYPE_UNARY,
+    ${PREFIX}_AST_NODE_TYPE_BINARY,
+    ${PREFIX}_AST_NODE_TYPE_TERNARY,
+    ${PREFIX}_AST_NODE_TYPE_VARIADIC
+} ${prefix}_ast_node_type_t;
 
-typedef struct pcc_ast_node_single_tag {
-    pcc_ast_node_t *node;
-} pcc_ast_node_single_t;
+typedef struct ${prefix}_ast_node_single_tag {
+    ${prefix}_ast_node_t *node;
+} ${prefix}_ast_node_single_t;
 
-typedef struct pcc_ast_node_double_tag {
-    pcc_ast_node_t *node[2];
-} pcc_ast_node_double_t;
+typedef struct ${prefix}_ast_node_double_tag {
+    ${prefix}_ast_node_t *node[2];
+} ${prefix}_ast_node_double_t;
 
-typedef struct pcc_ast_node_triple_tag {
-    pcc_ast_node_t *node[3];
-} pcc_ast_node_triple_t;
+typedef struct ${prefix}_ast_node_triple_tag {
+    ${prefix}_ast_node_t *node[3];
+} ${prefix}_ast_node_triple_t;
 
-typedef struct pcc_ast_node_array_tag {
-    pcc_ast_node_t **node;
+typedef struct ${prefix}_ast_node_array_tag {
+    ${prefix}_ast_node_t **node;
     size_t max, len;
-} pcc_ast_node_array_t;
+} ${prefix}_ast_node_array_t;
 
-typedef union pcc_ast_node_data_tag {
-    pcc_ast_node_single_t unary;
-    pcc_ast_node_double_t binary;
-    pcc_ast_node_triple_t ternary;
-    pcc_ast_node_array_t variadic;
-} pcc_ast_node_data_t;
+typedef union ${prefix}_ast_node_data_tag {
+    ${prefix}_ast_node_single_t unary;
+    ${prefix}_ast_node_double_t binary;
+    ${prefix}_ast_node_triple_t ternary;
+    ${prefix}_ast_node_array_t variadic;
+} ${prefix}_ast_node_data_t;
 
-struct pcc_ast_node_tag {
-    pcc_ast_manager_t *manager;
-    pcc_ast_node_t *next; /* the next element in the doubly linked list of managed nodes */
-    pcc_ast_node_t *prev; /* the previous element in the doubly linked list of managed nodes */
-    pcc_ast_node_t *parent;
-    pcc_ast_node_type_t type;
-    pcc_ast_node_data_t data;
-#ifdef PCC_AST_NODE_CUSTOM_DATA_DEFINED
-    pcc_ast_node_custom_data_t custom;
+struct ${prefix}_ast_node_tag {
+    ${prefix}_ast_manager_t *manager;
+    ${prefix}_ast_node_t *next; /* the next element in the doubly linked list of managed nodes */
+    ${prefix}_ast_node_t *prev; /* the previous element in the doubly linked list of managed nodes */
+    ${prefix}_ast_node_t *parent;
+    ${prefix}_ast_node_type_t type;
+    ${prefix}_ast_node_data_t data;
+#ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
+    ${prefix}_ast_node_custom_data_t custom;
 #endif
 };
 
-struct pcc_ast_manager_tag {
-    pcc_ast_node_t *first; /* the first element in the doubly linked list of managed nodes */
-#ifdef PCC_AST_MANAGER_CUSTOM_DATA_DEFINED
-    pcc_ast_manager_custom_data_t custom;
+struct ${prefix}_ast_manager_tag {
+    ${prefix}_ast_node_t *first; /* the first element in the doubly linked list of managed nodes */
+#ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
+    ${prefix}_ast_manager_custom_data_t custom;
 #endif
 };
 
-void pcc_ast_manager__initialize(pcc_ast_manager_t *obj);
-void pcc_ast_manager__finalize(pcc_ast_manager_t *obj);
+void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj);
+void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj);
 
-void pcc_ast_node_array__initialize(pcc_ast_manager_t *mgr, pcc_ast_node_array_t *obj);
-void pcc_ast_node_array__finalize(pcc_ast_manager_t *mgr, pcc_ast_node_array_t *obj);
-void pcc_ast_node_array__add(pcc_ast_manager_t *mgr, pcc_ast_node_array_t *obj, pcc_ast_node_t *node);
+void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
+void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
+void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node);
 
-pcc_ast_node_t *pcc_ast_node__create_nullary(pcc_ast_manager_t *mgr);
-pcc_ast_node_t *pcc_ast_node__create_unary(pcc_ast_manager_t *mgr, pcc_ast_node_t *node);
-pcc_ast_node_t *pcc_ast_node__create_binary(pcc_ast_manager_t *mgr, pcc_ast_node_t *node0, pcc_ast_node_t *node1);
-pcc_ast_node_t *pcc_ast_node__create_ternary(pcc_ast_manager_t *mgr, pcc_ast_node_t *node0, pcc_ast_node_t *node1, pcc_ast_node_t *node2);
-pcc_ast_node_t *pcc_ast_node__create_variadic(pcc_ast_manager_t *mgr);
-pcc_ast_node_t *pcc_ast_node__add_child(pcc_ast_node_t *obj, pcc_ast_node_t *node); /* for variadic node only */
-void pcc_ast_node__destroy(pcc_ast_node_t *obj);
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node);
+${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1);
+${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2);
+${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for variadic node only */
+void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj);
 
-#ifdef PCC_AST_MANAGER_CUSTOM_DATA_DEFINED
-void pcc_ast_manager_custom_data__initialize(pcc_ast_manager_custom_data_t *obj);
-void pcc_ast_manager_custom_data__finalize(pcc_ast_manager_custom_data_t *obj);
+#ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
+void ${prefix}_ast_manager_custom_data__initialize(${prefix}_ast_manager_custom_data_t *obj);
+void ${prefix}_ast_manager_custom_data__finalize(${prefix}_ast_manager_custom_data_t *obj);
 #else
-#define pcc_ast_manager_custom_data__initialize(obj) ((void)0)
-#define pcc_ast_manager_custom_data__finalize(obj) ((void)0)
+#define ${prefix}_ast_manager_custom_data__initialize(obj) ((void)0)
+#define ${prefix}_ast_manager_custom_data__finalize(obj) ((void)0)
 #endif
 
-#ifdef PCC_AST_NODE_CUSTOM_DATA_DEFINED
-void pcc_ast_node_custom_data__initialize(pcc_ast_node_custom_data_t *obj);
-void pcc_ast_node_custom_data__finalize(pcc_ast_node_custom_data_t *obj);
+#ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
+void ${prefix}_ast_node_custom_data__initialize(${prefix}_ast_node_custom_data_t *obj);
+void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_node_custom_data_t *obj);
 #else
-#define pcc_ast_node_custom_data__initialize(obj) ((void)0)
-#define pcc_ast_node_custom_data__finalize(obj) ((void)0)
+#define ${prefix}_ast_node_custom_data__initialize(obj) ((void)0)
+#define ${prefix}_ast_node_custom_data__finalize(obj) ((void)0)
 #endif
 
 #ifdef __cplusplus
@@ -122,10 +116,16 @@ void pcc_ast_node_custom_data__finalize(pcc_ast_node_custom_data_t *obj);
 }
 
 %source {
-#include <assert.h>
+#define ${prefix}_ast_node__create_0() ${prefix}_ast_node__create_nullary(auxil)
+#define ${prefix}_ast_node__create_1(node) ${prefix}_ast_node__create_unary(auxil, node)
+#define ${prefix}_ast_node__create_2(node0, node1) ${prefix}_ast_node__create_binary(auxil, node0, node1)
+#define ${prefix}_ast_node__create_3(node0, node1, node2) ${prefix}_ast_node__create_ternary(auxil, node0, node1, node2)
+#define ${prefix}_ast_node__create_v() ${prefix}_ast_node__create_variadic(auxil)
 }
 
 %%
+#include <assert.h>
+
 #ifndef PCC_AST_NODE_ARRAY_MIN_SIZE
 #define PCC_AST_NODE_ARRAY_MIN_SIZE 4
 #endif
@@ -142,59 +142,59 @@ void pcc_ast_node_custom_data__finalize(pcc_ast_node_custom_data_t *obj);
 #define PCC_AST_FREE(mgr, ptr) PCC_FREE(mgr, ptr)
 #endif
 
-void pcc_ast_manager__initialize(pcc_ast_manager_t *obj) {
+void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj) {
     obj->first = NULL;
-    pcc_ast_manager_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_manager_custom_data__initialize(&(obj->custom));
 }
 
-void pcc_ast_manager__finalize(pcc_ast_manager_t *obj) {
-    pcc_ast_manager_custom_data__finalize(&(obj->custom));
+void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj) {
+    ${prefix}_ast_manager_custom_data__finalize(&(obj->custom));
     while (obj->first) {
         assert(obj->first->manager == obj);
-        pcc_ast_node__destroy(obj->first);
+        ${prefix}_ast_node__destroy(obj->first);
     }
 }
 
-void pcc_ast_node_array__initialize(pcc_ast_manager_t *mgr, pcc_ast_node_array_t *obj) {
+void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
     obj->len = 0;
     obj->max = 0;
     obj->node = NULL;
 }
 
-void pcc_ast_node_array__finalize(pcc_ast_manager_t *mgr, pcc_ast_node_array_t *obj) {
+void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
     while (obj->len > 0) {
         obj->len--;
-        pcc_ast_node__destroy(obj->node[obj->len]);
+        ${prefix}_ast_node__destroy(obj->node[obj->len]);
     }
     PCC_AST_FREE(mgr, obj->node);
 }
 
-void pcc_ast_node_array__add(pcc_ast_manager_t *mgr, pcc_ast_node_array_t *obj, pcc_ast_node_t *node) {
+void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node) {
     if (obj->max <= obj->len) {
         const size_t n = obj->len + 1;
         size_t m = obj->max;
         if (m == 0) m = PCC_AST_NODE_ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n;
-        obj->node = (pcc_ast_node_t **)PCC_AST_REALLOC(mgr, obj->node, sizeof(pcc_ast_node_t *) * m);
+        obj->node = (${prefix}_ast_node_t **)PCC_AST_REALLOC(mgr, obj->node, sizeof(${prefix}_ast_node_t *) * m);
         obj->max = m;
     }
     obj->node[obj->len++] = node;
 }
 
-static void pcc_ast_node__unlink_parent_(pcc_ast_node_t *obj) {
+static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
     if (obj->parent) {
         switch (obj->parent->type) {
-        case PCC_AST_NODE_TYPE_NULLARY:
+        case ${PREFIX}_AST_NODE_TYPE_NULLARY:
             assert(((void)"Nullary node illegally linked as a parent", 0));
             break;
-        case PCC_AST_NODE_TYPE_UNARY:
+        case ${PREFIX}_AST_NODE_TYPE_UNARY:
             if (obj->parent->data.unary.node == obj)
                 obj->parent->data.unary.node = NULL;
             else
                 assert(((void)"parent node with no backward link", 0));
             break;
-        case PCC_AST_NODE_TYPE_BINARY:
+        case ${PREFIX}_AST_NODE_TYPE_BINARY:
             {
                 size_t i;
                 for (i = 0; i < 2; i++) {
@@ -206,7 +206,7 @@ static void pcc_ast_node__unlink_parent_(pcc_ast_node_t *obj) {
                     assert(((void)"parent node with no backward link", 0));
             }
             break;
-        case PCC_AST_NODE_TYPE_TERNARY:
+        case ${PREFIX}_AST_NODE_TYPE_TERNARY:
             {
                 size_t i;
                 for (i = 0; i < 3; i++) {
@@ -218,7 +218,7 @@ static void pcc_ast_node__unlink_parent_(pcc_ast_node_t *obj) {
                     assert(((void)"parent node with no backward link", 0));
             }
             break;
-        case PCC_AST_NODE_TYPE_VARIADIC:
+        case ${PREFIX}_AST_NODE_TYPE_VARIADIC:
             {
                 const size_t n = obj->parent->data.variadic.len;
                 size_t i;
@@ -239,8 +239,8 @@ static void pcc_ast_node__unlink_parent_(pcc_ast_node_t *obj) {
     }
 }
 
-static pcc_ast_node_t *pcc_ast_node__create_(pcc_ast_manager_t *mgr) {
-    pcc_ast_node_t *const obj = (pcc_ast_node_t *)PCC_AST_MALLOC(mgr, sizeof(pcc_ast_node_t));
+static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t *mgr) {
+    ${prefix}_ast_node_t *const obj = (${prefix}_ast_node_t *)PCC_AST_MALLOC(mgr, sizeof(${prefix}_ast_node_t));
     obj->manager = mgr;
     if (mgr->first) {
         obj->next = mgr->first;
@@ -256,77 +256,77 @@ static pcc_ast_node_t *pcc_ast_node__create_(pcc_ast_manager_t *mgr) {
     return obj;
 }
 
-pcc_ast_node_t *pcc_ast_node__create_nullary(pcc_ast_manager_t *mgr) {
-    pcc_ast_node_t *const obj = pcc_ast_node__create_(mgr);
-    obj->type = PCC_AST_NODE_TYPE_NULLARY;
-    pcc_ast_node_custom_data__initialize(&(obj->custom));
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+    obj->type = ${PREFIX}_AST_NODE_TYPE_NULLARY;
+    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
     return obj;
 }
 
-pcc_ast_node_t *pcc_ast_node__create_unary(pcc_ast_manager_t *mgr, pcc_ast_node_t *node) {
-    pcc_ast_node_t *const obj = pcc_ast_node__create_(mgr);
-    obj->type = PCC_AST_NODE_TYPE_UNARY;
+${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+    obj->type = ${PREFIX}_AST_NODE_TYPE_UNARY;
     obj->data.unary.node = node;
     if (node) {
-        pcc_ast_node__unlink_parent_(node);
+        ${prefix}_ast_node__unlink_parent_(node);
         node->parent = obj;
     }
-    pcc_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
     return obj;
 }
 
-pcc_ast_node_t *pcc_ast_node__create_binary(pcc_ast_manager_t *mgr, pcc_ast_node_t *node0, pcc_ast_node_t *node1) {
-    pcc_ast_node_t *const obj = pcc_ast_node__create_(mgr);
-    obj->type = PCC_AST_NODE_TYPE_BINARY;
+${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+    obj->type = ${PREFIX}_AST_NODE_TYPE_BINARY;
     obj->data.binary.node[0] = node0;
     obj->data.binary.node[1] = node1;
     {
         size_t i = 0;
         for (i = 0; i < 2; i++) {
-            pcc_ast_node_t *const node = obj->data.binary.node[i];
+            ${prefix}_ast_node_t *const node = obj->data.binary.node[i];
             if (node) {
-                pcc_ast_node__unlink_parent_(node);
+                ${prefix}_ast_node__unlink_parent_(node);
                 node->parent = obj;
             }
         }
     }
-    pcc_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
     return obj;
 }
 
-pcc_ast_node_t *pcc_ast_node__create_ternary(pcc_ast_manager_t *mgr, pcc_ast_node_t *node0, pcc_ast_node_t *node1, pcc_ast_node_t *node2) {
-    pcc_ast_node_t *const obj = pcc_ast_node__create_(mgr);
-    obj->type = PCC_AST_NODE_TYPE_TERNARY;
+${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+    obj->type = ${PREFIX}_AST_NODE_TYPE_TERNARY;
     obj->data.ternary.node[0] = node0;
     obj->data.ternary.node[1] = node1;
     obj->data.ternary.node[2] = node2;
     {
         size_t i = 0;
         for (i = 0; i < 3; i++) {
-            pcc_ast_node_t *const node = obj->data.ternary.node[i];
+            ${prefix}_ast_node_t *const node = obj->data.ternary.node[i];
             if (node) {
-                pcc_ast_node__unlink_parent_(node);
+                ${prefix}_ast_node__unlink_parent_(node);
                 node->parent = obj;
             }
         }
     }
-    pcc_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
     return obj;
 }
 
-pcc_ast_node_t *pcc_ast_node__create_variadic(pcc_ast_manager_t *mgr) {
-    pcc_ast_node_t *const obj = pcc_ast_node__create_(mgr);
-    obj->type = PCC_AST_NODE_TYPE_VARIADIC;
-    pcc_ast_node_array__initialize(mgr, &(obj->data.variadic));
-    pcc_ast_node_custom_data__initialize(&(obj->custom));
+${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+    obj->type = ${PREFIX}_AST_NODE_TYPE_VARIADIC;
+    ${prefix}_ast_node_array__initialize(mgr, &(obj->data.variadic));
+    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
     return obj;
 }
 
-pcc_ast_node_t *pcc_ast_node__add_child(pcc_ast_node_t *obj, pcc_ast_node_t *node) {
-    if (obj->type == PCC_AST_NODE_TYPE_VARIADIC) {
-        pcc_ast_node_array__add(obj->manager, &(obj->data.variadic), node);
+${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node) {
+    if (obj->type == ${PREFIX}_AST_NODE_TYPE_VARIADIC) {
+        ${prefix}_ast_node_array__add(obj->manager, &(obj->data.variadic), node);
         if (node) {
-            pcc_ast_node__unlink_parent_(node);
+            ${prefix}_ast_node__unlink_parent_(node);
             node->parent = obj;
         }
     }
@@ -336,66 +336,66 @@ pcc_ast_node_t *pcc_ast_node__add_child(pcc_ast_node_t *obj, pcc_ast_node_t *nod
     return obj;
 }
 
-void pcc_ast_node__destroy(pcc_ast_node_t *obj) {
+void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
     if (obj) {
-        pcc_ast_node_custom_data__finalize(&(obj->custom));
+        ${prefix}_ast_node_custom_data__finalize(&(obj->custom));
         switch (obj->type) {
-        case PCC_AST_NODE_TYPE_NULLARY:
+        case ${PREFIX}_AST_NODE_TYPE_NULLARY:
             break;
-        case PCC_AST_NODE_TYPE_UNARY:
+        case ${PREFIX}_AST_NODE_TYPE_UNARY:
             {
-                pcc_ast_node_t *const node = obj->data.unary.node;
+                ${prefix}_ast_node_t *const node = obj->data.unary.node;
                 if (node) {
                     assert(node->parent == obj);
                     node->parent = NULL;
-                    pcc_ast_node__destroy(node);
+                    ${prefix}_ast_node__destroy(node);
                 }
             }
             break;
-        case PCC_AST_NODE_TYPE_BINARY:
+        case ${PREFIX}_AST_NODE_TYPE_BINARY:
             {
                 size_t i;
                 for (i = 0; i < 2; i++) {
-                    pcc_ast_node_t *const node = obj->data.binary.node[i];
+                    ${prefix}_ast_node_t *const node = obj->data.binary.node[i];
                     if (node) {
                         assert(node->parent == obj);
                         node->parent = NULL;
-                        pcc_ast_node__destroy(node);
+                        ${prefix}_ast_node__destroy(node);
                     }
                 }
             }
             break;
-        case PCC_AST_NODE_TYPE_TERNARY:
+        case ${PREFIX}_AST_NODE_TYPE_TERNARY:
             {
                 size_t i;
                 for (i = 0; i < 3; i++) {
-                    pcc_ast_node_t *const node = obj->data.ternary.node[i];
+                    ${prefix}_ast_node_t *const node = obj->data.ternary.node[i];
                     if (node) {
                         assert(node->parent == obj);
                         node->parent = NULL;
-                        pcc_ast_node__destroy(node);
+                        ${prefix}_ast_node__destroy(node);
                     }
                 }
             }
             break;
-        case PCC_AST_NODE_TYPE_VARIADIC:
+        case ${PREFIX}_AST_NODE_TYPE_VARIADIC:
             while (obj->data.variadic.len > 0) {
                 const size_t i = --obj->data.variadic.len;
-                pcc_ast_node_t *const node = obj->data.variadic.node[i];
+                ${prefix}_ast_node_t *const node = obj->data.variadic.node[i];
                 if (node) {
                     assert(node->parent == obj);
                     node->parent = NULL;
-                    pcc_ast_node__destroy(node);
+                    ${prefix}_ast_node__destroy(node);
                     obj->data.variadic.node[i] = NULL;
                 }
             }
-            pcc_ast_node_array__finalize(obj->manager, &(obj->data.variadic));
+            ${prefix}_ast_node_array__finalize(obj->manager, &(obj->data.variadic));
             break;
         default:
             assert(((void)"Node type unknown", 0));
             break;
         }
-        pcc_ast_node__unlink_parent_(obj);
+        ${prefix}_ast_node__unlink_parent_(obj);
         if (obj->prev) {
             assert(obj->prev->next == obj);
             obj->prev->next = obj->next;
