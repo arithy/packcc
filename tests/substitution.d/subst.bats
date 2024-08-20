@@ -3,7 +3,7 @@
 load "$TESTDIR/utils.sh"
 
 check_output_parser() {
-    diff --strip-trailing-cr -uN "${1/parser/expected}" --label "${1/parser/expected}" <(sed -e '1d' < "$1") --label "output"
+    diff --strip-trailing-cr -uN "${1/parser/expected}.txt" --label "${1/parser/expected}" <(grep '^ *TEST ' < "$1") --label "output"
 }
 
 @test "Testing substitution.d - generation" {

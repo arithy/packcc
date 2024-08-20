@@ -1,79 +1,79 @@
 %header {
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST HEADER $$
+TEST HEADER $0
+TEST HEADER $0s
+TEST HEADER $0e
+TEST HEADER $123
+TEST HEADER $123s
+TEST HEADER $123e
+TEST HEADER ${prefix}
+TEST HEADER ${PREFIX}
+TEST HEADER ${bar}
 }
 
 %source {
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST SOURCE $$
+TEST SOURCE $0
+TEST SOURCE $0s
+TEST SOURCE $0e
+TEST SOURCE $123
+TEST SOURCE $123s
+TEST SOURCE $123e
+TEST SOURCE ${prefix}
+TEST SOURCE ${PREFIX}
+TEST SOURCE ${bar}
 }
 
 %common {
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST COMMON $$
+TEST COMMON $0
+TEST COMMON $0s
+TEST COMMON $0e
+TEST COMMON $123
+TEST COMMON $123s
+TEST COMMON $123e
+TEST COMMON ${prefix}
+TEST COMMON ${PREFIX}
+TEST COMMON ${bar}
 }
 
 %earlyheader {
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST EARLYHEADER $$
+TEST EARLYHEADER $0
+TEST EARLYHEADER $0s
+TEST EARLYHEADER $0e
+TEST EARLYHEADER $123
+TEST EARLYHEADER $123s
+TEST EARLYHEADER $123e
+TEST EARLYHEADER ${prefix}
+TEST EARLYHEADER ${PREFIX}
+TEST EARLYHEADER ${bar}
 }
 
 %earlysource {
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST EARLYSOURCE $$
+TEST EARLYSOURCE $0
+TEST EARLYSOURCE $0s
+TEST EARLYSOURCE $0e
+TEST EARLYSOURCE $123
+TEST EARLYSOURCE $123s
+TEST EARLYSOURCE $123e
+TEST EARLYSOURCE ${prefix}
+TEST EARLYSOURCE ${PREFIX}
+TEST EARLYSOURCE ${bar}
 }
 
 %earlycommon {
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST EARLYCOMMON $$
+TEST EARLYCOMMON $0
+TEST EARLYCOMMON $0s
+TEST EARLYCOMMON $0e
+TEST EARLYCOMMON $123
+TEST EARLYCOMMON $123s
+TEST EARLYCOMMON $123e
+TEST EARLYCOMMON ${prefix}
+TEST EARLYCOMMON ${PREFIX}
+TEST EARLYCOMMON ${bar}
 }
 
 %value "double"
@@ -85,50 +85,50 @@ ${bar}
 FILE
    <- '_'
     {
-        $$.
-        $$$
-        $$0
-        $0.
-        $0$
-        $01
-        $0s.
-        $0s$
-        $0s1
-        $01s
-        $0e.
-        $0e$
-        $0e1
-        $01e
-        $123.
-        $123$
-        $123_
-        $123s.
-        $123s$
-        $123s_
-        $123e.
-        $123e$
-        $123e_
-        ${prefix}
-        ${PREFIX}
-        ${bar}
+        TEST ACTION0 $$.
+        TEST ACTION0 $$$
+        TEST ACTION0 $$0
+        TEST ACTION0 $0.
+        TEST ACTION0 $0$
+        TEST ACTION0 $01
+        TEST ACTION0 $0s.
+        TEST ACTION0 $0s$
+        TEST ACTION0 $0s1
+        TEST ACTION0 $01s
+        TEST ACTION0 $0e.
+        TEST ACTION0 $0e$
+        TEST ACTION0 $0e1
+        TEST ACTION0 $01e
+        TEST ACTION0 $123.
+        TEST ACTION0 $123$
+        TEST ACTION0 $123_
+        TEST ACTION0 $123s.
+        TEST ACTION0 $123s$
+        TEST ACTION0 $123s_
+        TEST ACTION0 $123e.
+        TEST ACTION0 $123e$
+        TEST ACTION0 $123e_
+        TEST ACTION0 ${prefix}
+        TEST ACTION0 ${PREFIX}
+        TEST ACTION0 ${bar}
     }
-    / '$'  {$$}
-    / '0'  {$0}
-    / '0s' {$0s}
-    / '0e' {$0e}
-    / '123'  {$123}
-    / '123s' {$123s}
-    / '123e' {$123e}
+    / '$'  {TEST ACTION1 $$}
+    / '0'  {TEST ACTION2 $0}
+    / '0s' {TEST ACTION3 $0s}
+    / '0e' {TEST ACTION4 $0e}
+    / '123'  {TEST ACTION5 $123}
+    / '123s' {TEST ACTION6 $123s}
+    / '123e' {TEST ACTION7 $123e}
 
 %%
 
-$$
-$0
-$0s
-$0e
-$123
-$123s
-$123e
-${prefix}
-${PREFIX}
-${bar}
+TEST FOOTER $$
+TEST FOOTER $0
+TEST FOOTER $0s
+TEST FOOTER $0e
+TEST FOOTER $123
+TEST FOOTER $123s
+TEST FOOTER $123e
+TEST FOOTER ${prefix}
+TEST FOOTER ${PREFIX}
+TEST FOOTER ${bar}
