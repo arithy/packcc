@@ -2269,7 +2269,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "')\n");
         break;
     case NODE_POSITION:
-        fprintf(stdout, "%*sLocation(value:" FMT_LU ")\n", indent, "", (ulong_t)node->data.position.value);
+        fprintf(stdout, "%*sPosition(value:" FMT_LU ")\n", indent, "", (ulong_t)node->data.position.value);
         break;
     case NODE_QUANTITY:
         fprintf(stdout, "%*sQuantity(min:%d, max:%d) {\n", indent, "", node->data.quantity.min, node->data.quantity.max);
