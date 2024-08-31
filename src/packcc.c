@@ -240,14 +240,14 @@ typedef struct node_rule_tag {
     node_t *expr;
     int ref; /* mutable under make_rulehash(), link_references(), and unreference_rules_from_unused_rule() */
     bool_t used; /* mutable under mark_rules_if_used() */
-    node_const_array_t vars;
+    node_const_array_t rvars;
     node_const_array_t capts;
     node_const_array_t codes;
     file_pos_t fpos;
 } node_rule_t;
 
 typedef struct node_reference_tag {
-    char *var; /* NULL if no variable name */
+    char *rvar; /* NULL if no rule variable identifier */
     size_t index;
     char *name;
     const node_t *rule;
@@ -298,7 +298,7 @@ typedef struct node_expand_tag {
 typedef struct node_action_tag {
     code_block_t code;
     size_t index;
-    node_const_array_t vars;
+    node_const_array_t rvars;
     node_const_array_t capts;
 } node_action_t;
 
@@ -306,7 +306,7 @@ typedef struct node_error_tag {
     node_t *expr;
     code_block_t code;
     size_t index;
-    node_const_array_t vars;
+    node_const_array_t rvars;
     node_const_array_t capts;
 } node_error_t;
 
@@ -1063,7 +1063,7 @@ static void stream__write_characters(stream_t *obj, char ch, size_t len) {
     for (i = 0; i < len; i++) stream__putc(obj, ch);
 }
 
-static bool_t can_character_follow_action_variable_(char ch) {
+static bool_t can_character_follow_reserved_identifier_(char ch) {
     return (
         ch != SUBST_MARKER && ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
     ) ? TRUE : FALSE;
@@ -1083,7 +1083,7 @@ static void stream__write_text(stream_t *obj, const char *ptr, size_t len, bool_
             if (j < len) {
                 char c = ptr[j++];
                 if (isact && c == SUBST_MARKER) { /* "$$" */
-                    if (j >= len || can_character_follow_action_variable_(ptr[j])) {
+                    if (j >= len || can_character_follow_reserved_identifier_(ptr[j])) {
                         stream__putc(obj, '_');
                         stream__putc(obj, '_');
                         b = TRUE; i++;
@@ -1091,7 +1091,7 @@ static void stream__write_text(stream_t *obj, const char *ptr, size_t len, bool_
                 }
                 else if (isact && c == '0') { /* "$0" */
                     if (j < len && (ptr[j] == 's' || ptr[j] == 'e')) j++;
-                    if (j >= len || can_character_follow_action_variable_(ptr[j])) {
+                    if (j >= len || can_character_follow_reserved_identifier_(ptr[j])) {
                         stream__putc(obj, '_');
                         while (i + 1 < j) stream__putc(obj, ptr[++i]);
                         b = TRUE;
@@ -1100,7 +1100,7 @@ static void stream__write_text(stream_t *obj, const char *ptr, size_t len, bool_
                 else if (isact && c >= '1' && c <= '9') { /* "$n" (n: a string to express a natural number) */
                     while (j < len && ptr[j] >= '0' && ptr[j] <= '9') j++;
                     if (j < len && (ptr[j] == 's' || ptr[j] == 'e')) j++;
-                    if (j >= len || can_character_follow_action_variable_(ptr[j])) {
+                    if (j >= len || can_character_follow_reserved_identifier_(ptr[j])) {
                         stream__putc(obj, '_');
                         while (i + 1 < j) stream__putc(obj, ptr[++i]);
                         b = TRUE;
@@ -1706,13 +1706,13 @@ static node_t *create_node(node_type_t type) {
         node->data.rule.expr = NULL;
         node->data.rule.ref = 0;
         node->data.rule.used = FALSE;
-        node_const_array__initialize(&(node->data.rule.vars));
+        node_const_array__initialize(&(node->data.rule.rvars));
         node_const_array__initialize(&(node->data.rule.capts));
         node_const_array__initialize(&(node->data.rule.codes));
         file_pos__initialize(&(node->data.rule.fpos));
         break;
     case NODE_REFERENCE:
-        node->data.reference.var = NULL;
+        node->data.reference.rvar = NULL;
         node->data.reference.index = VOID_VALUE;
         node->data.reference.name = NULL;
         node->data.reference.rule = NULL;
@@ -1752,14 +1752,14 @@ static node_t *create_node(node_type_t type) {
     case NODE_ACTION:
         code_block__initialize(&(node->data.action.code));
         node->data.action.index = VOID_VALUE;
-        node_const_array__initialize(&(node->data.action.vars));
+        node_const_array__initialize(&(node->data.action.rvars));
         node_const_array__initialize(&(node->data.action.capts));
         break;
     case NODE_ERROR:
         node->data.error.expr = NULL;
         code_block__initialize(&(node->data.error.code));
         node->data.error.index = VOID_VALUE;
-        node_const_array__initialize(&(node->data.error.vars));
+        node_const_array__initialize(&(node->data.error.rvars));
         node_const_array__initialize(&(node->data.error.capts));
         break;
     default:
@@ -1775,13 +1775,13 @@ static void destroy_node(node_t *node) {
     case NODE_RULE:
         free(node->data.rule.name);
         destroy_node(node->data.rule.expr);
-        node_const_array__finalize(&(node->data.rule.vars));
+        node_const_array__finalize(&(node->data.rule.rvars));
         node_const_array__finalize(&(node->data.rule.capts));
         node_const_array__finalize(&(node->data.rule.codes));
         file_pos__finalize(&(node->data.rule.fpos));
         break;
     case NODE_REFERENCE:
-        free(node->data.reference.var);
+        free(node->data.reference.rvar);
         free(node->data.reference.name);
         file_pos__finalize(&(node->data.reference.fpos));
         break;
@@ -1813,13 +1813,13 @@ static void destroy_node(node_t *node) {
         break;
     case NODE_ACTION:
         code_block__finalize(&(node->data.action.code));
-        node_const_array__finalize(&(node->data.action.vars));
+        node_const_array__finalize(&(node->data.action.rvars));
         node_const_array__finalize(&(node->data.action.capts));
         break;
     case NODE_ERROR:
         destroy_node(node->data.error.expr);
         code_block__finalize(&(node->data.error.code));
-        node_const_array__finalize(&(node->data.error.vars));
+        node_const_array__finalize(&(node->data.error.rvars));
         node_const_array__finalize(&(node->data.error.capts));
         break;
     default:
@@ -2041,13 +2041,13 @@ static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
     }
 }
 
-static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *vars) {
+static void verify_rule_variables(context_t *ctx, node_t *node, node_const_array_t *rvars) {
     node_const_array_t a;
-    const bool_t b = (vars == NULL) ? TRUE : FALSE;
+    const bool_t b = (rvars == NULL) ? TRUE : FALSE;
     if (node == NULL) return;
     if (b) {
         node_const_array__initialize(&a);
-        vars = &a;
+        rvars = &a;
     }
     switch (node->type) {
     case NODE_RULE:
@@ -2056,11 +2056,11 @@ static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *v
     case NODE_REFERENCE:
         if (node->data.reference.index != VOID_VALUE) {
             size_t i;
-            for (i = 0; i < vars->n; i++) {
-                assert(vars->p[i]->type == NODE_REFERENCE);
-                if (node->data.reference.index == vars->p[i]->data.reference.index) break;
+            for (i = 0; i < rvars->n; i++) {
+                assert(rvars->p[i]->type == NODE_REFERENCE);
+                if (node->data.reference.index == rvars->p[i]->data.reference.index) break;
             }
-            if (i == vars->n) node_const_array__add(vars, node);
+            if (i == rvars->n) node_const_array__add(rvars, node);
         }
         break;
     case NODE_STRING:
@@ -2070,49 +2070,49 @@ static void verify_variables(context_t *ctx, node_t *node, node_const_array_t *v
     case NODE_POSITION:
         break;
     case NODE_QUANTITY:
-        verify_variables(ctx, node->data.quantity.expr, vars);
+        verify_rule_variables(ctx, node->data.quantity.expr, rvars);
         break;
     case NODE_PREDICATE:
-        verify_variables(ctx, node->data.predicate.expr, vars);
+        verify_rule_variables(ctx, node->data.predicate.expr, rvars);
         break;
     case NODE_SEQUENCE:
         {
             size_t i;
             for (i = 0; i < node->data.sequence.nodes.n; i++) {
-                verify_variables(ctx, node->data.sequence.nodes.p[i], vars);
+                verify_rule_variables(ctx, node->data.sequence.nodes.p[i], rvars);
             }
         }
         break;
     case NODE_ALTERNATE:
         {
-            size_t i, j, k, m = vars->n;
+            size_t i, j, k, m = rvars->n;
             node_const_array_t v;
             node_const_array__initialize(&v);
-            node_const_array__copy(&v, vars);
+            node_const_array__copy(&v, rvars);
             for (i = 0; i < node->data.alternate.nodes.n; i++) {
                 v.n = m;
-                verify_variables(ctx, node->data.alternate.nodes.p[i], &v);
+                verify_rule_variables(ctx, node->data.alternate.nodes.p[i], &v);
                 for (j = m; j < v.n; j++) {
-                    for (k = m; k < vars->n; k++) {
-                        if (v.p[j]->data.reference.index == vars->p[k]->data.reference.index) break;
+                    for (k = m; k < rvars->n; k++) {
+                        if (v.p[j]->data.reference.index == rvars->p[k]->data.reference.index) break;
                     }
-                    if (k == vars->n) node_const_array__add(vars, v.p[j]);
+                    if (k == rvars->n) node_const_array__add(rvars, v.p[j]);
                 }
             }
             node_const_array__finalize(&v);
         }
         break;
     case NODE_CAPTURE:
-        verify_variables(ctx, node->data.capture.expr, vars);
+        verify_rule_variables(ctx, node->data.capture.expr, rvars);
         break;
     case NODE_EXPAND:
         break;
     case NODE_ACTION:
-        node_const_array__copy(&(node->data.action.vars), vars);
+        node_const_array__copy(&(node->data.action.rvars), rvars);
         break;
     case NODE_ERROR:
-        node_const_array__copy(&(node->data.error.vars), vars);
-        verify_variables(ctx, node->data.error.expr, vars);
+        node_const_array__copy(&(node->data.error.rvars), rvars);
+        verify_rule_variables(ctx, node->data.error.expr, rvars);
         break;
     default:
         print_error("Internal error [%d]\n", __LINE__);
@@ -2238,13 +2238,13 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(
             stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ") {\n",
             indent, "", node->data.rule.name, node->data.rule.ref,
-            (ulong_t)node->data.rule.vars.n, (ulong_t)node->data.rule.capts.n, (ulong_t)node->data.rule.codes.n
+            (ulong_t)node->data.rule.rvars.n, (ulong_t)node->data.rule.capts.n, (ulong_t)node->data.rule.codes.n
         );
         dump_node(ctx, node->data.rule.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_REFERENCE:
-        fprintf(stdout, "%*sReference(var:'%s', index:", indent, "", node->data.reference.var);
+        fprintf(stdout, "%*sReference(var:'%s', index:", indent, "", node->data.reference.rvar);
         dump_integer_value(node->data.reference.index);
         fprintf(
             stdout, ", name:'%s', rule:'%s')\n", node->data.reference.name,
@@ -2318,11 +2318,11 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, ", code:{");
         dump_escaped_string(node->data.action.code.text);
         fprintf(stdout, "}, vars:");
-        if (node->data.action.vars.n + node->data.action.capts.n > 0) {
+        if (node->data.action.rvars.n + node->data.action.capts.n > 0) {
             size_t i;
             fprintf(stdout, "\n");
-            for (i = 0; i < node->data.action.vars.n; i++) {
-                fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.action.vars.p[i]->data.reference.var);
+            for (i = 0; i < node->data.action.rvars.n; i++) {
+                fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.action.rvars.p[i]->data.reference.rvar);
             }
             for (i = 0; i < node->data.action.capts.n; i++) {
                 fprintf(stdout, "%*s$" FMT_LU "\n", indent + 2, "", (ulong_t)(node->data.action.capts.p[i]->data.capture.index + 1));
@@ -2341,8 +2341,8 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "}, vars:\n");
         {
             size_t i;
-            for (i = 0; i < node->data.error.vars.n; i++) {
-                fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.error.vars.p[i]->data.reference.var);
+            for (i = 0; i < node->data.error.rvars.n; i++) {
+                fprintf(stdout, "%*s'%s'\n", indent + 2, "", node->data.error.rvars.p[i]->data.reference.rvar);
             }
             for (i = 0; i < node->data.error.capts.n; i++) {
                 fprintf(stdout, "%*s$" FMT_LU "\n", indent + 2, "", (ulong_t)(node->data.error.capts.p[i]->data.capture.index + 1));
@@ -2652,28 +2652,28 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         n_p = create_node(NODE_REFERENCE);
         if (r == VOID_VALUE) {
             assert(q >= p);
-            n_p->data.reference.var = NULL;
+            n_p->data.reference.rvar = NULL;
             n_p->data.reference.index = VOID_VALUE;
             n_p->data.reference.name = strndup_e(input->buffer.p + p, q - p);
         }
         else {
             assert(s != VOID_VALUE); /* s should have a valid value when r has a valid value */
             assert(q >= p);
-            n_p->data.reference.var = strndup_e(input->buffer.p + p, q - p);
-            if (n_p->data.reference.var[0] == '_') {
+            n_p->data.reference.rvar = strndup_e(input->buffer.p + p, q - p);
+            if (n_p->data.reference.rvar[0] == '_') {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
-                    input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.var
+                    input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.rvar
                 );
                 input->errnum++;
             }
             {
                 size_t i;
-                for (i = 0; i < rule->data.rule.vars.n; i++) {
-                    assert(rule->data.rule.vars.p[i]->type == NODE_REFERENCE);
-                    if (strcmp(n_p->data.reference.var, rule->data.rule.vars.p[i]->data.reference.var) == 0) break;
+                for (i = 0; i < rule->data.rule.rvars.n; i++) {
+                    assert(rule->data.rule.rvars.p[i]->type == NODE_REFERENCE);
+                    if (strcmp(n_p->data.reference.rvar, rule->data.rule.rvars.p[i]->data.reference.rvar) == 0) break;
                 }
-                if (i == rule->data.rule.vars.n) node_const_array__add(&(rule->data.rule.vars), n_p);
+                if (i == rule->data.rule.rvars.n) node_const_array__add(&(rule->data.rule.rvars), n_p);
                 n_p->data.reference.index = i;
             }
             assert(s >= r);
@@ -3298,7 +3298,7 @@ static bool_t parse(context_t *ctx) {
         size_t i;
         for (i = 0; i < ctx->rules.n; i++) {
             const node_rule_t *const rule = &(ctx->rules.p[i]->data.rule);
-            verify_variables(ctx, rule->expr, NULL);
+            verify_rule_variables(ctx, rule->expr, NULL);
             verify_captures(ctx, rule->expr, NULL);
         }
     }
@@ -3873,7 +3873,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
 }
 
 static code_reach_t generate_thunking_action_code(
-    generate_t *gen, size_t index, const node_const_array_t *vars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare
+    generate_t *gen, size_t index, const node_const_array_t *rvars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare
 ) {
     assert(gen->rule->type == NODE_RULE);
     if (!bare) {
@@ -3888,16 +3888,16 @@ static code_reach_t generate_thunking_action_code(
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(
         gen->stream, "pcc_thunk_t *const thunk = pcc_thunk__create_leaf(ctx, pcc_action_%s_" FMT_LU ", " FMT_LU ", " FMT_LU ");\n",
-        gen->rule->data.rule.name, (ulong_t)index, (ulong_t)gen->rule->data.rule.vars.n, (ulong_t)gen->rule->data.rule.capts.n
+        gen->rule->data.rule.name, (ulong_t)index, (ulong_t)gen->rule->data.rule.rvars.n, (ulong_t)gen->rule->data.rule.capts.n
     );
     {
         size_t i;
-        for (i = 0; i < vars->n; i++) {
-            assert(vars->p[i]->type == NODE_REFERENCE);
+        for (i = 0; i < rvars->n; i++) {
+            assert(rvars->p[i]->type == NODE_REFERENCE);
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(
                 gen->stream, "thunk->data.leaf.values.p[" FMT_LU "] = &(chunk->values.p[" FMT_LU "]);\n",
-                (ulong_t)vars->p[i]->data.reference.index, (ulong_t)vars->p[i]->data.reference.index
+                (ulong_t)rvars->p[i]->data.reference.index, (ulong_t)rvars->p[i]->data.reference.index
             );
         }
         for (i = 0; i < capts->n; i++) {
@@ -3936,7 +3936,7 @@ static code_reach_t generate_thunking_action_code(
 }
 
 static code_reach_t generate_thunking_error_code(
-    generate_t *gen, const node_t *expr, size_t index, const node_const_array_t *vars, const node_const_array_t *capts, int onfail, size_t indent, bool_t bare
+    generate_t *gen, const node_t *expr, size_t index, const node_const_array_t *rvars, const node_const_array_t *capts, int onfail, size_t indent, bool_t bare
 ) {
     code_reach_t r;
     const int l = ++gen->label;
@@ -3952,7 +3952,7 @@ static code_reach_t generate_thunking_error_code(
     stream__printf(gen->stream, "goto L%04d;\n", m);
     if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
     stream__printf(gen->stream, "L%04d:;\n", l);
-    generate_thunking_action_code(gen, index, vars, capts, TRUE, l, indent, FALSE);
+    generate_thunking_action_code(gen, index, rvars, capts, TRUE, l, indent, FALSE);
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "goto L%04d;\n", onfail);
     if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
@@ -4012,11 +4012,11 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_expanding_code(gen, node->data.expand.index, onfail, indent, bare);
     case NODE_ACTION:
         return generate_thunking_action_code(
-            gen, node->data.action.index, &(node->data.action.vars), &(node->data.action.capts), FALSE, onfail, indent, bare
+            gen, node->data.action.index, &(node->data.action.rvars), &(node->data.action.capts), FALSE, onfail, indent, bare
         );
     case NODE_ERROR:
         return generate_thunking_error_code(
-            gen, node->data.error.expr, node->data.error.index, &(node->data.error.vars), &(node->data.error.capts), onfail, indent, bare
+            gen, node->data.error.expr, node->data.error.index, &(node->data.error.rvars), &(node->data.error.capts), onfail, indent, bare
         );
     default:
         print_error("Internal error [%d]\n", __LINE__);
@@ -5392,13 +5392,13 @@ static bool_t generate(context_t *ctx) {
                     case NODE_ACTION:
                         b = &(rule->codes.p[j]->data.action.code);
                         d = rule->codes.p[j]->data.action.index;
-                        v = &(rule->codes.p[j]->data.action.vars);
+                        v = &(rule->codes.p[j]->data.action.rvars);
                         c = &(rule->codes.p[j]->data.action.capts);
                         break;
                     case NODE_ERROR:
                         b = &(rule->codes.p[j]->data.error.code);
                         d = rule->codes.p[j]->data.error.index;
-                        v = &(rule->codes.p[j]->data.error.vars);
+                        v = &(rule->codes.p[j]->data.error.rvars);
                         c = &(rule->codes.p[j]->data.error.capts);
                         break;
                     default:
@@ -5421,7 +5421,7 @@ static bool_t generate(context_t *ctx) {
                         stream__printf(
                             &sstream,
                             "#define %s (*__pcc_in->data.leaf.values.p[" FMT_LU "])\n",
-                            v->p[k]->data.reference.var, (ulong_t)v->p[k]->data.reference.index
+                            v->p[k]->data.reference.rvar, (ulong_t)v->p[k]->data.reference.index
                         );
                         k++;
                     }
@@ -5485,7 +5485,7 @@ static bool_t generate(context_t *ctx) {
                         stream__printf(
                             &sstream,
                             "#undef %s\n",
-                            v->p[k]->data.reference.var
+                            v->p[k]->data.reference.rvar
                         );
                     }
                     stream__puts(
@@ -5543,11 +5543,11 @@ static bool_t generate(context_t *ctx) {
                         (ulong_t)rule->capts.n
                     );
                 }
-                if (rule->vars.n > 0) {
+                if (rule->rvars.n > 0) {
                     stream__printf(
                         &sstream,
                         "    pcc_value_table__resize(ctx->auxil, &(chunk->values), " FMT_LU ");\n",
-                        (ulong_t)rule->vars.n
+                        (ulong_t)rule->rvars.n
                     );
                     stream__puts(
                         &sstream,
