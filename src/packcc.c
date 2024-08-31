@@ -376,6 +376,7 @@ typedef struct context_tag {
     char *vtype;  /* the type name of the data output by the parsing API function (NULL means the default) */
     char *atype;  /* the type name of the user-defined data passed to the parser creation API function (NULL means the default) */
     char *prefix; /* the prefix of the API function names (NULL means the default) */
+    string_array_t mvars; /* the marker variable identifiers */
     const string_array_t *dirs; /* the path names of directories to search for import files */
     options_t opts;       /* the options */
     code_flag_t flags;    /* the bitwise flags to control code generation; updated during PEG parsing */
@@ -1657,6 +1658,7 @@ static context_t *create_context(const char *ipath, const char *opath, const str
     ctx->vtype = NULL;
     ctx->atype = NULL;
     ctx->prefix = NULL;
+    string_array__initialize(&(ctx->mvars));
     ctx->dirs = dirs;
     ctx->opts = *opts;
     ctx->flags = CODE_FLAG__NONE;
@@ -1684,6 +1686,7 @@ static void destroy_context(context_t *ctx) {
     free(ctx->vtype);
     free(ctx->atype);
     free(ctx->prefix);
+    string_array__finalize(&(ctx->mvars));
     while (ctx->input) ctx->input = input_state__destroy(ctx->input);
     file_id_array__finalize(&(ctx->done));
     subst_map__finalize(&(ctx->subst));
@@ -2662,7 +2665,7 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
             n_p->data.reference.rvar = strndup_e(input->buffer.p + p, q - p);
             if (n_p->data.reference.rvar[0] == '_') {
                 print_error(
-                    "%s:" FMT_LU ":" FMT_LU ": Leading underscore in variable name '%s'\n",
+                    "%s:" FMT_LU ":" FMT_LU ": Leading underscore in rule variable identifier '%s'\n",
                     input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.rvar
                 );
                 input->errnum++;
@@ -3109,6 +3112,50 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
     return TRUE;
 }
 
+static bool_t parse_directive_marker_(input_state_t *input, const char *name, string_array_t *output) {
+    if (!match_string(input, name)) return FALSE;
+    for (;;) {
+        match_spaces(input);
+        if (!match_character(input, '@')) break;
+        match_spaces(input);
+        {
+            const size_t p = input->bufcur;
+            const size_t l = input->linenum;
+            const size_t m = column_number(input);
+            if (!match_identifier(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal marker variable identifier\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                input->errnum++;
+                break;
+            }
+            else {
+                const size_t q = input->bufcur;
+                size_t i;
+                for (i = 0; i < output->n; i++) {
+                    if (strncmp(output->p[i], input->buffer.p + p, q - p) == 0) break;
+                }
+                if (i < output->n) {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Duplicate marker variable identifier '%s'\n",
+                        input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), output->p[i]
+                    );
+                    input->errnum++;
+                }
+                else {
+                    string_array__add(output, input->buffer.p + p, q - p);
+                }
+                if (output->p[i][0] == '_') {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Leading underscore in marker variable identifier '%s'\n",
+                        input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), output->p[i]
+                    );
+                    input->errnum++;
+                }
+            }
+        }
+    }
+    return TRUE;
+}
+
 static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
     if (!match_footer_start(input)) return FALSE;
     {
@@ -3220,7 +3267,8 @@ static void parse_file_(context_t *ctx) {
                 parse_directive_block_(ctx->input, "%common", &(ctx->source), &(ctx->header)) ||
                 parse_directive_string_(ctx->input, "%value", imp ? NULL : &(ctx->vtype), STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
                 parse_directive_string_(ctx->input, "%auxil", imp ? NULL : &(ctx->atype), STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
-                parse_directive_string_(ctx->input, "%prefix", imp ? NULL : &(ctx->prefix), STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER)
+                parse_directive_string_(ctx->input, "%prefix", imp ? NULL : &(ctx->prefix), STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER) ||
+                parse_directive_marker_(ctx->input, "%marker", &(ctx->mvars))
             ) {
                 b = TRUE;
             }
