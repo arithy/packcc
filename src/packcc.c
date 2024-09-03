@@ -209,6 +209,7 @@ typedef enum node_type_tag {
     NODE_POSITION,
     NODE_QUANTITY,
     NODE_PREDICATE,
+    NODE_PROGPRED,
     NODE_SEQUENCE,
     NODE_ALTERNATE,
     NODE_CAPTURE,
@@ -243,6 +244,7 @@ typedef struct node_rule_tag {
     node_const_array_t rvars;
     node_const_array_t capts;
     node_const_array_t codes;
+    node_const_array_t preds;
     file_pos_t fpos;
 } node_rule_t;
 
@@ -276,6 +278,13 @@ typedef struct node_predicate_tag {
     bool_t neg;
     node_t *expr;
 } node_predicate_t;
+
+typedef struct node_progpred_tag {
+    bool_t neg;
+    code_block_t code;
+    size_t index;
+    node_const_array_t capts;
+} node_progpred_t;
 
 typedef struct node_sequence_tag {
     node_array_t nodes;
@@ -318,6 +327,7 @@ typedef union node_data_tag {
     node_position_t  position;
     node_quantity_t  quantity;
     node_predicate_t predicate;
+    node_progpred_t  progpred;
     node_sequence_t  sequence;
     node_alternate_t alternate;
     node_capture_t   capture;
@@ -1712,6 +1722,7 @@ static node_t *create_node(node_type_t type) {
         node_const_array__initialize(&(node->data.rule.rvars));
         node_const_array__initialize(&(node->data.rule.capts));
         node_const_array__initialize(&(node->data.rule.codes));
+        node_const_array__initialize(&(node->data.rule.preds));
         file_pos__initialize(&(node->data.rule.fpos));
         break;
     case NODE_REFERENCE:
@@ -1737,6 +1748,12 @@ static node_t *create_node(node_type_t type) {
     case NODE_PREDICATE:
         node->data.predicate.neg = FALSE;
         node->data.predicate.expr = NULL;
+        break;
+    case NODE_PROGPRED:
+        node->data.progpred.neg = FALSE;
+        code_block__initialize(&(node->data.progpred.code));
+        node->data.progpred.index = VOID_VALUE;
+        node_const_array__initialize(&(node->data.progpred.capts));
         break;
     case NODE_SEQUENCE:
         node_array__initialize(&(node->data.sequence.nodes));
@@ -1781,6 +1798,7 @@ static void destroy_node(node_t *node) {
         node_const_array__finalize(&(node->data.rule.rvars));
         node_const_array__finalize(&(node->data.rule.capts));
         node_const_array__finalize(&(node->data.rule.codes));
+        node_const_array__finalize(&(node->data.rule.preds));
         file_pos__finalize(&(node->data.rule.fpos));
         break;
     case NODE_REFERENCE:
@@ -1801,6 +1819,10 @@ static void destroy_node(node_t *node) {
         break;
     case NODE_PREDICATE:
         destroy_node(node->data.predicate.expr);
+        break;
+    case NODE_PROGPRED:
+        code_block__finalize(&(node->data.progpred.code));
+        node_const_array__finalize(&(node->data.progpred.capts));
         break;
     case NODE_SEQUENCE:
         node_array__finalize(&(node->data.sequence.nodes));
@@ -1902,6 +1924,8 @@ static void link_references(context_t *ctx, node_t *node) {
     case NODE_PREDICATE:
         link_references(ctx, node->data.predicate.expr);
         break;
+    case NODE_PROGPRED:
+        break;
     case NODE_SEQUENCE:
         {
             size_t i;
@@ -1958,6 +1982,8 @@ static void mark_rules_if_used(context_t *ctx, node_t *node) {
     case NODE_PREDICATE:
         mark_rules_if_used(ctx, node->data.predicate.expr);
         break;
+    case NODE_PROGPRED:
+        break;
     case NODE_SEQUENCE:
         {
             size_t i;
@@ -2011,6 +2037,8 @@ static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
         break;
     case NODE_PREDICATE:
         unreference_rules_from_unused_rule(ctx, node->data.predicate.expr);
+        break;
+    case NODE_PROGPRED:
         break;
     case NODE_SEQUENCE:
         {
@@ -2077,6 +2105,8 @@ static void verify_rule_variables(context_t *ctx, node_t *node, node_const_array
         break;
     case NODE_PREDICATE:
         verify_rule_variables(ctx, node->data.predicate.expr, rvars);
+        break;
+    case NODE_PROGPRED:
         break;
     case NODE_SEQUENCE:
         {
@@ -2151,6 +2181,9 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
         break;
     case NODE_PREDICATE:
         verify_captures(ctx, node->data.predicate.expr, capts);
+        break;
+    case NODE_PROGPRED:
+        node_const_array__copy(&(node->data.progpred.capts), capts);
         break;
     case NODE_SEQUENCE:
         {
@@ -2239,9 +2272,10 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     switch (node->type) {
     case NODE_RULE:
         fprintf(
-            stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ") {\n",
+            stdout, "%*sRule(name:'%s', ref:%d, vars.len:" FMT_LU ", capts.len:" FMT_LU ", codes.len:" FMT_LU ", preds.len:" FMT_LU ") {\n",
             indent, "", node->data.rule.name, node->data.rule.ref,
-            (ulong_t)node->data.rule.rvars.n, (ulong_t)node->data.rule.capts.n, (ulong_t)node->data.rule.codes.n
+            (ulong_t)node->data.rule.rvars.n, (ulong_t)node->data.rule.capts.n,
+            (ulong_t)node->data.rule.codes.n, (ulong_t)node->data.rule.preds.n
         );
         dump_node(ctx, node->data.rule.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
@@ -2276,6 +2310,24 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*sPredicate(neg:%d) {\n", indent, "", node->data.predicate.neg);
         dump_node(ctx, node->data.predicate.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
+        break;
+    case NODE_PROGPRED:
+        fprintf(stdout, "%*sProgrammable Predicate(index:", indent, "");
+        dump_integer_value(node->data.progpred.index);
+        fprintf(stdout, ", neg:%d, code:{", node->data.progpred.neg);
+        dump_escaped_string(node->data.progpred.code.text);
+        fprintf(stdout, "}, capts:");
+        if (node->data.progpred.capts.n > 0) {
+            size_t i;
+            fprintf(stdout, "\n");
+            for (i = 0; i < node->data.progpred.capts.n; i++) {
+                fprintf(stdout, "%*s$" FMT_LU "\n", indent + 2, "", (ulong_t)(node->data.progpred.capts.p[i]->data.capture.index + 1));
+            }
+            fprintf(stdout, "%*s)\n", indent, "");
+        }
+        else {
+            fprintf(stdout, "none)\n");
+        }
         break;
     case NODE_SEQUENCE:
         fprintf(
@@ -2816,46 +2868,68 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
     node_t *n_r = NULL;
     node_t *n_t = NULL;
     const char t = match_character(input, '&') ? '&' : match_character(input, '!') ? '!' : '\0';
-    if (t) match_spaces(input);
-    n_p = parse_primary(input, rule);
-    if (n_p == NULL) goto EXCEPTION;
-    if (match_character(input, '*')) {
+    if (t) {
+        size_t p, l, m;
         match_spaces(input);
-        n_q = create_node(NODE_QUANTITY);
-        n_q->data.quantity.min = 0;
-        n_q->data.quantity.max = -1;
-        n_q->data.quantity.expr = n_p;
+        p = input->bufcur;
+        l = input->linenum;
+        m = column_number(input);
+        if (match_code_block(input)) {
+            const size_t q = input->bufcur;
+            match_spaces(input);
+            n_p = create_node(NODE_PROGPRED);
+            n_p->data.progpred.neg = (t == '!') ? TRUE : FALSE;
+            n_p->data.progpred.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
+            n_p->data.progpred.code.len = find_trailing_blanks(n_p->data.progpred.code.text);
+            file_pos__set(&n_p->data.progpred.code.fpos, input->path, l, m);
+            n_p->data.progpred.index = rule->data.rule.preds.n;
+            node_const_array__add(&(rule->data.rule.preds), n_p);
+        }
     }
-    else if (match_character(input, '+')) {
-        match_spaces(input);
-        n_q = create_node(NODE_QUANTITY);
-        n_q->data.quantity.min = 1;
-        n_q->data.quantity.max = -1;
-        n_q->data.quantity.expr = n_p;
-    }
-    else if (match_character(input, '?')) {
-        match_spaces(input);
-        n_q = create_node(NODE_QUANTITY);
-        n_q->data.quantity.min = 0;
-        n_q->data.quantity.max = 1;
-        n_q->data.quantity.expr = n_p;
+    if (n_p == NULL) {
+        n_p = parse_primary(input, rule);
+        if (n_p == NULL) goto EXCEPTION;
+        if (match_character(input, '*')) {
+            match_spaces(input);
+            n_q = create_node(NODE_QUANTITY);
+            n_q->data.quantity.min = 0;
+            n_q->data.quantity.max = -1;
+            n_q->data.quantity.expr = n_p;
+        }
+        else if (match_character(input, '+')) {
+            match_spaces(input);
+            n_q = create_node(NODE_QUANTITY);
+            n_q->data.quantity.min = 1;
+            n_q->data.quantity.max = -1;
+            n_q->data.quantity.expr = n_p;
+        }
+        else if (match_character(input, '?')) {
+            match_spaces(input);
+            n_q = create_node(NODE_QUANTITY);
+            n_q->data.quantity.min = 0;
+            n_q->data.quantity.max = 1;
+            n_q->data.quantity.expr = n_p;
+        }
+        else {
+            n_q = n_p;
+        }
+        switch (t) {
+        case '&':
+            n_r = create_node(NODE_PREDICATE);
+            n_r->data.predicate.neg = FALSE;
+            n_r->data.predicate.expr = n_q;
+            break;
+        case '!':
+            n_r = create_node(NODE_PREDICATE);
+            n_r->data.predicate.neg = TRUE;
+            n_r->data.predicate.expr = n_q;
+            break;
+        default:
+            n_r = n_q;
+        }
     }
     else {
-        n_q = n_p;
-    }
-    switch (t) {
-    case '&':
-        n_r = create_node(NODE_PREDICATE);
-        n_r->data.predicate.neg = FALSE;
-        n_r->data.predicate.expr = n_q;
-        break;
-    case '!':
-        n_r = create_node(NODE_PREDICATE);
-        n_r->data.predicate.neg = TRUE;
-        n_r->data.predicate.expr = n_q;
-        break;
-    default:
-        n_r = n_q;
+        n_r = n_q = n_p;
     }
     if (match_character(input, '~')) {
         size_t p, l, m;
@@ -3767,6 +3841,39 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
     return r;
 }
 
+static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t neg, int onfail, size_t indent, bool_t bare) {
+    if (!bare) {
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "{\n");
+        indent += 4;
+    }
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(gen->stream, "int r = %s;\n", neg ? "0" : "1");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "ctx->capt0.range.start = chunk->pos;\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "ctx->capt0.range.end = ctx->cur;\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "pcc_char_array__resize(ctx->auxil, &(ctx->capt0.string), 0);\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(
+        gen->stream, "pcc_predicate_%s_" FMT_LU "(ctx, chunk, &r);\n",
+        gen->rule->data.rule.name, (ulong_t)index
+    );
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "ctx->cur = p;\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(gen->stream, "if (%sr) goto L%04d;\n", neg ? "" : "!", onfail);
+    if (!bare) {
+        indent -= 4;
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "}\n");
+    }
+    return CODE_REACH__BOTH;
+}
+
 static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t *nodes, int onfail, size_t indent, bool_t bare) {
     bool_t b = FALSE;
     size_t i;
@@ -4050,6 +4157,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_quantifying_code(gen, node->data.quantity.expr, node->data.quantity.min, node->data.quantity.max, onfail, indent, bare);
     case NODE_PREDICATE:
         return generate_predicating_code(gen, node->data.predicate.expr, node->data.predicate.neg, onfail, indent, bare);
+    case NODE_PROGPRED:
+        return generate_progpred_code(gen, node->data.progpred.index, node->data.progpred.neg, onfail, indent, bare);
     case NODE_SEQUENCE:
         return generate_sequential_code(gen, &(node->data.sequence.nodes), onfail, indent, bare);
     case NODE_ALTERNATE:
@@ -4438,6 +4547,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_stack_t lrstack;\n"
             "    pcc_thunk_array_t thunks;\n"
             "    pcc_auxil_t auxil;\n"
+            "    pcc_capture_t capt0; /* used for programmable predicates */\n"
             "    pcc_memory_recycler_t thunk_recycler;\n"
             "    pcc_memory_recycler_t thunk_chunk_recycler;\n"
             "    pcc_memory_recycler_t lr_head_recycler;\n"
@@ -5178,6 +5288,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_table__initialize(ctx, &(ctx->lrtable));\n"
             "    pcc_lr_stack__initialize(auxil, &(ctx->lrstack));\n"
             "    pcc_thunk_array__initialize(ctx, &(ctx->thunks));\n"
+            "    pcc_capture__initialize(ctx->auxil, &(ctx->capt0));\n"
             "    pcc_memory_recycler__initialize(auxil, &(ctx->thunk_recycler), sizeof(pcc_thunk_t));\n"
             "    pcc_memory_recycler__initialize(auxil, &(ctx->thunk_chunk_recycler), sizeof(pcc_thunk_chunk_t));\n"
             "    pcc_memory_recycler__initialize(auxil, &(ctx->lr_head_recycler), sizeof(pcc_lr_head_t));\n"
@@ -5197,6 +5308,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_table__finalize(ctx, &(ctx->lrtable));\n"
             "    pcc_lr_stack__finalize(ctx->auxil, &(ctx->lrstack));\n"
             "    pcc_thunk_array__finalize(ctx, &(ctx->thunks));\n"
+            "    pcc_capture__finalize(ctx->auxil, &(ctx->capt0));\n"
             "    pcc_memory_recycler__finalize(ctx->auxil, &(ctx->thunk_recycler));\n"
             "    pcc_memory_recycler__finalize(ctx->auxil, &(ctx->thunk_chunk_recycler));\n"
             "    pcc_memory_recycler__finalize(ctx->auxil, &(ctx->lr_head_recycler));\n"
@@ -5432,6 +5544,90 @@ static bool_t generate(context_t *ctx) {
             size_t i, j, k;
             for (i = 0; i < ctx->rules.n; i++) {
                 const node_rule_t *const rule = &(ctx->rules.p[i]->data.rule);
+                for (j = 0; j < rule->preds.n; j++) {
+                    const code_block_t *const b = &(rule->preds.p[j]->data.progpred.code);
+                    const size_t d = rule->preds.p[j]->data.progpred.index;
+                    const node_const_array_t *const c = &(rule->preds.p[j]->data.progpred.capts);
+                    stream__printf(
+                        &sstream,
+                        "static void pcc_predicate_%s_" FMT_LU "(%s_context_t *__pcc_ctx, pcc_thunk_chunk_t *__pcc_in, int *__pcc_out) {\n",
+                        rule->name, (ulong_t)d, get_prefix(ctx)
+                    );
+                    stream__puts(
+                        &sstream,
+                        "#define auxil (__pcc_ctx->auxil)\n"
+                        "#define __ (*__pcc_out)\n"
+                    );
+                    stream__puts(
+                        &sstream,
+                        "#define _0 pcc_get_capture_string(__pcc_ctx, &(__pcc_ctx->capt0))\n"
+                        "#define _0s ((const size_t)(__pcc_ctx->pos + __pcc_ctx->capt0.range.start))\n"
+                        "#define _0e ((const size_t)(__pcc_ctx->pos + __pcc_ctx->capt0.range.end))\n"
+                    );
+                    k = 0;
+                    while (k < c->n) {
+                        assert(c->p[k]->type == NODE_CAPTURE);
+                        stream__printf(
+                            &sstream,
+                            "#define _" FMT_LU " pcc_get_capture_string(__pcc_ctx, &(__pcc_in->capts.p[" FMT_LU "]))\n",
+                            (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
+                        );
+                        stream__printf(
+                            &sstream,
+                            "#define _" FMT_LU "s ((const size_t)(__pcc_ctx->pos + __pcc_in->capts.p[" FMT_LU "].range.start))\n",
+                            (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
+                        );
+                        stream__printf(
+                            &sstream,
+                            "#define _" FMT_LU "e ((const size_t)(__pcc_ctx->pos + __pcc_in->capts.p[" FMT_LU "].range.end))\n",
+                            (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
+                        );
+                        k++;
+                    }
+                    stream__write_code_block(&sstream, b->text, b->len, 4, b->fpos.path, b->fpos.line, TRUE, &(ctx->subst));
+                    k = c->n;
+                    while (k > 0) {
+                        k--;
+                        assert(c->p[k]->type == NODE_CAPTURE);
+                        stream__printf(
+                            &sstream,
+                            "#undef _" FMT_LU "e\n",
+                            (ulong_t)(c->p[k]->data.capture.index + 1)
+                        );
+                        stream__printf(
+                            &sstream,
+                            "#undef _" FMT_LU "s\n",
+                            (ulong_t)(c->p[k]->data.capture.index + 1)
+                        );
+                        stream__printf(
+                            &sstream,
+                            "#undef _" FMT_LU "\n",
+                            (ulong_t)(c->p[k]->data.capture.index + 1)
+                        );
+                    }
+                    stream__puts(
+                        &sstream,
+                        "#undef _0e\n"
+                        "#undef _0s\n"
+                        "#undef _0\n"
+                    );
+                    stream__puts(
+                        &sstream,
+                        "#undef __\n"
+                        "#undef auxil\n"
+                    );
+                    stream__puts(
+                        &sstream,
+                        "}\n"
+                        "\n"
+                    );
+                }
+            }
+        }
+        {
+            size_t i, j, k;
+            for (i = 0; i < ctx->rules.n; i++) {
+                const node_rule_t *const rule = &(ctx->rules.p[i]->data.rule);
                 for (j = 0; j < rule->codes.n; j++) {
                     const code_block_t *b;
                     size_t d;
@@ -5468,7 +5664,7 @@ static bool_t generate(context_t *ctx) {
                         assert(v->p[k]->type == NODE_REFERENCE);
                         stream__printf(
                             &sstream,
-                            "#define %s (*__pcc_in->data.leaf.values.p[" FMT_LU "])\n",
+                            "#define %s (*(__pcc_in->data.leaf.values.p[" FMT_LU "]))\n",
                             v->p[k]->data.reference.rvar, (ulong_t)v->p[k]->data.reference.index
                         );
                         k++;
