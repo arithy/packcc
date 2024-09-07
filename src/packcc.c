@@ -533,7 +533,7 @@ static size_t string_to_size_t(const char *str) {
 #undef M
 }
 
-static size_t find_first_trailing_space(const char *str, size_t start, size_t end, size_t *next) {
+static size_t find_first_trailing_spaces_in_line(const char *str, size_t start, size_t end, size_t *next) {
     size_t j = start, i;
     for (i = start; i < end; i++) {
         switch (str[i]) {
@@ -1161,7 +1161,7 @@ static void stream__write_code_block(
     bool_t b = FALSE;
     size_t i, j, k;
     if (len == VOID_VALUE) return; /* for safety */
-    j = find_first_trailing_space(ptr, 0, len, &k);
+    j = find_first_trailing_spaces_in_line(ptr, 0, len, &k);
     for (i = 0; i < j; i++) {
         if (
             ptr[i] != ' '  &&
@@ -1186,7 +1186,7 @@ static void stream__write_code_block(
         size_t m = VOID_VALUE;
         size_t h;
         for (i = k; i < len; i = h) {
-            j = find_first_trailing_space(ptr, i, len, &h);
+            j = find_first_trailing_spaces_in_line(ptr, i, len, &h);
             if (i < j) {
                 if (obj->line != VOID_VALUE && !b)
                     stream__write_line_directive(obj, path, lineno);
@@ -1204,7 +1204,7 @@ static void stream__write_code_block(
             }
         }
         for (i = k; i < len; i = h) {
-            j = find_first_trailing_space(ptr, i, len, &h);
+            j = find_first_trailing_spaces_in_line(ptr, i, len, &h);
             if (i < j) {
                 const size_t l = count_indent_spaces(ptr, i, j, &i);
                 if (ptr[i] != '#') {
@@ -1229,7 +1229,7 @@ static void stream__write_footer(stream_t *obj, const char *ptr, size_t len, con
     bool_t b = FALSE;
     size_t i, j, k;
     if (len == VOID_VALUE) return; /* for safety */
-    j = find_first_trailing_space(ptr, 0, len, &k);
+    j = find_first_trailing_spaces_in_line(ptr, 0, len, &k);
     for (i = 0; i < j; i++) {
         if (
             ptr[i] != ' '  &&
@@ -1251,7 +1251,7 @@ static void stream__write_footer(stream_t *obj, const char *ptr, size_t len, con
     if (k < len) {
         size_t h;
         for (i = k; i < len; i = h) {
-            j = find_first_trailing_space(ptr, i, len, &h);
+            j = find_first_trailing_spaces_in_line(ptr, i, len, &h);
             if (i < j) {
                 if (obj->line != VOID_VALUE && !b)
                     stream__write_line_directive(obj, path, lineno);
@@ -1266,7 +1266,7 @@ static void stream__write_footer(stream_t *obj, const char *ptr, size_t len, con
             }
         }
         for (i = k; i < len; i = h) {
-            j = find_first_trailing_space(ptr, i, len, &h);
+            j = find_first_trailing_spaces_in_line(ptr, i, len, &h);
             if (i < j) {
                 stream__write_text(obj, ptr + i, j - i, FALSE, subst);
                 stream__putc(obj, '\n');
