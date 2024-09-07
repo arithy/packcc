@@ -372,6 +372,7 @@ struct input_state_tag {
     size_t errnum;     /* the current number of PEG parsing errors */
     size_t linenum;    /* the current line number (0-based) */
     size_t charnum;    /* the number of characters in the current line that are already flushed (0-based, UTF-8 support if not disabled) */
+    bool_t indent;     /* TRUE if all characters in the current line that are already flushed are white space characters */
     size_t linepos;    /* the beginning position in the PEG file of the current line */
     size_t bufpos;     /* the position in the PEG file of the first character currently buffered */
     size_t bufcur;     /* the current parsing position in the character buffer */
@@ -919,6 +920,19 @@ static size_t find_trailing_spaces(const char *str) {
         ) j = i + 1;
     }
     return j;
+}
+
+static bool_t are_all_spaces(const char *str, size_t start, size_t end) {
+    size_t i;
+    for (i = start; i < end && str[i]; i++) {
+        if (
+            str[i] != ' '  &&
+            str[i] != '\v' &&
+            str[i] != '\f' &&
+            str[i] != '\t'
+        ) return FALSE;
+    }
+    return TRUE;
 }
 
 static size_t count_characters(const char *str, size_t start, size_t end) {
@@ -1627,6 +1641,7 @@ static input_state_t *input_state__create(const char *path, FILE *file, input_st
     obj->errnum = 0;
     obj->linenum = 0;
     obj->charnum = 0;
+    obj->indent = TRUE;
     obj->linepos = 0;
     obj->bufpos = 0;
     obj->bufcur = 0;
@@ -1648,6 +1663,12 @@ static input_state_t *input_state__destroy(input_state_t *obj) {
 
 static bool_t input_state__is_in_imported(const input_state_t *obj) {
     return obj->parent ? TRUE : FALSE;
+}
+
+static bool_t input_state__is_in_indent(const input_state_t *obj) {
+    return obj->indent && are_all_spaces(
+        obj->buffer.p, (obj->linepos > obj->bufpos) ? obj->linepos - obj->bufpos : 0, obj->bufcur
+    );
 }
 
 static size_t input_state__column_number(const input_state_t *obj) { /* 0-based */
@@ -1672,8 +1693,10 @@ static size_t input_state__refill_buffer(input_state_t *obj, size_t num) {
 
 static void input_state__commit_buffer(input_state_t *obj) {
     assert(obj->buffer.n >= obj->bufcur);
-    if (obj->linepos < obj->bufpos + obj->bufcur)
+    if (obj->linepos < obj->bufpos + obj->bufcur) {
         obj->charnum += obj->ascii ? obj->bufcur : count_characters(obj->buffer.p, 0, obj->bufcur);
+        if (obj->indent) obj->indent = are_all_spaces(obj->buffer.p, 0, obj->bufcur);
+    }
     memmove(obj->buffer.p, obj->buffer.p + obj->bufcur, obj->buffer.n - obj->bufcur);
     obj->buffer.n -= obj->bufcur;
     obj->bufpos += obj->bufcur;
@@ -1691,6 +1714,7 @@ static bool_t input_state__match_eol(input_state_t *obj) {
             obj->bufcur++;
             obj->linenum++;
             obj->charnum = 0;
+            obj->indent = TRUE;
             obj->linepos = obj->bufpos + obj->bufcur;
             return TRUE;
         case '\r':
@@ -1700,6 +1724,7 @@ static bool_t input_state__match_eol(input_state_t *obj) {
             }
             obj->linenum++;
             obj->charnum = 0;
+            obj->indent = TRUE;
             obj->linepos = obj->bufpos + obj->bufcur;
             return TRUE;
         }
@@ -1854,7 +1879,14 @@ static bool_t input_state__match_character_class(input_state_t *obj) {
 }
 
 static bool_t input_state__match_directive_c(input_state_t *obj) {
+    const size_t l = obj->linenum;
+    const size_t m = input_state__column_number(obj);
+    const bool_t b = input_state__is_in_indent(obj);
     if (input_state__match_character(obj, '#')) {
+        if (!b) {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Malplaced C preprocessor directive\n", obj->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            obj->errnum++;
+        }
         while (!input_state__match_eof(obj)) {
             const size_t p = obj->bufcur;
             if (input_state__match_eol(obj)) {
