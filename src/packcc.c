@@ -2569,25 +2569,17 @@ static bool_t match_quotation_(input_state_t *input, const char *left, const cha
                 input->errnum++;
                 break;
             }
-            if (match_character(input, '\\')) {
-                if (!match_eol(input)) match_character_any(input);
+            match_character(input, '\\');
+            if (match_eol(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
+                break;
             }
-            else {
-                if (match_eol(input)) {
-                    print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                    input->errnum++;
-                    break;
-                }
-                match_character_any(input);
-            }
+            match_character_any(input);
         }
         return TRUE;
     }
     return FALSE;
-}
-
-static bool_t match_directive_c(input_state_t *input) {
-    return match_section_line_continuable_(input, "#");
 }
 
 static bool_t match_comment(input_state_t *input) {
@@ -2599,7 +2591,7 @@ static bool_t match_comment_c(input_state_t *input) {
 }
 
 static bool_t match_comment_cxx(input_state_t *input) {
-    return match_section_line_(input, "//");
+    return match_section_line_continuable_(input, "//");
 }
 
 static bool_t match_quotation_single(input_state_t *input) {
@@ -2612,6 +2604,30 @@ static bool_t match_quotation_double(input_state_t *input) {
 
 static bool_t match_character_class(input_state_t *input) {
     return match_quotation_(input, "[", "]", "character class");
+}
+
+static bool_t match_directive_c(input_state_t *input) {
+    if (match_character(input, '#')) {
+        while (!match_eof(input)) {
+            const size_t p = input->bufcur;
+            if (match_eol(input)) {
+                if (input->buffer.p[p - 1] != '\\') break;
+            }
+            else if (match_comment_cxx(input)) {
+                break;
+            }
+            else if (
+                !match_comment_c(input) &&
+                !match_quotation_single(input) &&
+                !match_quotation_double(input) &&
+                !match_character_any(input)
+            ) {
+                break;
+            }
+        }
+        return TRUE;
+    }
+    return FALSE;
 }
 
 static bool_t match_spaces(input_state_t *input) {
