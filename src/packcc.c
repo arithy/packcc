@@ -1402,16 +1402,6 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
-static size_t column_number(const input_state_t *input) { /* 0-based */
-    assert(input->bufpos + input->bufcur >= input->linepos);
-    if (input->ascii)
-        return input->charnum + input->bufcur - ((input->linepos > input->bufpos) ? input->linepos - input->bufpos : 0);
-    else
-        return input->charnum + count_characters(
-            input->buffer.p, (input->linepos > input->bufpos) ? input->linepos - input->bufpos : 0, input->bufcur
-        );
-}
-
 static void file_id_array__initialize(file_id_array_t *obj) {
     obj->m = 0;
     obj->n = 0;
@@ -1658,6 +1648,302 @@ static input_state_t *input_state__destroy(input_state_t *obj) {
 
 static bool_t input_state__is_in_imported(const input_state_t *obj) {
     return obj->parent ? TRUE : FALSE;
+}
+
+static size_t input_state__column_number(const input_state_t *obj) { /* 0-based */
+    assert(obj->bufpos + obj->bufcur >= obj->linepos);
+    if (obj->ascii)
+        return obj->charnum + obj->bufcur - ((obj->linepos > obj->bufpos) ? obj->linepos - obj->bufpos : 0);
+    else
+        return obj->charnum + count_characters(
+            obj->buffer.p, (obj->linepos > obj->bufpos) ? obj->linepos - obj->bufpos : 0, obj->bufcur
+        );
+}
+
+static size_t input_state__refill_buffer(input_state_t *obj, size_t num) {
+    if (obj->buffer.n >= obj->bufcur + num) return obj->buffer.n - obj->bufcur;
+    while (obj->buffer.n < obj->bufcur + num) {
+        const int c = fgetc_e(obj->file, obj->path);
+        if (c == EOF) break;
+        char_array__add(&(obj->buffer), (char)c);
+    }
+    return obj->buffer.n - obj->bufcur;
+}
+
+static void input_state__commit_buffer(input_state_t *obj) {
+    assert(obj->buffer.n >= obj->bufcur);
+    if (obj->linepos < obj->bufpos + obj->bufcur)
+        obj->charnum += obj->ascii ? obj->bufcur : count_characters(obj->buffer.p, 0, obj->bufcur);
+    memmove(obj->buffer.p, obj->buffer.p + obj->bufcur, obj->buffer.n - obj->bufcur);
+    obj->buffer.n -= obj->bufcur;
+    obj->bufpos += obj->bufcur;
+    obj->bufcur = 0;
+}
+
+static bool_t input_state__match_eof(input_state_t *obj) {
+    return (input_state__refill_buffer(obj, 1) < 1) ? TRUE : FALSE;
+}
+
+static bool_t input_state__match_eol(input_state_t *obj) {
+    if (input_state__refill_buffer(obj, 1) >= 1) {
+        switch (obj->buffer.p[obj->bufcur]) {
+        case '\n':
+            obj->bufcur++;
+            obj->linenum++;
+            obj->charnum = 0;
+            obj->linepos = obj->bufpos + obj->bufcur;
+            return TRUE;
+        case '\r':
+            obj->bufcur++;
+            if (input_state__refill_buffer(obj, 1) >= 1) {
+                if (obj->buffer.p[obj->bufcur] == '\n') obj->bufcur++;
+            }
+            obj->linenum++;
+            obj->charnum = 0;
+            obj->linepos = obj->bufpos + obj->bufcur;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_character(input_state_t *obj, char ch) {
+    if (input_state__refill_buffer(obj, 1) >= 1) {
+        if (obj->buffer.p[obj->bufcur] == ch) {
+            obj->bufcur++;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_character_range(input_state_t *obj, char min, char max) {
+    if (input_state__refill_buffer(obj, 1) >= 1) {
+        const char c = obj->buffer.p[obj->bufcur];
+        if (c >= min && c <= max) {
+            obj->bufcur++;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_character_set(input_state_t *obj, const char *chs) {
+    if (input_state__refill_buffer(obj, 1) >= 1) {
+        const char c = obj->buffer.p[obj->bufcur];
+        size_t i;
+        for (i = 0; chs[i]; i++) {
+            if (c == chs[i]) {
+                obj->bufcur++;
+                return TRUE;
+            }
+        }
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_character_any(input_state_t *obj) {
+    if (input_state__refill_buffer(obj, 1) >= 1) {
+        obj->bufcur++;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_string(input_state_t *obj, const char *str) {
+    const size_t n = strlen(str);
+    if (input_state__refill_buffer(obj, n) >= n) {
+        if (strncmp(obj->buffer.p + obj->bufcur, str, n) == 0) {
+            obj->bufcur += n;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_blank(input_state_t *obj) {
+    return input_state__match_character_set(obj, " \t\v\f");
+}
+
+static bool_t input_state__match_section_line_(input_state_t *obj, const char *head) {
+    if (input_state__match_string(obj, head)) {
+        while (!input_state__match_eol(obj) && !input_state__match_eof(obj)) input_state__match_character_any(obj);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_section_line_continuable_(input_state_t *obj, const char *head) {
+    if (input_state__match_string(obj, head)) {
+        while (!input_state__match_eof(obj)) {
+            const size_t p = obj->bufcur;
+            if (input_state__match_eol(obj)) {
+                if (obj->buffer.p[p - 1] != '\\') break;
+            }
+            else {
+                input_state__match_character_any(obj);
+            }
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_section_block_(input_state_t *obj, const char *left, const char *right, const char *name) {
+    const size_t l = obj->linenum;
+    const size_t m = input_state__column_number(obj);
+    if (input_state__match_string(obj, left)) {
+        while (!input_state__match_string(obj, right)) {
+            if (input_state__match_eof(obj)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", obj->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                obj->errnum++;
+                break;
+            }
+            if (!input_state__match_eol(obj)) input_state__match_character_any(obj);
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_quotation_(input_state_t *obj, const char *left, const char *right, const char *name) {
+    const size_t l = obj->linenum;
+    const size_t m = input_state__column_number(obj);
+    if (input_state__match_string(obj, left)) {
+        while (!input_state__match_string(obj, right)) {
+            if (input_state__match_eof(obj)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", obj->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                obj->errnum++;
+                break;
+            }
+            input_state__match_character(obj, '\\');
+            if (input_state__match_eol(obj)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", obj->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                obj->errnum++;
+                break;
+            }
+            input_state__match_character_any(obj);
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_comment(input_state_t *obj) {
+    return input_state__match_section_line_(obj, "#");
+}
+
+static bool_t input_state__match_comment_c(input_state_t *obj) {
+    return input_state__match_section_block_(obj, "/*", "*/", "C comment");
+}
+
+static bool_t input_state__match_comment_cxx(input_state_t *obj) {
+    return input_state__match_section_line_continuable_(obj, "//");
+}
+
+static bool_t input_state__match_quotation_single(input_state_t *obj) {
+    return input_state__match_quotation_(obj, "\'", "\'", "single quotation");
+}
+
+static bool_t input_state__match_quotation_double(input_state_t *obj) {
+    return input_state__match_quotation_(obj, "\"", "\"", "double quotation");
+}
+
+static bool_t input_state__match_character_class(input_state_t *obj) {
+    return input_state__match_quotation_(obj, "[", "]", "character class");
+}
+
+static bool_t input_state__match_directive_c(input_state_t *obj) {
+    if (input_state__match_character(obj, '#')) {
+        while (!input_state__match_eof(obj)) {
+            const size_t p = obj->bufcur;
+            if (input_state__match_eol(obj)) {
+                if (obj->buffer.p[p - 1] != '\\') break;
+            }
+            else if (input_state__match_comment_cxx(obj)) {
+                break;
+            }
+            else if (
+                !input_state__match_comment_c(obj) &&
+                !input_state__match_quotation_single(obj) &&
+                !input_state__match_quotation_double(obj) &&
+                !input_state__match_character_any(obj)
+            ) {
+                break;
+            }
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_spaces(input_state_t *obj) {
+    size_t n = 0;
+    while (input_state__match_blank(obj) || input_state__match_eol(obj) || input_state__match_comment(obj)) n++;
+    return (n > 0) ? TRUE : FALSE;
+}
+
+static bool_t input_state__match_number(input_state_t *obj) {
+    if (input_state__match_character_range(obj, '0', '9')) {
+        while (input_state__match_character_range(obj, '0', '9'));
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_identifier(input_state_t *obj) {
+    if (
+        input_state__match_character_range(obj, 'a', 'z') ||
+        input_state__match_character_range(obj, 'A', 'Z') ||
+        input_state__match_character(obj, '_')
+    ) {
+        while (
+            input_state__match_character_range(obj, 'a', 'z') ||
+            input_state__match_character_range(obj, 'A', 'Z') ||
+            input_state__match_character_range(obj, '0', '9') ||
+            input_state__match_character(obj, '_')
+        );
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_code_block(input_state_t *obj) {
+    const size_t l = obj->linenum;
+    const size_t m = input_state__column_number(obj);
+    if (input_state__match_character(obj, '{')) {
+        int d = 1;
+        for (;;) {
+            if (input_state__match_eof(obj)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", obj->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                obj->errnum++;
+                break;
+            }
+            if (
+                input_state__match_directive_c(obj) ||
+                input_state__match_comment_c(obj) ||
+                input_state__match_comment_cxx(obj) ||
+                input_state__match_quotation_single(obj) ||
+                input_state__match_quotation_double(obj)
+            ) continue;
+            if (input_state__match_character(obj, '{')) {
+                d++;
+            }
+            else if (input_state__match_character(obj, '}')) {
+                d--;
+                if (d == 0) break;
+            }
+            else if (!input_state__match_eol(obj)) {
+                input_state__match_character_any(obj);
+            }
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t input_state__match_footer_start(input_state_t *obj) {
+    return input_state__match_string(obj, "%%");
 }
 
 static context_t *create_context(const char *ipath, const char *opath, const string_array_t *dirs, const options_t *opts) {
@@ -2413,313 +2699,27 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
     }
 }
 
-static size_t refill_buffer(input_state_t *input, size_t num) {
-    if (input->buffer.n >= input->bufcur + num) return input->buffer.n - input->bufcur;
-    while (input->buffer.n < input->bufcur + num) {
-        const int c = fgetc_e(input->file, input->path);
-        if (c == EOF) break;
-        char_array__add(&(input->buffer), (char)c);
-    }
-    return input->buffer.n - input->bufcur;
-}
-
-static void commit_buffer(input_state_t *input) {
-    assert(input->buffer.n >= input->bufcur);
-    if (input->linepos < input->bufpos + input->bufcur)
-        input->charnum += input->ascii ? input->bufcur : count_characters(input->buffer.p, 0, input->bufcur);
-    memmove(input->buffer.p, input->buffer.p + input->bufcur, input->buffer.n - input->bufcur);
-    input->buffer.n -= input->bufcur;
-    input->bufpos += input->bufcur;
-    input->bufcur = 0;
-}
-
-static bool_t match_eof(input_state_t *input) {
-    return (refill_buffer(input, 1) < 1) ? TRUE : FALSE;
-}
-
-static bool_t match_eol(input_state_t *input) {
-    if (refill_buffer(input, 1) >= 1) {
-        switch (input->buffer.p[input->bufcur]) {
-        case '\n':
-            input->bufcur++;
-            input->linenum++;
-            input->charnum = 0;
-            input->linepos = input->bufpos + input->bufcur;
-            return TRUE;
-        case '\r':
-            input->bufcur++;
-            if (refill_buffer(input, 1) >= 1) {
-                if (input->buffer.p[input->bufcur] == '\n') input->bufcur++;
-            }
-            input->linenum++;
-            input->charnum = 0;
-            input->linepos = input->bufpos + input->bufcur;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-static bool_t match_character(input_state_t *input, char ch) {
-    if (refill_buffer(input, 1) >= 1) {
-        if (input->buffer.p[input->bufcur] == ch) {
-            input->bufcur++;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-static bool_t match_character_range(input_state_t *input, char min, char max) {
-    if (refill_buffer(input, 1) >= 1) {
-        const char c = input->buffer.p[input->bufcur];
-        if (c >= min && c <= max) {
-            input->bufcur++;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-static bool_t match_character_set(input_state_t *input, const char *chs) {
-    if (refill_buffer(input, 1) >= 1) {
-        const char c = input->buffer.p[input->bufcur];
-        size_t i;
-        for (i = 0; chs[i]; i++) {
-            if (c == chs[i]) {
-                input->bufcur++;
-                return TRUE;
-            }
-        }
-    }
-    return FALSE;
-}
-
-static bool_t match_character_any(input_state_t *input) {
-    if (refill_buffer(input, 1) >= 1) {
-        input->bufcur++;
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_string(input_state_t *input, const char *str) {
-    const size_t n = strlen(str);
-    if (refill_buffer(input, n) >= n) {
-        if (strncmp(input->buffer.p + input->bufcur, str, n) == 0) {
-            input->bufcur += n;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-static bool_t match_blank(input_state_t *input) {
-    return match_character_set(input, " \t\v\f");
-}
-
-static bool_t match_section_line_(input_state_t *input, const char *head) {
-    if (match_string(input, head)) {
-        while (!match_eol(input) && !match_eof(input)) match_character_any(input);
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_section_line_continuable_(input_state_t *input, const char *head) {
-    if (match_string(input, head)) {
-        while (!match_eof(input)) {
-            const size_t p = input->bufcur;
-            if (match_eol(input)) {
-                if (input->buffer.p[p - 1] != '\\') break;
-            }
-            else {
-                match_character_any(input);
-            }
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_section_block_(input_state_t *input, const char *left, const char *right, const char *name) {
-    const size_t l = input->linenum;
-    const size_t m = column_number(input);
-    if (match_string(input, left)) {
-        while (!match_string(input, right)) {
-            if (match_eof(input)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                input->errnum++;
-                break;
-            }
-            if (!match_eol(input)) match_character_any(input);
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_quotation_(input_state_t *input, const char *left, const char *right, const char *name) {
-    const size_t l = input->linenum;
-    const size_t m = column_number(input);
-    if (match_string(input, left)) {
-        while (!match_string(input, right)) {
-            if (match_eof(input)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                input->errnum++;
-                break;
-            }
-            match_character(input, '\\');
-            if (match_eol(input)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOL in %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
-                input->errnum++;
-                break;
-            }
-            match_character_any(input);
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_comment(input_state_t *input) {
-    return match_section_line_(input, "#");
-}
-
-static bool_t match_comment_c(input_state_t *input) {
-    return match_section_block_(input, "/*", "*/", "C comment");
-}
-
-static bool_t match_comment_cxx(input_state_t *input) {
-    return match_section_line_continuable_(input, "//");
-}
-
-static bool_t match_quotation_single(input_state_t *input) {
-    return match_quotation_(input, "\'", "\'", "single quotation");
-}
-
-static bool_t match_quotation_double(input_state_t *input) {
-    return match_quotation_(input, "\"", "\"", "double quotation");
-}
-
-static bool_t match_character_class(input_state_t *input) {
-    return match_quotation_(input, "[", "]", "character class");
-}
-
-static bool_t match_directive_c(input_state_t *input) {
-    if (match_character(input, '#')) {
-        while (!match_eof(input)) {
-            const size_t p = input->bufcur;
-            if (match_eol(input)) {
-                if (input->buffer.p[p - 1] != '\\') break;
-            }
-            else if (match_comment_cxx(input)) {
-                break;
-            }
-            else if (
-                !match_comment_c(input) &&
-                !match_quotation_single(input) &&
-                !match_quotation_double(input) &&
-                !match_character_any(input)
-            ) {
-                break;
-            }
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_spaces(input_state_t *input) {
-    size_t n = 0;
-    while (match_blank(input) || match_eol(input) || match_comment(input)) n++;
-    return (n > 0) ? TRUE : FALSE;
-}
-
-static bool_t match_number(input_state_t *input) {
-    if (match_character_range(input, '0', '9')) {
-        while (match_character_range(input, '0', '9'));
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_identifier(input_state_t *input) {
-    if (
-        match_character_range(input, 'a', 'z') ||
-        match_character_range(input, 'A', 'Z') ||
-        match_character(input, '_')
-    ) {
-        while (
-            match_character_range(input, 'a', 'z') ||
-            match_character_range(input, 'A', 'Z') ||
-            match_character_range(input, '0', '9') ||
-            match_character(input, '_')
-        );
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_code_block(input_state_t *input) {
-    const size_t l = input->linenum;
-    const size_t m = column_number(input);
-    if (match_character(input, '{')) {
-        int d = 1;
-        for (;;) {
-            if (match_eof(input)) {
-                print_error("%s:" FMT_LU ":" FMT_LU ": Premature EOF in code block\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
-                input->errnum++;
-                break;
-            }
-            if (
-                match_directive_c(input) ||
-                match_comment_c(input) ||
-                match_comment_cxx(input) ||
-                match_quotation_single(input) ||
-                match_quotation_double(input)
-            ) continue;
-            if (match_character(input, '{')) {
-                d++;
-            }
-            else if (match_character(input, '}')) {
-                d--;
-                if (d == 0) break;
-            }
-            else if (!match_eol(input)) {
-                match_character_any(input);
-            }
-        }
-        return TRUE;
-    }
-    return FALSE;
-}
-
-static bool_t match_footer_start(input_state_t *input) {
-    return match_string(input, "%%");
-}
-
 static node_t *parse_expression(input_state_t *input, node_t *rule);
 
 static node_t *parse_primary(input_state_t *input, node_t *rule) {
     const size_t p = input->bufcur;
     const size_t l = input->linenum;
-    const size_t m = column_number(input);
+    const size_t m = input_state__column_number(input);
     const size_t n = input->charnum;
     const size_t o = input->linepos;
     node_t *n_p = NULL;
-    if (match_identifier(input)) {
+    if (input_state__match_identifier(input)) {
         const size_t q = input->bufcur;
         size_t r = VOID_VALUE, s = VOID_VALUE;
-        match_spaces(input);
-        if (match_character(input, ':')) {
-            match_spaces(input);
+        input_state__match_spaces(input);
+        if (input_state__match_character(input, ':')) {
+            input_state__match_spaces(input);
             r = input->bufcur;
-            if (!match_identifier(input)) goto EXCEPTION;
+            if (!input_state__match_identifier(input)) goto EXCEPTION;
             s = input->bufcur;
-            match_spaces(input);
+            input_state__match_spaces(input);
         }
-        if (match_string(input, "<-")) goto EXCEPTION;
+        if (input_state__match_string(input, "<-")) goto EXCEPTION;
         n_p = create_node(NODE_REFERENCE);
         if (r == VOID_VALUE) {
             assert(q >= p);
@@ -2752,33 +2752,33 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         }
         file_pos__set(&(n_p->data.reference.fpos), input->path, l, m);
     }
-    else if (match_character(input, '(')) {
-        match_spaces(input);
+    else if (input_state__match_character(input, '(')) {
+        input_state__match_spaces(input);
         n_p = parse_expression(input, rule);
         if (n_p == NULL) goto EXCEPTION;
-        if (!match_character(input, ')')) goto EXCEPTION;
-        match_spaces(input);
+        if (!input_state__match_character(input, ')')) goto EXCEPTION;
+        input_state__match_spaces(input);
     }
-    else if (match_character(input, '<')) {
-        match_spaces(input);
+    else if (input_state__match_character(input, '<')) {
+        input_state__match_spaces(input);
         n_p = create_node(NODE_CAPTURE);
         n_p->data.capture.index = rule->data.rule.capts.n;
         node_const_array__add(&(rule->data.rule.capts), n_p);
         n_p->data.capture.expr = parse_expression(input, rule);
-        if (n_p->data.capture.expr == NULL || !match_character(input, '>')) {
+        if (n_p->data.capture.expr == NULL || !input_state__match_character(input, '>')) {
             rule->data.rule.capts.n = n_p->data.capture.index;
             goto EXCEPTION;
         }
-        match_spaces(input);
+        input_state__match_spaces(input);
     }
-    else if (match_character(input, '$')) {
+    else if (input_state__match_character(input, '$')) {
         size_t p;
-        match_spaces(input);
+        input_state__match_spaces(input);
         p = input->bufcur;
-        if (match_number(input)) {
+        if (input_state__match_number(input)) {
             const size_t q = input->bufcur;
             char *s;
-            match_spaces(input);
+            input_state__match_spaces(input);
             n_p = create_node(NODE_EXPAND);
             assert(q >= p);
             s = strndup_e(input->buffer.p + p, q - p);
@@ -2806,22 +2806,22 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
             goto EXCEPTION;
         }
     }
-    else if (match_character(input, '^')) {
-        match_spaces(input);
+    else if (input_state__match_character(input, '^')) {
+        input_state__match_spaces(input);
         n_p = create_node(NODE_POSITION);
         n_p->data.position.value = 0;
     }
-    else if (match_character(input, '.')) {
-        match_spaces(input);
+    else if (input_state__match_character(input, '.')) {
+        input_state__match_spaces(input);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = NULL;
         if (!input->ascii) {
             input->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
-    else if (match_character_class(input)) {
+    else if (input_state__match_character_class(input)) {
         const size_t q = input->bufcur;
-        match_spaces(input);
+        input_state__match_spaces(input);
         n_p = create_node(NODE_CHARCLASS);
         n_p->data.charclass.value = strndup_e(input->buffer.p + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.charclass.value, TRUE)) {
@@ -2836,9 +2836,9 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
             input->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
-    else if (match_quotation_single(input) || match_quotation_double(input)) {
+    else if (input_state__match_quotation_single(input) || input_state__match_quotation_double(input)) {
         const size_t q = input->bufcur;
-        match_spaces(input);
+        input_state__match_spaces(input);
         n_p = create_node(NODE_STRING);
         n_p->data.string.value = strndup_e(input->buffer.p + p + 1, q - p - 2);
         if (!unescape_string(n_p->data.string.value, FALSE)) {
@@ -2850,9 +2850,9 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
             input->errnum++;
         }
     }
-    else if (match_code_block(input)) {
+    else if (input_state__match_code_block(input)) {
         const size_t q = input->bufcur;
-        match_spaces(input);
+        input_state__match_spaces(input);
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
         n_p->data.action.code.len = find_trailing_blanks(n_p->data.action.code.text);
@@ -2883,16 +2883,16 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
     node_t *n_q = NULL;
     node_t *n_r = NULL;
     node_t *n_t = NULL;
-    const char t = match_character(input, '&') ? '&' : match_character(input, '!') ? '!' : '\0';
+    const char t = input_state__match_character(input, '&') ? '&' : input_state__match_character(input, '!') ? '!' : '\0';
     if (t) {
         size_t p, l, m;
-        match_spaces(input);
+        input_state__match_spaces(input);
         p = input->bufcur;
         l = input->linenum;
-        m = column_number(input);
-        if (match_code_block(input)) {
+        m = input_state__column_number(input);
+        if (input_state__match_code_block(input)) {
             const size_t q = input->bufcur;
-            match_spaces(input);
+            input_state__match_spaces(input);
             n_p = create_node(NODE_PROGPRED);
             n_p->data.progpred.neg = (t == '!') ? TRUE : FALSE;
             n_p->data.progpred.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
@@ -2905,22 +2905,22 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
     if (n_p == NULL) {
         n_p = parse_primary(input, rule);
         if (n_p == NULL) goto EXCEPTION;
-        if (match_character(input, '*')) {
-            match_spaces(input);
+        if (input_state__match_character(input, '*')) {
+            input_state__match_spaces(input);
             n_q = create_node(NODE_QUANTITY);
             n_q->data.quantity.min = 0;
             n_q->data.quantity.max = -1;
             n_q->data.quantity.expr = n_p;
         }
-        else if (match_character(input, '+')) {
-            match_spaces(input);
+        else if (input_state__match_character(input, '+')) {
+            input_state__match_spaces(input);
             n_q = create_node(NODE_QUANTITY);
             n_q->data.quantity.min = 1;
             n_q->data.quantity.max = -1;
             n_q->data.quantity.expr = n_p;
         }
-        else if (match_character(input, '?')) {
-            match_spaces(input);
+        else if (input_state__match_character(input, '?')) {
+            input_state__match_spaces(input);
             n_q = create_node(NODE_QUANTITY);
             n_q->data.quantity.min = 0;
             n_q->data.quantity.max = 1;
@@ -2947,15 +2947,15 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
     else {
         n_r = n_q = n_p;
     }
-    if (match_character(input, '~')) {
+    if (input_state__match_character(input, '~')) {
         size_t p, l, m;
-        match_spaces(input);
+        input_state__match_spaces(input);
         p = input->bufcur;
         l = input->linenum;
-        m = column_number(input);
-        if (match_code_block(input)) {
+        m = input_state__column_number(input);
+        if (input_state__match_code_block(input)) {
             const size_t q = input->bufcur;
-            match_spaces(input);
+            input_state__match_spaces(input);
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
@@ -3028,13 +3028,13 @@ static node_t *parse_expression(input_state_t *input, node_t *rule) {
     n_s = parse_sequence(input, rule);
     if (n_s == NULL) goto EXCEPTION;
     q = input->bufcur;
-    if (match_character(input, '/')) {
+    if (input_state__match_character(input, '/')) {
         input->bufcur = q;
         n_e = create_node(NODE_ALTERNATE);
         a_s = &(n_e->data.alternate.nodes);
         node_array__add(a_s, n_s);
-        while (match_character(input, '/')) {
-            match_spaces(input);
+        while (input_state__match_character(input, '/')) {
+            input_state__match_spaces(input);
             n_s = parse_sequence(input, rule);
             if (n_s == NULL) goto EXCEPTION;
             node_array__add(a_s, n_s);
@@ -3057,16 +3057,16 @@ EXCEPTION:;
 static node_t *parse_rule(input_state_t *input) {
     const size_t p = input->bufcur;
     const size_t l = input->linenum;
-    const size_t m = column_number(input);
+    const size_t m = input_state__column_number(input);
     const size_t n = input->charnum;
     const size_t o = input->linepos;
     size_t q;
     node_t *n_r = NULL;
-    if (!match_identifier(input)) goto EXCEPTION;
+    if (!input_state__match_identifier(input)) goto EXCEPTION;
     q = input->bufcur;
-    match_spaces(input);
-    if (!match_string(input, "<-")) goto EXCEPTION;
-    match_spaces(input);
+    input_state__match_spaces(input);
+    if (!input_state__match_string(input, "<-")) goto EXCEPTION;
+    input_state__match_spaces(input);
     n_r = create_node(NODE_RULE);
     n_r->data.rule.expr = parse_expression(input, n_r);
     if (n_r->data.rule.expr == NULL) goto EXCEPTION;
@@ -3103,15 +3103,15 @@ static void dump_options(context_t *ctx) {
 }
 
 static bool_t parse_directive_block_(input_state_t *input, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
-    if (!match_string(input, name)) return FALSE;
-    match_spaces(input);
+    if (!input_state__match_string(input, name)) return FALSE;
+    input_state__match_spaces(input);
     {
         const size_t p = input->bufcur;
         const size_t l = input->linenum;
-        const size_t m = column_number(input);
-        if (match_code_block(input)) {
+        const size_t m = input_state__column_number(input);
+        if (input_state__match_code_block(input)) {
             const size_t q = input->bufcur;
-            match_spaces(input);
+            input_state__match_spaces(input);
             if (output1 != NULL) {
                 code_block_t *const c = code_block_array__create_entry(output1);
                 c->text = strndup_e(input->buffer.p + p + 1, q - p - 2);
@@ -3135,18 +3135,18 @@ static bool_t parse_directive_block_(input_state_t *input, const char *name, cod
 
 static bool_t parse_directive_string_(input_state_t *input, const char *name, char **output, string_flag_t mode) {
     const size_t l = input->linenum;
-    const size_t m = column_number(input);
-    if (!match_string(input, name)) return FALSE;
-    match_spaces(input);
+    const size_t m = input_state__column_number(input);
+    if (!input_state__match_string(input, name)) return FALSE;
+    input_state__match_spaces(input);
     {
         char *s = NULL;
         const size_t p = input->bufcur;
         const size_t lv = input->linenum;
-        const size_t mv = column_number(input);
+        const size_t mv = input_state__column_number(input);
         size_t q;
-        if (match_quotation_single(input) || match_quotation_double(input)) {
+        if (input_state__match_quotation_single(input) || input_state__match_quotation_double(input)) {
             q = input->bufcur;
-            match_spaces(input);
+            input_state__match_spaces(input);
             s = strndup_e(input->buffer.p + p + 1, q - p - 2);
             if (!unescape_string(s, FALSE)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
@@ -3203,16 +3203,16 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
 }
 
 static bool_t parse_directive_marker_(input_state_t *input, const char *name, string_array_t *output) {
-    if (!match_string(input, name)) return FALSE;
+    if (!input_state__match_string(input, name)) return FALSE;
     for (;;) {
-        match_spaces(input);
-        if (!match_character(input, '@')) break;
-        match_spaces(input);
+        input_state__match_spaces(input);
+        if (!input_state__match_character(input, '@')) break;
+        input_state__match_spaces(input);
         {
             const size_t p = input->bufcur;
             const size_t l = input->linenum;
-            const size_t m = column_number(input);
-            if (!match_identifier(input)) {
+            const size_t m = input_state__column_number(input);
+            if (!input_state__match_identifier(input)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Illegal marker variable identifier\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 input->errnum++;
                 break;
@@ -3247,12 +3247,12 @@ static bool_t parse_directive_marker_(input_state_t *input, const char *name, st
 }
 
 static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
-    if (!match_footer_start(input)) return FALSE;
+    if (!input_state__match_footer_start(input)) return FALSE;
     {
         const size_t p = input->bufcur;
         const size_t l = input->linenum;
-        const size_t m = column_number(input);
-        while (!match_eof(input)) match_character_any(input);
+        const size_t m = input_state__column_number(input);
+        while (!input_state__match_eof(input)) input_state__match_character_any(input);
         {
             const size_t q = input->bufcur;
             code_block_t *const c = code_block_array__create_entry(output);
@@ -3274,13 +3274,13 @@ static void parse_file_(context_t *ctx) {
     {
         const bool_t imp = input_state__is_in_imported(ctx->input);
         bool_t b = TRUE;
-        match_spaces(ctx->input);
+        input_state__match_spaces(ctx->input);
         for (;;) {
             char *s = NULL;
             size_t l, m, n, o;
-            if (match_eof(ctx->input) || parse_footer_(ctx->input, &(ctx->fsource))) break;
+            if (input_state__match_eof(ctx->input) || parse_footer_(ctx->input, &(ctx->fsource))) break;
             l = ctx->input->linenum;
-            m = column_number(ctx->input);
+            m = input_state__column_number(ctx->input);
             n = ctx->input->charnum;
             o = ctx->input->linepos;
             if (parse_directive_string_(ctx->input, "%import", &s, STRING_FLAG__NOTEMPTY)) {
@@ -3362,11 +3362,11 @@ static void parse_file_(context_t *ctx) {
             ) {
                 b = TRUE;
             }
-            else if (match_character(ctx->input, '%')) {
+            else if (input_state__match_character(ctx->input, '%')) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Invalid directive\n", ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 ctx->input->errnum++;
-                match_identifier(ctx->input);
-                match_spaces(ctx->input);
+                input_state__match_identifier(ctx->input);
+                input_state__match_spaces(ctx->input);
                 b = TRUE;
             }
             else {
@@ -3380,15 +3380,15 @@ static void parse_file_(context_t *ctx) {
                     ctx->input->linenum = l;
                     ctx->input->charnum = n;
                     ctx->input->linepos = o;
-                    if (!match_identifier(ctx->input) && !match_spaces(ctx->input)) match_character_any(ctx->input);
+                    if (!input_state__match_identifier(ctx->input) && !input_state__match_spaces(ctx->input)) input_state__match_character_any(ctx->input);
                     continue;
                 }
                 node_array__add(&(ctx->rules), n_r);
                 b = TRUE;
             }
-            commit_buffer(ctx->input);
+            input_state__commit_buffer(ctx->input);
         }
-        commit_buffer(ctx->input);
+        input_state__commit_buffer(ctx->input);
     }
     ctx->errnum += ctx->input->errnum;
     ctx->flags |= ctx->input->flags;
