@@ -873,7 +873,7 @@ static const char *escape_character(char ch, char (*buf)[5]) {
     return *buf;
 }
 
-static void remove_leading_blanks(char *str) {
+static void remove_leading_spaces(char *str) {
     size_t i, j;
     for (i = 0; str[i]; i++) {
         if (
@@ -891,7 +891,7 @@ static void remove_leading_blanks(char *str) {
     str[j] = '\0';
 }
 
-static void remove_trailing_blanks(char *str) {
+static void remove_trailing_spaces(char *str) {
     size_t i, j;
     for (j = 0, i = 0; str[i]; i++) {
         if (
@@ -906,7 +906,7 @@ static void remove_trailing_blanks(char *str) {
     str[j] = '\0';
 }
 
-static size_t find_trailing_blanks(const char *str) {
+static size_t find_trailing_spaces(const char *str) {
     size_t i, j;
     for (j = 0, i = 0; str[i]; i++) {
         if (
@@ -1761,7 +1761,7 @@ static bool_t input_state__match_string(input_state_t *obj, const char *str) {
     return FALSE;
 }
 
-static bool_t input_state__match_blank(input_state_t *obj) {
+static bool_t input_state__match_space(input_state_t *obj) {
     return input_state__match_character_set(obj, " \t\v\f");
 }
 
@@ -1879,7 +1879,7 @@ static bool_t input_state__match_directive_c(input_state_t *obj) {
 
 static bool_t input_state__match_spaces(input_state_t *obj) {
     size_t n = 0;
-    while (input_state__match_blank(obj) || input_state__match_eol(obj) || input_state__match_comment(obj)) n++;
+    while (input_state__match_space(obj) || input_state__match_eol(obj) || input_state__match_comment(obj)) n++;
     return (n > 0) ? TRUE : FALSE;
 }
 
@@ -2855,7 +2855,7 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         input_state__match_spaces(input);
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
-        n_p->data.action.code.len = find_trailing_blanks(n_p->data.action.code.text);
+        n_p->data.action.code.len = find_trailing_spaces(n_p->data.action.code.text);
         file_pos__set(&(n_p->data.action.code.fpos), input->path, l, m);
         n_p->data.action.index = rule->data.rule.codes.n;
         node_const_array__add(&(rule->data.rule.codes), n_p);
@@ -2896,7 +2896,7 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
             n_p = create_node(NODE_PROGPRED);
             n_p->data.progpred.neg = (t == '!') ? TRUE : FALSE;
             n_p->data.progpred.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
-            n_p->data.progpred.code.len = find_trailing_blanks(n_p->data.progpred.code.text);
+            n_p->data.progpred.code.len = find_trailing_spaces(n_p->data.progpred.code.text);
             file_pos__set(&n_p->data.progpred.code.fpos, input->path, l, m);
             n_p->data.progpred.index = rule->data.rule.preds.n;
             node_const_array__add(&(rule->data.rule.preds), n_p);
@@ -2959,7 +2959,7 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
-            n_t->data.error.code.len = find_trailing_blanks(n_t->data.error.code.text);
+            n_t->data.error.code.len = find_trailing_spaces(n_t->data.error.code.text);
             file_pos__set(&(n_t->data.error.code.fpos), input->path, l, m);
             n_t->data.error.index = rule->data.rule.codes.n;
             node_const_array__add(&(rule->data.rule.codes), n_t);
@@ -3160,8 +3160,8 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
         if (s != NULL) {
             string_flag_t f = STRING_FLAG__NONE;
             bool_t b = TRUE;
-            remove_leading_blanks(s);
-            remove_trailing_blanks(s);
+            remove_leading_spaces(s);
+            remove_trailing_spaces(s);
             assert((mode & ~7) == 0);
             if ((mode & STRING_FLAG__NOTEMPTY) && !is_filled_string(s)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
