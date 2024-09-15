@@ -1236,7 +1236,7 @@ static void stream__write_code_block(
         }
     }
     if (obj->line != VOID_VALUE && b)
-        stream__write_line_directive(obj, obj->path, obj->line);
+        stream__write_line_directive(obj, obj->path, obj->line + 1);
 }
 
 static void stream__write_footer(stream_t *obj, const char *str, size_t len, const char *path, size_t lineno, const subst_map_t *subst) {
