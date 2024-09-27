@@ -5987,6 +5987,236 @@ static bool_t generate(context_t *ctx) {
     return TRUE;
 }
 
+#define COMMAND_LINE_OPTION_ERROR_NOT_OPTION            -1
+#define COMMAND_LINE_OPTION_ERROR_NO_MATCHED_OPTION     -2
+#define COMMAND_LINE_OPTION_ERROR_AMBIGUOUS_OPTION      -3
+#define COMMAND_LINE_OPTION_ERROR_ARGUMENT_REQUIRED     -4
+#define COMMAND_LINE_OPTION_ERROR_ARGUMENT_NOT_REQUIRED -5
+
+typedef struct command_line_option_parser_tag {
+    int arg_index;
+    int next_char;
+} command_line_option_parser_t;
+
+typedef enum command_line_option_argument_tag {
+    COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED,
+    COMMAND_LINE_OPTION_ARGUMENT_REQUIRED,
+    COMMAND_LINE_OPTION_ARGUMENT_OPTIONAL
+} command_line_option_argument_t;
+
+typedef struct command_line_option_tag {
+    int id;                /* the value (>= 0) to be returned by the option parsing function when the option is found;
+                              the value of the member variable 'short_name' is to be returned instead if 'id' is 0 */
+    char short_name;       /* the short option name; NULL if no short option name */
+    const char *long_name; /* the long option name; NULL if no long option name */
+    command_line_option_argument_t has_arg;
+    const char *arg_name;  /* the option argument name displayed in usage */
+    const char *desc;      /* the option description displayed in usage */
+} command_line_option_t;
+
+static const command_line_option_t g_command_opts[] = {
+    {
+        0, 'I', NULL, COMMAND_LINE_OPTION_ARGUMENT_REQUIRED, "DIRNAME",
+        "specify a directory name to search for import files;\n"
+        "can be used as many times as needed to add directories"
+    },
+    {
+        0, 'o', NULL, COMMAND_LINE_OPTION_ARGUMENT_REQUIRED, "BASENAME",
+        "specify a base name of output source and header files;\n"
+        "can be used only once"
+    },
+    {
+        0, 'a', "ascii", COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED, NULL,
+        "disable UTF-8 support"
+    },
+    {
+        0, 'l', "lines", COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED, NULL,
+        "insert #line directives in output source and header files"
+    },
+    {
+        0, 'd', "debug", COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED, NULL,
+        "with printing debug information"
+    },
+    {
+        0, 'h', "help", COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED, NULL,
+        "print this help message and exit"
+    },
+    {
+        0, 'v', "version", COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED, NULL,
+        "print the version and exit"
+    },
+    { 0 }
+};
+
+static void command_line_option_parser__reset(command_line_option_parser_t *obj, int argi) {
+    obj->arg_index = (argi <= 1) ? 1: argi;
+    obj->next_char = 0;
+}
+
+static int command_line_option_parser__parse(
+    command_line_option_parser_t *obj, const command_line_option_t *opts, int argc, char **argv,
+    int *arg_next, const char **opt_arg
+) {
+    const char *a = NULL;
+    int r = 0;
+    int i = obj->arg_index;
+    if (i < 1 || i >= argc) return COMMAND_LINE_OPTION_ERROR_NOT_OPTION;
+    if (obj->next_char == 0) {
+        if (argv[i][0] != '-') return COMMAND_LINE_OPTION_ERROR_NOT_OPTION;
+        if (argv[i][1] != '-') { /* short option */
+            if (argv[i][1] == '\0') return COMMAND_LINE_OPTION_ERROR_NOT_OPTION; /* "-" */
+            obj->next_char = 1; /* parsing is done later */
+        }
+        else { /* long option */
+            size_t k;
+            for (k = 2; argv[i][k] != '\0' && argv[i][k] != '='; k++);
+            a = (argv[i][k] == '=') ? argv[i] + k + 1 : NULL;
+            if (k == 2) { /* "--" */
+                r = a ? COMMAND_LINE_OPTION_ERROR_ARGUMENT_NOT_REQUIRED : 0;
+                i++;
+            }
+            else {
+                size_t j, j0;
+                for (j0 = VOID_VALUE, j = 0; opts[j].short_name != '\0' || opts[j].long_name != NULL; j++) {
+                    if (opts[j].long_name == NULL) continue;
+                    if (strncmp(opts[j].long_name, argv[i] + 2, k - 2) == 0) {
+                        if (j0 != VOID_VALUE) {
+                            r = COMMAND_LINE_OPTION_ERROR_AMBIGUOUS_OPTION;
+                            break;
+                        }
+                        j0 = j;
+                    }
+                }
+                if (j0 == VOID_VALUE) r = COMMAND_LINE_OPTION_ERROR_NO_MATCHED_OPTION;
+                if (r >= 0) { /* no error */
+                    r = opts[j0].id ? opts[j0].id : opts[j0].short_name;
+                    i++;
+                    switch (opts[j0].has_arg) {
+                    case COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED:
+                        if (a) r = COMMAND_LINE_OPTION_ERROR_ARGUMENT_NOT_REQUIRED;
+                        break;
+                    case COMMAND_LINE_OPTION_ARGUMENT_REQUIRED:
+                        if (!a) {
+                            if (i >= argc) {
+                                r = COMMAND_LINE_OPTION_ERROR_ARGUMENT_REQUIRED;
+                            }
+                            else {
+                                a = argv[i++];
+                            }
+                        }
+                        break;
+                    case COMMAND_LINE_OPTION_ARGUMENT_OPTIONAL:
+                    default:
+                        break;
+                    }
+                }
+            }
+            obj->arg_index = i;
+            if (arg_next) *arg_next = i;
+            if (opt_arg) *opt_arg = a;
+            return r;
+        }
+    }
+    { /* short option */
+        size_t j, j0;
+        for (j0 = VOID_VALUE, j = 0; opts[j].short_name != '\0' || opts[j].long_name != NULL; j++) {
+            if (opts[j].short_name == '\0') continue;
+            if (opts[j].short_name == argv[i][obj->next_char]) {
+                j0 = j; break;
+            }
+        }
+        if (j0 == VOID_VALUE) r = COMMAND_LINE_OPTION_ERROR_NO_MATCHED_OPTION;
+        if (r >= 0) { /* no error */
+            r = opts[j0].id ? opts[j0].id : opts[j0].short_name;
+            obj->next_char++;
+            switch (opts[j0].has_arg) {
+            case COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED:
+                a = NULL;
+                if (argv[i][obj->next_char] == '\0') {
+                    i++;
+                    obj->next_char = 0;
+                }
+                break;
+            case COMMAND_LINE_OPTION_ARGUMENT_REQUIRED:
+                if (argv[i][obj->next_char] != '\0') {
+                    a = argv[i++] + obj->next_char;
+                }
+                else {
+                    i++;
+                    if (i >= argc) {
+                        a = NULL;
+                        r = COMMAND_LINE_OPTION_ERROR_ARGUMENT_REQUIRED;
+                    }
+                    else {
+                        a = argv[i++];
+                    }
+                }
+                obj->next_char = 0;
+                break;
+            case COMMAND_LINE_OPTION_ARGUMENT_OPTIONAL:
+            default:
+                if (argv[i][obj->next_char] != '\0') {
+                    a = argv[i++] + obj->next_char;
+                }
+                else {
+                    a = NULL;
+                    i++;
+                }
+                obj->next_char = 0;
+                break;
+            }
+        }
+        obj->arg_index = i;
+        if (arg_next) *arg_next = i;
+        if (opt_arg) *opt_arg = a;
+        return r;
+    }
+}
+
+static void print_options(FILE *output, const command_line_option_t *opts) {
+#define L 17
+    size_t j;
+    for (j = 0; opts[j].short_name != '\0' || opts[j].long_name != NULL; j++) {
+        int l = 0;
+        if (opts[j].short_name != '\0' && opts[j].long_name != NULL) {
+            l = fprintf(
+                output,
+                (opts[j].has_arg == COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED) ? "  -%c, --%s" :
+                (opts[j].has_arg == COMMAND_LINE_OPTION_ARGUMENT_REQUIRED) ? "  -%c, --%s=%s" : "  -%c, --%s=[%s]",
+                opts[j].short_name, opts[j].long_name, opts[j].arg_name
+            );
+        }
+        else if (opts[j].short_name != '\0') {
+            l = fprintf(
+                output,
+                (opts[j].has_arg == COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED) ? "  -%c" :
+                (opts[j].has_arg == COMMAND_LINE_OPTION_ARGUMENT_REQUIRED) ? "  -%c %s" : "  -%c[%s]",
+                opts[j].short_name, opts[j].arg_name
+            );
+        }
+        else if (opts[j].long_name != NULL) {
+            l = fprintf(
+                output,
+                (opts[j].has_arg == COMMAND_LINE_OPTION_ARGUMENT_NOT_REQUIRED) ? "      --%s" :
+                (opts[j].has_arg == COMMAND_LINE_OPTION_ARGUMENT_REQUIRED) ? "      --%s=%s" : "      --%s=[%s]",
+                opts[j].long_name, opts[j].arg_name
+            );
+        }
+        if (opts[j].desc != NULL) {
+            const char *p, *q;
+            if (l < L)
+                fprintf(output, "%*s", L - l, "");
+            else
+                fprintf(output, "\n%*s", L, "");
+            for (p = opts[j].desc; (q = strchr(p, '\n')); p = q + 1) {
+                fprintf(output, "%.*s\n%*s", (int)(q - p), p, L + 2, "");
+            }
+            fprintf(output, "%s\n", p);
+        }
+    }
+#undef L
+}
+
 static void print_version(FILE *output) {
     fprintf(output, "%s version %s\n", g_cmdname, PACKCC_VERSION);
     fprintf(output, "Copyright (c) %s Arihiro Yoshida. All rights reserved.\n", PACKCC_YEARS);
@@ -5997,16 +6227,7 @@ static void print_usage(FILE *output) {
     fprintf(output, "Generates a packrat parser for C.\n");
     fprintf(output, "\n");
     fprintf(output, "Options:\n");
-    fprintf(output, "  -o BASENAME    specify a base name of output source and header files;\n");
-    fprintf(output, "                   can be used only once\n");
-    fprintf(output, "  -I DIRNAME     specify a directory name to search for import files;\n");
-    fprintf(output, "                   can be used as many times as needed to add directories\n");
-    fprintf(output, "  -a, --ascii    disable UTF-8 support\n");
-    fprintf(output, "  -l, --lines    add #line directives\n");
-    fprintf(output, "  -d, --debug    with debug information\n");
-    fprintf(output, "  -h, --help     print this help message and exit\n");
-    fprintf(output, "  -v, --version  print the version and exit\n");
-    fprintf(output, "\n");
+    print_options(output, g_command_opts);
     fprintf(output, "Environment Variable:\n");
     fprintf(output, "  %s\n", ENVVAR_IMPORT_PATH);
     fprintf(output, "      specify directory names to search for import files, delimited by '%c'\n", PATH_SEP);
@@ -6029,9 +6250,6 @@ int main(int argc, char **argv) {
         options_t opts = { 0 };
         string_array_t dirs;
         string_array__initialize(&dirs);
-        opts.ascii = FALSE;
-        opts.lines = FALSE;
-        opts.debug = FALSE;
         {
             const char *path = NULL;
             const char *opt_o = NULL;
@@ -6040,57 +6258,64 @@ int main(int argc, char **argv) {
             bool_t opt_d = FALSE;
             bool_t opt_h = FALSE;
             bool_t opt_v = FALSE;
-            int i;
-            for (i = 1; i < argc; i++) {
-                if (argv[i][0] != '-') {
+            const char *a = NULL;
+            int i = 1;
+            command_line_option_parser_t cl;
+            command_line_option_parser__reset(&cl, i);
+            for (;;) {
+                const int h = i;
+                const int r = command_line_option_parser__parse(&cl, g_command_opts, argc, argv, &i, &a);
+                if (r == COMMAND_LINE_OPTION_ERROR_NOT_OPTION || r == 0) break;
+                switch (r) {
+                case COMMAND_LINE_OPTION_ERROR_NO_MATCHED_OPTION:
+                    print_error("Invalid option: '%s'\n", argv[h]);
+                    fprintf(stderr, "\n");
+                    print_usage(stderr);
+                    exit(1);
+                case COMMAND_LINE_OPTION_ERROR_AMBIGUOUS_OPTION:
+                    print_error("Ambiguous option: '%s'\n", argv[h]);
+                    fprintf(stderr, "\n");
+                    print_usage(stderr);
+                    exit(1);
+                case COMMAND_LINE_OPTION_ERROR_ARGUMENT_REQUIRED:
+                    print_error("Option requires an argument: '%s'\n", argv[h]);
+                    fprintf(stderr, "\n");
+                    print_usage(stderr);
+                    exit(1);
+                case COMMAND_LINE_OPTION_ERROR_ARGUMENT_NOT_REQUIRED:
+                    print_error("Option does not require an argument: '%s'\n", argv[h]);
+                    fprintf(stderr, "\n");
+                    print_usage(stderr);
+                    exit(1);
+                case 'I':
+                    string_array__add(&dirs, a, VOID_VALUE);
                     break;
-                }
-                else if (strcmp(argv[i], "--") == 0) {
-                    i++; break;
-                }
-                else if (argv[i][1] == 'I') {
-                    const char *const v = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
-                    if (v == NULL || v[0] == '\0') {
-                        print_error("Import directory name missing\n");
-                        fprintf(stderr, "\n");
-                        print_usage(stderr);
-                        exit(1);
-                    }
-                    string_array__add(&dirs, v, VOID_VALUE);
-                }
-                else if (argv[i][1] == 'o') {
-                    const char *const v = (argv[i][2] != '\0') ? argv[i] + 2 : (++i < argc) ?  argv[i] : NULL;
-                    if (v == NULL || v[0] == '\0') {
-                        print_error("Output base name missing\n");
-                        fprintf(stderr, "\n");
-                        print_usage(stderr);
-                        exit(1);
-                    }
+                case 'o':
                     if (opt_o != NULL) {
-                        print_error("Extra output base name: '%s'\n", v);
+                        print_error("Extra output base name: '%s'\n", a);
                         fprintf(stderr, "\n");
                         print_usage(stderr);
                         exit(1);
                     }
-                    opt_o = v;
-                }
-                else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--ascii") == 0) {
+                    opt_o = a;
+                    break;
+                case 'a':
                     opt_a = TRUE;
-                }
-                else if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--lines") == 0) {
+                    break;
+                case 'l':
                     opt_l = TRUE;
-                }
-                else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+                    break;
+                case 'd':
                     opt_d = TRUE;
-                }
-                else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+                    break;
+                case 'h':
                     opt_h = TRUE;
-                }
-                else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+                    break;
+                case 'v':
                     opt_v = TRUE;
-                }
-                else {
-                    print_error("Invalid option: '%s'\n", argv[i]);
+                    break;
+                default:
+                    print_error("Unimplemented option: '%s'\n", argv[h]); /* kind of an internal error */
                     fprintf(stderr, "\n");
                     print_usage(stderr);
                     exit(1);
