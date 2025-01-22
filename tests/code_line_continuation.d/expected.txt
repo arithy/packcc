@@ -1,0 +1,9 @@
+Rule(name:'rule', ref:0, vars.len:0, capts.len:0, codes.len:1) {
+  Sequence(max:2, len:2) {
+    Charclass(value:'null')
+    Action(index:0, code:{\n        #define AAA /* {\n        */ { \\\n        aaa \"//\" /*\n        {\n        {\n        */{ \"/*\"\n        // bbb \\\n           {\\\n           {\n    }, vars:none)
+  }
+}
+value_type: 'int'
+auxil_type: 'void *'
+prefix: 'pcc'
