@@ -237,7 +237,7 @@ A set of characters enclosed in square brackets matches any single character fro
 The ANSI C escape sequences are recognized within the characters.
 The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs,
 if the command line option `-a` is not specified (version 1.4.0 or later).
-If the set begins with an up-arrow (`^`), the set is negated (the element matches any character not in the set).
+If the set begins with a caret (`^`), the set is negated (the element matches any character not in the set).
 Any pair of characters separated with a dash (`-`) represents the range of characters from the first to the second, inclusive.
 The examples are shown below.
 
@@ -250,7 +250,11 @@ The examples are shown below.
 **`.`**
 
 A dot (`.`) matches any single character.
-Note that the only time this fails is at the end of input, where there is no character to match.
+Note that the only time this fails is at the end of the input, where there is no character to match.
+
+**`^`**
+
+A caret (`^`) matches the beginning of the input (version 2.1.0 or later).
 
 **_element_ `?`**
 
@@ -279,7 +283,7 @@ The input text scanned while matching _element_ is not consumed from the input a
 
 The predicate succeeds only if the _element_ cannot be matched.
 The input text scanned while matching _element_ is not consumed from the input and remains available for subsequent matching.
-A popular idiom is the following, which matches the end of input, after the last character of the input has already been consumed.
+A popular idiom is the following, which matches the end of the input, after the last character of the input has already been consumed.
 
 ```
 !.
@@ -668,7 +672,7 @@ The `auxil` can be used to pass user-defined data to be bound to the context.
 int pcc_parse(pcc_context_t *ctx, int *ret);
 ```
 
-Parses an input text (from standard input by default) and returns the result in `ret`.
+Parses an input text (from the standard input by default) and returns the result in `ret`.
 The `ret` can be `NULL` if no output data is needed.
 This function returns `0` if no text is left to be parsed, or a nonzero value otherwise.
 
