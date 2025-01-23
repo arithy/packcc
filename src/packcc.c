@@ -30,6 +30,7 @@
  */
 
 #ifdef _MSC_VER
+#define _CRT_NONSTDC_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -4109,7 +4110,9 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "#ifdef _MSC_VER\n"
+            "#undef _CRT_NONSTDC_NO_WARNINGS\n"
             "#undef _CRT_SECURE_NO_WARNINGS\n"
+            "#define _CRT_NONSTDC_NO_WARNINGS\n"
             "#define _CRT_SECURE_NO_WARNINGS\n"
             "#endif /* _MSC_VER */\n"
             "#include <stdio.h>\n"
