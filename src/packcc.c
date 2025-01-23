@@ -1,7 +1,7 @@
 /*
  * PackCC: a packrat parser generator for C.
  *
- * Copyright (c) 2014, 2019-2024 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019-2025 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -128,7 +128,7 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 
 #define WEBSITE "https://github.com/arithy/packcc"
 
-#define VERSION "2.1.0"
+#define VERSION "2.2.0"
 
 #ifndef BUFFER_MIN_SIZE
 #define BUFFER_MIN_SIZE 256
@@ -5685,7 +5685,7 @@ static bool_t generate(context_t *ctx) {
 
 static void print_version(FILE *output) {
     fprintf(output, "%s version %s\n", g_cmdname, VERSION);
-    fprintf(output, "Copyright (c) 2014, 2019-2024 Arihiro Yoshida. All rights reserved.\n");
+    fprintf(output, "Copyright (c) 2014, 2019-2025 Arihiro Yoshida. All rights reserved.\n");
 }
 
 static void print_usage(FILE *output) {
