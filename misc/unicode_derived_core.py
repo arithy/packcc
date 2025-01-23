@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Copyright (c) 2024 Arihiro Yoshida. All rights reserved.
+# Copyright (c) 2024-2025 Arihiro Yoshida. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ import os
 import requests
 import re
 
-ucd_url = 'https://www.unicode.org/Public/15.1.0/ucd/DerivedCoreProperties.txt'
+ucd_url = 'https://www.unicode.org/Public/UCD/latest/ucd/DerivedCoreProperties.txt'
 ucd_dp_list = [ # Grapheme_Link is deprecated; Indic_Conjunct_Break is unsupported.
     'Math',
     'Alphabetic',
@@ -53,6 +53,12 @@ def get_unicode_data():
     for chunk in res.iter_content(chunk_size=1024*1024):
         txt += chunk.decode()
     return txt
+
+def escape_as_utf16_hex(hex):
+    code = int(hex, 16)
+    if code > 0x10ffff:
+        raise ValueError
+    return f'\\u{code:04x}' if code <= 0xffff else f'\\u{0xd800 | ((code - 0x10000) >> 10):04x}\\u{0xdc00 | (code & 0x3ff):04x}'
 
 def generate_rules(dat):
     str = (
@@ -83,15 +89,15 @@ def generate_rules(dat):
             if cs == '':
                 cs = c[0]
             elif int(c[0], 16) - int(cp, 16) != 1:
-                cc += '\\u' + cs
+                cc += escape_as_utf16_hex(cs)
                 if cs != cp:
-                    cc += '-\\u' + cp
+                    cc += '-' + escape_as_utf16_hex(cp)
                 cs = c[0]
             cp = c[1]
         if cs != '':
-            cc += '\\u' + cs
+            cc += escape_as_utf16_hex(cs)
             if cs != cp:
-                cc += '-\\u' + cp
+                cc += '-' + escape_as_utf16_hex(cp)
         str += 'Unicode_' + dp + ' <- [' + cc + ']\n'
     return str
 
