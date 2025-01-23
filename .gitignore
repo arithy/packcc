@@ -6,3 +6,6 @@
 /build/msvc/**/x64/
 /build/msvc/**/.vs/
 /benchmark/tmp/
+/.vscode/
+/.cache/
+__pycache__/
