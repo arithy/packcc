@@ -48,7 +48,7 @@ def main():
         if m is None:
             print('#line directive not found one line after keyword')
             sys.exit(2)
-        if int(m.group(1)) - 1 != i + 1:
+        if int(m.group(1)) - 1 != i + 2:
             print('#line directive with inconsistent line number')
             sys.exit(2)
         if m.group(2) != os.path.abspath(path):

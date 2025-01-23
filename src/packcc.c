@@ -1218,7 +1218,7 @@ static void stream__write_code_block(
         }
     }
     if (stream->line != VOID_VALUE && b)
-        stream__write_line_directive(stream, stream->path, stream->line);
+        stream__write_line_directive(stream, stream->path, stream->line + 1);
 }
 
 static void stream__write_footer(stream_t *stream, const char *ptr, size_t len, const char *path, size_t lineno, const subst_map_t *subst) {
