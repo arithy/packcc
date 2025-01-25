@@ -137,8 +137,6 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 #define ARRAY_MIN_SIZE 2
 #endif
 
-#define SUBST_MARKER '$'
-
 #define INDENT_UNIT 4
 
 #define VOID_VALUE (~(size_t)0)
@@ -426,6 +424,10 @@ typedef enum code_reach_tag {
 } code_reach_t;
 
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
+
+static size_t size__sub(size_t a, size_t b) {
+    return (a > b) ? a - b : 0;
+}
 
 __attribute__((format(printf, 1, 2)))
 static int print_error(const char *format, ...) {
@@ -1078,7 +1080,8 @@ static void stream__write_characters(stream_t *obj, char ch, size_t len) {
 
 static bool_t can_character_follow_reserved_identifier_(char ch) {
     return (
-        ch != SUBST_MARKER && ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
+        ch != '$' && ch != '@' &&
+        ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
     ) ? TRUE : FALSE;
 }
 
@@ -1090,12 +1093,12 @@ static void stream__write_text(stream_t *obj, const char *str, size_t len, bool_
             if (i + 1 < len && str[i + 1] == '\n') i++;
             stream__putc(obj, '\n');
         }
-        else if (str[i] == SUBST_MARKER) {
+        else if (str[i] == '$') {
             bool_t b = FALSE;
             size_t j = i + 1;
             if (j < len) {
                 char c = str[j++];
-                if (isact && c == SUBST_MARKER) { /* "$$" */
+                if (isact && c == '$') { /* "$$" */
                     if (j >= len || can_character_follow_reserved_identifier_(str[j])) {
                         stream__putc(obj, '_');
                         stream__putc(obj, '_');
@@ -1655,10 +1658,10 @@ static bool_t input_state__is_in_imported(const input_state_t *obj) {
 static size_t input_state__column_number(const input_state_t *obj) { /* 0-based */
     assert(obj->bufpos + obj->bufcur >= obj->linepos);
     if (obj->ascii)
-        return obj->charnum + obj->bufcur - ((obj->linepos > obj->bufpos) ? obj->linepos - obj->bufpos : 0);
+        return obj->charnum + obj->bufcur - size__sub(obj->linepos, obj->bufpos);
     else
         return obj->charnum + count_characters(
-            obj->buffer.p, (obj->linepos > obj->bufpos) ? obj->linepos - obj->bufpos : 0, obj->bufcur
+            obj->buffer.p, size__sub(obj->linepos, obj->bufpos), obj->bufcur
         );
 }
 
