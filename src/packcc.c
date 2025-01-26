@@ -1130,7 +1130,14 @@ static void file_pos__set(file_pos_t *obj, const char *path, size_t line, size_t
 
 static void file_id__get(FILE *file, const char *path, file_id_t *id) {
 #ifdef _WIN32 /* Windows including MSVC and MinGW */
-    if (GetFileInformationByHandle((HANDLE)_get_osfhandle(_fileno(file)), id) == 0) {
+    const int f = _fileno(file);
+    if (f <= 2) { /* standard input/output/error */
+        id->dwVolumeSerialNumber = ~(DWORD)0;
+        id->nFileIndexHigh = 0;
+        id->nFileIndexLow = f;
+        return;
+    }
+    if (GetFileInformationByHandle((HANDLE)_get_osfhandle(f), id) == 0) {
         print_error("Cannot get file information: %s\n", path);
         exit(2);
     }
