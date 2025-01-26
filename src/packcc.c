@@ -1,7 +1,7 @@
 /*
  * PackCC: a packrat parser generator for C.
  *
- * Copyright (c) 2014, 2019-2024 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019-2025 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,7 @@
  */
 
 #define PACKCC_VERSION "3.0.0"
-#define PACKCC_YEARS "2014, 2019-2024"
+#define PACKCC_YEARS "2014, 2019-2025"
 #define PACKCC_WEBSITE "https://github.com/arithy/packcc"
 
 #ifdef _MSC_VER
