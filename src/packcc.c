@@ -678,52 +678,39 @@ static bool_t is_pointer_type(const char *str) {
 }
 
 static bool_t is_valid_utf8_string(const char *str) {
-    int k = 0, n = 0, u = 0;
+    int k = 1, n = 0, u = 0;
     size_t i;
     for (i = 0; str[i]; i++) {
         const int c = (int)(unsigned char)str[i];
         switch (k) {
-        case 0:
+        case 1:
             if (c >= 0x80) {
-                if ((c & 0xe0) == 0xc0) {
-                    u = c & 0x1f;
-                    n = k = 1;
-                }
-                else if ((c & 0xf0) == 0xe0) {
-                    u = c & 0x0f;
-                    n = k = 2;
-                }
-                else if ((c & 0xf8) == 0xf0) {
-                    u = c & 0x07;
-                    n = k = 3;
-                }
-                else {
-                    return FALSE;
-                }
+                n = ((c & 0xe0) == 0xc0) ? 2 :
+                    ((c & 0xf0) == 0xe0) ? 3 :
+                    ((c & 0xf8) == 0xf0) ? 4 :
+                    ((c & 0xfc) == 0xf8) ? 5 :
+                    ((c & 0xfe) == 0xfc) ? 6 : 0;
+                if (n < 1) return FALSE;
+                k = n;
+                u = c & ((1 << (7 - n)) - 1);
             }
             break;
-        case 1:
         case 2:
         case 3:
+        case 4:
+        case 5:
+        case 6:
             if ((c & 0xc0) == 0x80) {
-                u <<= 6;
-                u |= c & 0x3f;
+                u = (u << 6) | (c & 0x3f);
                 k--;
-                if (k == 0) {
-                    switch (n) {
-                    case 1:
-                        if (u < 0x80) return FALSE;
-                        break;
-                    case 2:
-                        if (u < 0x800) return FALSE;
-                        break;
-                    case 3:
-                        if (u < 0x10000 || u > 0x10ffff) return FALSE;
-                        break;
-                    default:
-                        assert(((void)"unexpected control flow", 0));
-                        return FALSE; /* never reached */
-                    }
+                if (k == 1) {
+                    if (
+                        (n == 2 && u < 0x00000080) ||
+                        (n == 3 && u < 0x00000800) ||
+                        (n == 4 && u < 0x00010000) ||
+                        (n == 5 && u < 0x00200000) ||
+                        (n == 6 && u < 0x04000000)
+                    ) return FALSE;
                     u = 0;
                     n = 0;
                 }
@@ -737,36 +724,41 @@ static bool_t is_valid_utf8_string(const char *str) {
             return FALSE; /* never reached */
         }
     }
-    return (k == 0) ? TRUE : FALSE;
+    return (k == 1) ? TRUE : FALSE;
 }
 
-static size_t utf8_to_utf32(const char *seq, int *out) { /* without checking UTF-8 validity */
+static size_t utf8_to_utf32(const char *seq, int *out) { /* with checking UTF-8 validity */
+    int u;
+    size_t i;
     const int c = (int)(unsigned char)seq[0];
-    const size_t n =
-        (c == 0) ? 0 : (c < 0x80) ? 1 :
+    const size_t n = (c < 0x80) ? 1 :
         ((c & 0xe0) == 0xc0) ? 2 :
         ((c & 0xf0) == 0xe0) ? 3 :
-        ((c & 0xf8) == 0xf0) ? 4 : 1;
-    int u = 0;
-    switch (n) {
-    case 0:
-    case 1:
-        u = c;
-        break;
-    case 2:
-        u = ((c & 0x1f) << 6) |
-            ((int)(unsigned char)seq[1] & 0x3f);
-        break;
-    case 3:
-        u = ((c & 0x0f) << 12) |
-            (((int)(unsigned char)seq[1] & 0x3f) << 6) |
-            (seq[1] ? ((int)(unsigned char)seq[2] & 0x3f) : 0);
-        break;
-    default:
-        u = ((c & 0x07) << 18) |
-            (((int)(unsigned char)seq[1] & 0x3f) << 12) |
-            (seq[1] ? (((int)(unsigned char)seq[2] & 0x3f) << 6) : 0) |
-            (seq[2] ? ((int)(unsigned char)seq[3] & 0x3f) : 0);
+        ((c & 0xf8) == 0xf0) ? 4 :
+        ((c & 0xfc) == 0xf8) ? 5 :
+        ((c & 0xfe) == 0xfc) ? 6 : 0;
+    if (n < 1) { /* invalid code sequence */
+        if (out) *out = 0xfffd;
+        return 1;
+    }
+    u = (n <= 1) ? c : (c & ((1 << (7 - n)) - 1));
+    for (i = 1; i < n; i++) {
+        const int d = (int)(unsigned char)seq[i];
+        if ((d & 0xc0) != 0x80) { /* not a continuation byte */
+            if (out) *out = 0xfffd;
+            return 1;
+        }
+        u = (u << 6) | (d & 0x3f);
+    }
+    if (
+        (n == 2 && u < 0x00000080) ||
+        (n == 3 && u < 0x00000800) ||
+        (n == 4 && u < 0x00010000) ||
+        (n == 5 && u < 0x00200000) ||
+        (n == 6 && u < 0x04000000)
+    ) { /* invalidly encoded */
+        if (out) *out = 0xfffd;
+        return 1;
     }
     if (out) *out = u;
     return n;
@@ -970,11 +962,16 @@ static void remove_trailing_spaces(char *str) {
 static size_t count_characters(const char *str, size_t start, size_t end) {
     /* UTF-8 multibyte character support but without checking UTF-8 validity */
     size_t n = 0, i = start;
-    while (i < end && str[i]) {
+    while (i < end) {
         const int c = (int)(unsigned char)str[i];
         if (c == 0) break;
         n++;
-        i += (c < 0x80) ? 1 : ((c & 0xe0) == 0xc0) ? 2 : ((c & 0xf0) == 0xe0) ? 3 : ((c & 0xf8) == 0xf0) ? 4 : /* invalid code */ 1;
+        i += (c < 0x80) ? 1 :
+            ((c & 0xe0) == 0xc0) ? 2 :
+            ((c & 0xf0) == 0xe0) ? 3 :
+            ((c & 0xf8) == 0xf0) ? 4 :
+            ((c & 0xfc) == 0xf8) ? 5 :
+            ((c & 0xfe) == 0xfc) ? 6 : /* invalid code */ 1;
     }
     return n;
 }
@@ -5714,52 +5711,30 @@ static bool_t generate(context_t *ctx) {
                 &sstream,
                 "static size_t pcc_get_char_as_utf32(pcc_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n"
                 "    int c, u;\n"
-                "    size_t n;\n"
+                "    size_t n, i;\n"
                 "    if (pcc_refill_buffer(ctx, 1) < 1) return 0;\n"
                 "    c = (int)(unsigned char)ctx->buffer.p[ctx->cur];\n"
                 "    n = (c < 0x80) ? 1 :\n"
                 "        ((c & 0xe0) == 0xc0) ? 2 :\n"
                 "        ((c & 0xf0) == 0xe0) ? 3 :\n"
-                "        ((c & 0xf8) == 0xf0) ? 4 : 0;\n"
+                "        ((c & 0xf8) == 0xf0) ? 4 :\n"
+                "        ((c & 0xfc) == 0xf8) ? 5 :\n"
+                "        ((c & 0xfe) == 0xfc) ? 6 : 0;\n"
                 "    if (n < 1) return 0;\n"
                 "    if (pcc_refill_buffer(ctx, n) < n) return 0;\n"
-                "    switch (n) {\n"
-                "    case 1:\n"
-                "        u = c;\n"
-                "        break;\n"
-                "    case 2:\n"
-                "        u = c & 0x1f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.p[ctx->cur + 1];\n"
-                "        if ((c & 0xc0) != 0x80) return 0;\n"
-                "        u <<= 6; u |= c & 0x3f;\n"
-                "        if (u < 0x80) return 0;\n"
-                "        break;\n"
-                "    case 3:\n"
-                "        u = c & 0x0f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.p[ctx->cur + 1];\n"
-                "        if ((c & 0xc0) != 0x80) return 0;\n"
-                "        u <<= 6; u |= c & 0x3f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.p[ctx->cur + 2];\n"
-                "        if ((c & 0xc0) != 0x80) return 0;\n"
-                "        u <<= 6; u |= c & 0x3f;\n"
-                "        if (u < 0x800) return 0;\n"
-                "        break;\n"
-                "    case 4:\n"
-                "        u = c & 0x07;\n"
-                "        c = (int)(unsigned char)ctx->buffer.p[ctx->cur + 1];\n"
-                "        if ((c & 0xc0) != 0x80) return 0;\n"
-                "        u <<= 6; u |= c & 0x3f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.p[ctx->cur + 2];\n"
-                "        if ((c & 0xc0) != 0x80) return 0;\n"
-                "        u <<= 6; u |= c & 0x3f;\n"
-                "        c = (int)(unsigned char)ctx->buffer.p[ctx->cur + 3];\n"
-                "        if ((c & 0xc0) != 0x80) return 0;\n"
-                "        u <<= 6; u |= c & 0x3f;\n"
-                "        if (u < 0x10000 || u > 0x10ffff) return 0;\n"
-                "        break;\n"
-                "    default:\n"
-                "        return 0;\n"
+                "    u = (n <= 1) ? c : (c & ((1 << (7 - n)) - 1));\n"
+                "    for (i = 1; i < n; i++) {\n"
+                "        const int d = (int)(unsigned char)ctx->buffer.p[ctx->cur + i];\n"
+                "        if ((d & 0xc0) != 0x80) return 0; /* not a continuation byte */\n"
+                "        u = (u << 6) | (d & 0x3f);\n"
                 "    }\n"
+                "    if (\n"
+                "        (n == 2 && u < 0x00000080) ||\n"
+                "        (n == 3 && u < 0x00000800) ||\n"
+                "        (n == 4 && u < 0x00010000) ||\n"
+                "        (n == 5 && u < 0x00200000) ||\n"
+                "        (n == 6 && u < 0x04000000)\n"
+                "    ) return 0; /* invalidly encoded */\n"
                 "    if (out) *out = u;\n"
                 "    return n;\n"
                 "}\n"
