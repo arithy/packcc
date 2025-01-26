@@ -1,40 +1,124 @@
-TEST EARLYHEADER $$
-TEST EARLYHEADER $0
-TEST EARLYHEADER $0s
-TEST EARLYHEADER $0e
-TEST EARLYHEADER $123
-TEST EARLYHEADER $123s
-TEST EARLYHEADER $123e
-TEST EARLYHEADER foo1
-TEST EARLYHEADER FOO1
-TEST EARLYHEADER ${bar}
-TEST EARLYCOMMON $$
-TEST EARLYCOMMON $0
-TEST EARLYCOMMON $0s
-TEST EARLYCOMMON $0e
-TEST EARLYCOMMON $123
-TEST EARLYCOMMON $123s
-TEST EARLYCOMMON $123e
-TEST EARLYCOMMON foo1
-TEST EARLYCOMMON FOO1
-TEST EARLYCOMMON ${bar}
-TEST HEADER $$
-TEST HEADER $0
-TEST HEADER $0s
-TEST HEADER $0e
-TEST HEADER $123
-TEST HEADER $123s
-TEST HEADER $123e
-TEST HEADER foo1
-TEST HEADER FOO1
-TEST HEADER ${bar}
-TEST COMMON $$
-TEST COMMON $0
-TEST COMMON $0s
-TEST COMMON $0e
-TEST COMMON $123
-TEST COMMON $123s
-TEST COMMON $123e
-TEST COMMON foo1
-TEST COMMON FOO1
-TEST COMMON ${bar}
+TEST EARLYHEADER $$         " $$         " /* $$         */ // $$
+TEST EARLYHEADER $0         " $0         " /* $0         */ // $0
+TEST EARLYHEADER $0s        " $0s        " /* $0s        */ // $0s
+TEST EARLYHEADER $0e        " $0e        " /* $0e        */ // $0e
+TEST EARLYHEADER $123       " $123       " /* $123       */ // $123
+TEST EARLYHEADER $123s      " $123s      " /* $123s      */ // $123s
+TEST EARLYHEADER $123e      " $123e      " /* $123e      */ // $123e
+TEST EARLYHEADER foo1  " foo1  " /* foo1  */ // foo1
+TEST EARLYHEADER FOO1  " FOO1  " /* FOO1  */ // FOO1
+TEST EARLYHEADER ${bar}     " ${bar}     " /* ${bar}     */ // ${bar}
+TEST EARLYHEADER ${prefix} " ${prefix} " /* ${prefix} */ // ${prefix}
+TEST EARLYHEADER ${PREFIX} " ${PREFIX} " /* ${PREFIX} */ // ${PREFIX}
+TEST EARLYHEADER @@                     " @@                     " /* @@                     */ // @@
+TEST EARLYHEADER @var                   " @var                   " /* @var                   */ // @var
+TEST EARLYHEADER @var.get_string()      " @var.get_string()      " /* @var.get_string()      */ // @var.get_string()
+TEST EARLYHEADER @var.set_string($0)    " @var.set_string($0)    " /* @var.set_string($0)    */ // @var.set_string($0)
+TEST EARLYHEADER @var.append_string($0) " @var.append_string($0) " /* @var.append_string($0) */ // @var.append_string($0)
+TEST EARLYHEADER @var.save()            " @var.save()            " /* @var.save()            */ // @var.save()
+TEST EARLYHEADER @var.restore()         " @var.restore()         " /* @var.restore()         */ // @var.restore()
+TEST EARLYHEADER @baz                   " @baz                   " /* @baz                   */ // @baz
+TEST EARLYHEADER @baz.get_string()      " @baz.get_string()      " /* @baz.get_string()      */ // @baz.get_string()
+TEST EARLYHEADER @baz.set_string($0)    " @baz.set_string($0)    " /* @baz.set_string($0)    */ // @baz.set_string($0)
+TEST EARLYHEADER @baz.append_string($0) " @baz.append_string($0) " /* @baz.append_string($0) */ // @baz.append_string($0)
+TEST EARLYHEADER @baz.save()            " @baz.save()            " /* @baz.save()            */ // @baz.save()
+TEST EARLYHEADER @baz.restore()         " @baz.restore()         " /* @baz.restore()         */ // @baz.restore()
+TEST EARLYHEADER @var                  " @var                  " /* @var                  */ // @var
+TEST EARLYHEADER @var.get_string()     " @var.get_string()     " /* @var.get_string()     */ // @var.get_string()
+TEST EARLYHEADER @var.set_string($0)   " @var.set_string($0)   " /* @var.set_string($0)   */ // @var.set_string($0)
+TEST EARLYHEADER @var.append_string($0)" @var.append_string($0)" /* @var.append_string($0)*/ // @var.append_string($0)
+TEST EARLYHEADER @var.save()           " @var.save()           " /* @var.save()           */ // @var.save()
+TEST EARLYHEADER @var.restore()        " @var.restore()        " /* @var.restore()        */ // @var.restore()
+TEST EARLYCOMMON $$         " $$         " /* $$         */ // $$
+TEST EARLYCOMMON $0         " $0         " /* $0         */ // $0
+TEST EARLYCOMMON $0s        " $0s        " /* $0s        */ // $0s
+TEST EARLYCOMMON $0e        " $0e        " /* $0e        */ // $0e
+TEST EARLYCOMMON $123       " $123       " /* $123       */ // $123
+TEST EARLYCOMMON $123s      " $123s      " /* $123s      */ // $123s
+TEST EARLYCOMMON $123e      " $123e      " /* $123e      */ // $123e
+TEST EARLYCOMMON foo1  " foo1  " /* foo1  */ // foo1
+TEST EARLYCOMMON FOO1  " FOO1  " /* FOO1  */ // FOO1
+TEST EARLYCOMMON ${bar}     " ${bar}     " /* ${bar}     */ // ${bar}
+TEST EARLYCOMMON ${prefix} " ${prefix} " /* ${prefix} */ // ${prefix}
+TEST EARLYCOMMON ${PREFIX} " ${PREFIX} " /* ${PREFIX} */ // ${PREFIX}
+TEST EARLYCOMMON @@                     " @@                     " /* @@                     */ // @@
+TEST EARLYCOMMON @var                   " @var                   " /* @var                   */ // @var
+TEST EARLYCOMMON @var.get_string()      " @var.get_string()      " /* @var.get_string()      */ // @var.get_string()
+TEST EARLYCOMMON @var.set_string($0)    " @var.set_string($0)    " /* @var.set_string($0)    */ // @var.set_string($0)
+TEST EARLYCOMMON @var.append_string($0) " @var.append_string($0) " /* @var.append_string($0) */ // @var.append_string($0)
+TEST EARLYCOMMON @var.save()            " @var.save()            " /* @var.save()            */ // @var.save()
+TEST EARLYCOMMON @var.restore()         " @var.restore()         " /* @var.restore()         */ // @var.restore()
+TEST EARLYCOMMON @baz                   " @baz                   " /* @baz                   */ // @baz
+TEST EARLYCOMMON @baz.get_string()      " @baz.get_string()      " /* @baz.get_string()      */ // @baz.get_string()
+TEST EARLYCOMMON @baz.set_string($0)    " @baz.set_string($0)    " /* @baz.set_string($0)    */ // @baz.set_string($0)
+TEST EARLYCOMMON @baz.append_string($0) " @baz.append_string($0) " /* @baz.append_string($0) */ // @baz.append_string($0)
+TEST EARLYCOMMON @baz.save()            " @baz.save()            " /* @baz.save()            */ // @baz.save()
+TEST EARLYCOMMON @baz.restore()         " @baz.restore()         " /* @baz.restore()         */ // @baz.restore()
+TEST EARLYCOMMON @var                  " @var                  " /* @var                  */ // @var
+TEST EARLYCOMMON @var.get_string()     " @var.get_string()     " /* @var.get_string()     */ // @var.get_string()
+TEST EARLYCOMMON @var.set_string($0)   " @var.set_string($0)   " /* @var.set_string($0)   */ // @var.set_string($0)
+TEST EARLYCOMMON @var.append_string($0)" @var.append_string($0)" /* @var.append_string($0)*/ // @var.append_string($0)
+TEST EARLYCOMMON @var.save()           " @var.save()           " /* @var.save()           */ // @var.save()
+TEST EARLYCOMMON @var.restore()        " @var.restore()        " /* @var.restore()        */ // @var.restore()
+TEST HEADER $$         " $$         " /* $$         */ // $$
+TEST HEADER $0         " $0         " /* $0         */ // $0
+TEST HEADER $0s        " $0s        " /* $0s        */ // $0s
+TEST HEADER $0e        " $0e        " /* $0e        */ // $0e
+TEST HEADER $123       " $123       " /* $123       */ // $123
+TEST HEADER $123s      " $123s      " /* $123s      */ // $123s
+TEST HEADER $123e      " $123e      " /* $123e      */ // $123e
+TEST HEADER foo1  " foo1  " /* foo1  */ // foo1
+TEST HEADER FOO1  " FOO1  " /* FOO1  */ // FOO1
+TEST HEADER ${bar}     " ${bar}     " /* ${bar}     */ // ${bar}
+TEST HEADER ${prefix} " ${prefix} " /* ${prefix} */ // ${prefix}
+TEST HEADER ${PREFIX} " ${PREFIX} " /* ${PREFIX} */ // ${PREFIX}
+TEST HEADER @@                     " @@                     " /* @@                     */ // @@
+TEST HEADER @var                   " @var                   " /* @var                   */ // @var
+TEST HEADER @var.get_string()      " @var.get_string()      " /* @var.get_string()      */ // @var.get_string()
+TEST HEADER @var.set_string($0)    " @var.set_string($0)    " /* @var.set_string($0)    */ // @var.set_string($0)
+TEST HEADER @var.append_string($0) " @var.append_string($0) " /* @var.append_string($0) */ // @var.append_string($0)
+TEST HEADER @var.save()            " @var.save()            " /* @var.save()            */ // @var.save()
+TEST HEADER @var.restore()         " @var.restore()         " /* @var.restore()         */ // @var.restore()
+TEST HEADER @baz                   " @baz                   " /* @baz                   */ // @baz
+TEST HEADER @baz.get_string()      " @baz.get_string()      " /* @baz.get_string()      */ // @baz.get_string()
+TEST HEADER @baz.set_string($0)    " @baz.set_string($0)    " /* @baz.set_string($0)    */ // @baz.set_string($0)
+TEST HEADER @baz.append_string($0) " @baz.append_string($0) " /* @baz.append_string($0) */ // @baz.append_string($0)
+TEST HEADER @baz.save()            " @baz.save()            " /* @baz.save()            */ // @baz.save()
+TEST HEADER @baz.restore()         " @baz.restore()         " /* @baz.restore()         */ // @baz.restore()
+TEST HEADER @var                  " @var                  " /* @var                  */ // @var
+TEST HEADER @var.get_string()     " @var.get_string()     " /* @var.get_string()     */ // @var.get_string()
+TEST HEADER @var.set_string($0)   " @var.set_string($0)   " /* @var.set_string($0)   */ // @var.set_string($0)
+TEST HEADER @var.append_string($0)" @var.append_string($0)" /* @var.append_string($0)*/ // @var.append_string($0)
+TEST HEADER @var.save()           " @var.save()           " /* @var.save()           */ // @var.save()
+TEST HEADER @var.restore()        " @var.restore()        " /* @var.restore()        */ // @var.restore()
+TEST COMMON $$         " $$         " /* $$         */ // $$
+TEST COMMON $0         " $0         " /* $0         */ // $0
+TEST COMMON $0s        " $0s        " /* $0s        */ // $0s
+TEST COMMON $0e        " $0e        " /* $0e        */ // $0e
+TEST COMMON $123       " $123       " /* $123       */ // $123
+TEST COMMON $123s      " $123s      " /* $123s      */ // $123s
+TEST COMMON $123e      " $123e      " /* $123e      */ // $123e
+TEST COMMON foo1  " foo1  " /* foo1  */ // foo1
+TEST COMMON FOO1  " FOO1  " /* FOO1  */ // FOO1
+TEST COMMON ${bar}     " ${bar}     " /* ${bar}     */ // ${bar}
+TEST COMMON ${prefix} " ${prefix} " /* ${prefix} */ // ${prefix}
+TEST COMMON ${PREFIX} " ${PREFIX} " /* ${PREFIX} */ // ${PREFIX}
+TEST COMMON @@                     " @@                     " /* @@                     */ // @@
+TEST COMMON @var                   " @var                   " /* @var                   */ // @var
+TEST COMMON @var.get_string()      " @var.get_string()      " /* @var.get_string()      */ // @var.get_string()
+TEST COMMON @var.set_string($0)    " @var.set_string($0)    " /* @var.set_string($0)    */ // @var.set_string($0)
+TEST COMMON @var.append_string($0) " @var.append_string($0) " /* @var.append_string($0) */ // @var.append_string($0)
+TEST COMMON @var.save()            " @var.save()            " /* @var.save()            */ // @var.save()
+TEST COMMON @var.restore()         " @var.restore()         " /* @var.restore()         */ // @var.restore()
+TEST COMMON @baz                   " @baz                   " /* @baz                   */ // @baz
+TEST COMMON @baz.get_string()      " @baz.get_string()      " /* @baz.get_string()      */ // @baz.get_string()
+TEST COMMON @baz.set_string($0)    " @baz.set_string($0)    " /* @baz.set_string($0)    */ // @baz.set_string($0)
+TEST COMMON @baz.append_string($0) " @baz.append_string($0) " /* @baz.append_string($0) */ // @baz.append_string($0)
+TEST COMMON @baz.save()            " @baz.save()            " /* @baz.save()            */ // @baz.save()
+TEST COMMON @baz.restore()         " @baz.restore()         " /* @baz.restore()         */ // @baz.restore()
+TEST COMMON @var                  " @var                  " /* @var                  */ // @var
+TEST COMMON @var.get_string()     " @var.get_string()     " /* @var.get_string()     */ // @var.get_string()
+TEST COMMON @var.set_string($0)   " @var.set_string($0)   " /* @var.set_string($0)   */ // @var.set_string($0)
+TEST COMMON @var.append_string($0)" @var.append_string($0)" /* @var.append_string($0)*/ // @var.append_string($0)
+TEST COMMON @var.save()           " @var.save()           " /* @var.save()           */ // @var.save()
+TEST COMMON @var.restore()        " @var.restore()        " /* @var.restore()        */ // @var.restore()

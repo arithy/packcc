@@ -137,10 +137,10 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 #define ARRAY_MIN_SIZE 2
 #endif
 
-#define VARNAME_ACTION_OUT "_pcc_action_out"
-#define VARNAME_PROGPRED_OUT "_pcc_progpred_out"
-#define VARNAME_CAPTURE_PREFIX "_pcc_capture__"
-#define VARNAME_MARKER_PREFIX "_pcc_marker__"
+#define VARNAME_ACTION_OUT "pcc_action_out"
+#define VARNAME_PROGPRED_OUT "pcc_progpred_out"
+#define VARNAME_CAPTURE_PREFIX "pcc_capture__"
+#define VARNAME_MARKER_PREFIX "pcc_marker__"
 
 #define INDENT_UNIT 4
 
@@ -428,6 +428,13 @@ typedef enum code_reach_tag {
     CODE_REACH__ALWAYS_FAIL = -1
 } code_reach_t;
 
+typedef enum code_block_kind_tag {
+    CODE_BLOCK_KIND__NONE = 0,
+    CODE_BLOCK_KIND__NORMAL,
+    CODE_BLOCK_KIND__ACTION,
+    CODE_BLOCK_KIND__PROGPRED
+} code_block_kind_t;
+
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
 
 static size_t size__sub(size_t a, size_t b) {
@@ -542,9 +549,25 @@ static size_t string_to_size_t(const char *str) {
 #undef M
 }
 
-static size_t find_first_trailing_spaces_in_line(const char *str, size_t start, size_t end, size_t *next) {
-    size_t j = start, i;
-    for (i = start; i < end; i++) {
+static size_t find_first_nonspace_or_eol(const char *str, size_t start, size_t end) {
+    size_t i;
+    for (i = start; i < end && str[i]; i++) {
+        switch (str[i]) {
+        case ' ':
+        case '\v':
+        case '\f':
+        case '\t':
+            continue;
+        default:
+            return i;
+        }
+    }
+    return i;
+}
+
+static size_t find_trailing_spaces_in_line(const char *str, size_t start, size_t end, size_t *next) {
+    size_t i, j;
+    for (j = start, i = start; i < end && str[i]; i++) {
         switch (str[i]) {
         case ' ':
         case '\v':
@@ -566,9 +589,24 @@ static size_t find_first_trailing_spaces_in_line(const char *str, size_t start, 
     return j;
 }
 
+static size_t find_trailing_spaces_in_string(const char *str, size_t start, size_t end) {
+    size_t i, j;
+    for (j = start, i = start; i < end && str[i]; i++) {
+        if (
+            str[i] != ' '  &&
+            str[i] != '\v' &&
+            str[i] != '\f' &&
+            str[i] != '\t' &&
+            str[i] != '\n' &&
+            str[i] != '\r'
+        ) j = i + 1;
+    }
+    return j;
+}
+
 static size_t count_indent_spaces(const char *str, size_t start, size_t end, size_t *next) {
     size_t n = 0, i;
-    for (i = start; i < end; i++) {
+    for (i = start; i < end && str[i]; i++) {
         switch (str[i]) {
         case ' ':
         case '\v':
@@ -585,6 +623,20 @@ static size_t count_indent_spaces(const char *str, size_t start, size_t end, siz
     }
     if (next) *next = end;
     return n;
+}
+
+static size_t find_back_preceding_spaces_in_line(const char *str, size_t pos) {
+    size_t i = pos;
+    while (i > 0) {
+        i--;
+        if (
+            str[i] != ' '  &&
+            str[i] != '\v' &&
+            str[i] != '\f' &&
+            str[i] != '\t'
+        ) return i + 1;
+    }
+    return 0;
 }
 
 static bool_t is_filled_string(const char *str) {
@@ -915,31 +967,142 @@ static void remove_trailing_spaces(char *str) {
     str[j] = '\0';
 }
 
-static size_t find_trailing_spaces(const char *str) {
-    size_t i, j;
-    for (j = 0, i = 0; str[i]; i++) {
-        if (
-            str[i] != ' '  &&
-            str[i] != '\v' &&
-            str[i] != '\f' &&
-            str[i] != '\t' &&
-            str[i] != '\n' &&
-            str[i] != '\r'
-        ) j = i + 1;
-    }
-    return j;
-}
-
 static size_t count_characters(const char *str, size_t start, size_t end) {
     /* UTF-8 multibyte character support but without checking UTF-8 validity */
     size_t n = 0, i = start;
-    while (i < end) {
+    while (i < end && str[i]) {
         const int c = (int)(unsigned char)str[i];
         if (c == 0) break;
         n++;
         i += (c < 0x80) ? 1 : ((c & 0xe0) == 0xc0) ? 2 : ((c & 0xf0) == 0xe0) ? 3 : ((c & 0xf8) == 0xf0) ? 4 : /* invalid code */ 1;
     }
     return n;
+}
+
+static bool_t match_eol(
+    const char *str, size_t start, size_t end, size_t *next
+) {
+    size_t i = start;
+    if (i < end && str[i] == '\r') i++;
+    if (i < end && str[i] == '\n') i++;
+    if (i > start) {
+        if (next) *next = i;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t match_spaces_in_line(
+    const char *str, size_t start, size_t end, size_t *next
+) {
+    size_t i = start;
+    while (i < end) {
+        if (
+            str[i] != ' '  &&
+            str[i] != '\v' &&
+            str[i] != '\f' &&
+            str[i] != '\t'
+        ) break;
+        i++;
+    }
+    if (i > start) {
+        if (next) *next = i;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t match_comment_c(
+    const char *str, size_t start, size_t end, size_t *next
+) {
+    size_t i = start;
+    if (i + 1 < end && str[i] == '/' && str[i + 1] == '*') {
+        i += 2;
+        while (i < end) {
+            if (str[i] == '\0') break; /* Premature EOS but accept it here */
+            if (i + 1 < end && str[i] == '*' && str[i + 1] == '/') { i += 2; break; }
+            i++;
+        }
+        if (next) *next = i;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t match_comment_cxx(
+    const char *str, size_t start, size_t end, size_t *next
+) {
+    size_t i = start;
+    if (i + 1 < end && str[i] == '/' && str[i + 1] == '/') {
+        i += 2;
+        while (i < end) {
+            const size_t h = i;
+            if (str[i] == '\0') break;
+            if (match_eol(str, h, end, &i)) {
+                if (h <= start || str[h - 1] != '\\') break;
+            }
+            else {
+                i++;
+            }
+        }
+        if (next) *next = i;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t match_quotation(
+    const char *str, size_t start, size_t end, char quote, size_t *next
+) {
+    size_t i = start;
+    if (i < end && str[i] == quote) {
+        i++;
+        while (i < end) {
+            if (str[i] == '\0') break; /* Premature EOS but accept it here */
+            if (match_eol(str, i, end, &i)) break; /* Premature EOL but accept it here */
+            if (str[i] == quote) {
+                i++;
+                break;
+            }
+            if (str[i] == '\\') {
+                i++;
+                if (i >= end) break;
+            }
+            i++;
+        }
+        if (next) *next = i;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static bool_t match_directive_c(
+    const char *str, size_t start, size_t end, size_t *next
+) {
+    size_t i = start;
+    if (i < end && str[i] == '#') {
+        i++;
+        while (i < end) {
+            const size_t h = i;
+            if (str[i] == '\0') break;
+            if (match_eol(str, h, end, &i)) {
+                if (h <= start || str[h - 1] != '\\') break;
+            }
+            else if (match_comment_cxx(str, h, end, &i)) {
+                break;
+            }
+            else if (
+                !match_comment_c(str, h, end, &i) &&
+                !match_quotation(str, h, end, '\'', &i) &&
+                !match_quotation(str, h, end, '\"', &i)
+            ) {
+                i++;
+            }
+        }
+        if (next) *next = i;
+        return TRUE;
+    }
+    return FALSE;
 }
 
 static void make_header_identifier(char *str) {
@@ -1083,72 +1246,6 @@ static void stream__write_characters(stream_t *obj, char ch, size_t len) {
     for (i = 0; i < len; i++) stream__putc(obj, ch);
 }
 
-static bool_t can_character_follow_reserved_identifier_(char ch) {
-    return (
-        ch != '$' && ch != '@' &&
-        ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
-    ) ? TRUE : FALSE;
-}
-
-static void stream__write_text(stream_t *obj, const char *str, size_t len, bool_t isact, const subst_map_t *subst) {
-    size_t i;
-    if (len == VOID_VALUE) return; /* for safety */
-    for (i = 0; i < len; i++) {
-        if (str[i] == '\r') {
-            if (i + 1 < len && str[i + 1] == '\n') i++;
-            stream__putc(obj, '\n');
-        }
-        else if (str[i] == '$') {
-            bool_t b = FALSE;
-            size_t j = i + 1;
-            if (j < len) {
-                char c = str[j++];
-                if (isact && c == '$') { /* "$$" */
-                    if (j >= len || can_character_follow_reserved_identifier_(str[j])) {
-                        stream__puts(obj, VARNAME_ACTION_OUT);
-                        b = TRUE; i++;
-                    }
-                }
-                else if (isact && c == '0') { /* "$0" */
-                    if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
-                    if (j >= len || can_character_follow_reserved_identifier_(str[j])) {
-                        stream__puts(obj, VARNAME_CAPTURE_PREFIX);
-                        while (i + 1 < j) stream__putc(obj, str[++i]);
-                        b = TRUE;
-                    }
-                }
-                else if (isact && c >= '1' && c <= '9') { /* "$n" (n: a string to express a natural number) */
-                    while (j < len && str[j] >= '0' && str[j] <= '9') j++;
-                    if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
-                    if (j >= len || can_character_follow_reserved_identifier_(str[j])) {
-                        stream__puts(obj, VARNAME_CAPTURE_PREFIX);
-                        while (i + 1 < j) stream__putc(obj, str[++i]);
-                        b = TRUE;
-                    }
-                }
-                else if (subst && c == '{') { /* "${str}" (str: a string to be replaced) */
-                    size_t is;
-                    for (is = 0; is < subst->n; is++) {
-                        const subst_entry_t *const p = &(subst->p[is]);
-                        size_t k;
-                        for (k = 0; p->istr[k] && j + k < len && p->istr[k] == str[j + k]; k++);
-                        if (!p->istr[k] && j + k < len && str[j + k] == '}') {
-                            size_t l;
-                            for (l = 0; p->ostr[l]; l++) stream__putc(obj, p->ostr[l]);
-                            b = TRUE; i = j + k;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (!b) stream__putc(obj, '$');
-        }
-        else {
-            stream__putc(obj, str[i]);
-        }
-    }
-}
-
 static void stream__write_escaped_string(stream_t *obj, const char *str, size_t len) {
     char s[5];
     size_t i;
@@ -1164,127 +1261,327 @@ static void stream__write_line_directive(stream_t *obj, const char *path, size_t
     stream__puts(obj, "\"\n");
 }
 
-static void stream__write_code_block(
-    stream_t *obj, const char *str, size_t len, size_t indent, const char *path, size_t lineno, bool_t isact, const subst_map_t *subst
+static bool_t can_character_follow_identifier_(char ch) {
+    return (
+        ch != '$' && ch != '@' &&
+        ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
+    ) ? TRUE : FALSE;
+}
+
+static bool_t stream__write_text(
+    stream_t *obj, const char *str, size_t len, bool_t lhead, size_t dedent, size_t indent,
+    code_block_kind_t kind, size_t ncapts, const string_array_t *mvars, const subst_map_t *subst
 ) {
-    bool_t b = FALSE;
-    size_t i, j, k;
+    size_t i = 0;
+    if (len == VOID_VALUE) return lhead; /* for safety */
+    while (i < len) {
+        if (str[i] == '\0') break;
+        if (match_eol(str, i, len, &i)) {
+            stream__putc(obj, '\n');
+            lhead = TRUE;
+            continue;
+        }
+        if (lhead) {
+            const size_t l = count_indent_spaces(str, i, len, &i);
+            if (i >= len || str[i] == '\0') break;
+            if (str[i] == '\n' || str[i] == '\r') continue;
+            stream__write_characters(obj, ' ', size__sub(l, dedent) + indent);
+            lhead = FALSE;
+        }
+        if (str[i] == '\\' && i + 1 < len && (str[i + 1] == '$' || str[i + 1] == '@')) {
+            stream__putc(obj, str[i + 1]);
+            i += 2;
+        }
+        else if (str[i] == '$') {
+            bool_t b = FALSE; /* to be TRUE if substitution succeeds */
+            size_t j = i + 1;
+            if (j < len) {
+                char c = str[j++];
+                if (c == '$' && kind == CODE_BLOCK_KIND__ACTION) { /* $$ */
+                    if (j >= len || can_character_follow_identifier_(str[j])) {
+                        stream__puts(obj, VARNAME_ACTION_OUT);
+                        i = j;
+                        b = TRUE;
+                    }
+                }
+                else if (c == '0' && (kind == CODE_BLOCK_KIND__ACTION || kind == CODE_BLOCK_KIND__PROGPRED)) { /* $0, $0s, $0e */
+                    if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
+                    if (j >= len || can_character_follow_identifier_(str[j])) {
+                        stream__puts(obj, VARNAME_CAPTURE_PREFIX);
+                        i++;
+                        while (i < j) stream__putc(obj, str[i++]);
+                        b = TRUE;
+                    }
+                }
+                else if (c >= '1' && c <= '9' && (kind == CODE_BLOCK_KIND__ACTION || kind == CODE_BLOCK_KIND__PROGPRED)) { /* $N, $Ns, $Ne (N >= 1) */
+                    size_t k = c - '0';
+                    while (j < len) {
+                        c = str[j];
+                        if (!(c >= '0' && c <= '9')) break;
+                        k = (c - '0') + 10 * k;
+                        if (k > ncapts) k = ncapts + 1; /* to avoid overflow */
+                        j++;
+                    }
+                    if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
+                    if ((j >= len || can_character_follow_identifier_(str[j])) && k <= ncapts) {
+                        stream__puts(obj, VARNAME_CAPTURE_PREFIX);
+                        i++;
+                        while (i < j) stream__putc(obj, str[i++]);
+                        b = TRUE;
+                    }
+                }
+                else if (c == '{') { /* ${...} */
+                    size_t is;
+                    for (is = 0; is < subst->n; is++) {
+                        const subst_entry_t *const p = &(subst->p[is]);
+                        size_t k;
+                        for (k = 0; p->istr[k] && j + k < len && p->istr[k] == str[j + k]; k++);
+                        if (!p->istr[k] && j + k < len && str[j + k] == '}') {
+                            stream__puts(obj, p->ostr);
+                            i = j + k + 1;
+                            b = TRUE;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!b) {
+                stream__putc(obj, '$');
+                i++;
+            }
+        }
+        else if (str[i] == '@') {
+            bool_t b = FALSE; /* to be TRUE if substitution succeeds */
+            size_t j = i + 1;
+            if (j < len) {
+                char c = str[j++];
+                if (c == '@' && kind == CODE_BLOCK_KIND__PROGPRED) { /* @@ */
+                    if (j >= len || can_character_follow_identifier_(str[j])) {
+                        stream__puts(obj, VARNAME_PROGPRED_OUT);
+                        i = j;
+                        b = TRUE;
+                    }
+                }
+                else if (
+                    ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) &&
+                    (kind == CODE_BLOCK_KIND__ACTION || kind == CODE_BLOCK_KIND__PROGPRED)
+                ) { /* @VAR */
+                    while (j < len) {
+                        c = str[j];
+                        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) break;
+                        j++;
+                    }
+                    if (j >= len || can_character_follow_identifier_(str[j])) {
+                        size_t iv;
+                        for (iv = 0; iv < mvars->n; iv++) {
+                            if (strncmp(mvars->p[iv], str + (i + 1), j - (i + 1)) == 0) break;
+                        }
+                        if (iv < mvars->n) {
+                            if (j < len && str[j] == '.') {
+                                static const char s_get[] = "get_string(";
+                                static const char s_set[] = "set_string(";
+                                static const char s_append[] = "append_string(";
+                                static const char s_save[] = "save(";
+                                static const char s_restore[] = "restore(";
+                                typedef struct func_entry_tag {
+                                    const char *str;
+                                    size_t len;
+                                    size_t arg;
+                                } func_entry_t;
+                                static const func_entry_t s_func_read[] = {
+                                    { s_get, sizeof(s_get), 0 },
+                                    { NULL, 0, 0 }
+                                };
+                                static const func_entry_t s_func_write[] = {
+                                    { s_set, sizeof(s_set), 1 },
+                                    { s_append, sizeof(s_append), 1 },
+                                    { s_save, sizeof(s_save), 0 },
+                                    { s_restore, sizeof(s_restore), 0 },
+                                    { NULL, 0, 0 }
+                                };
+                                size_t ie = 0;
+                                while (s_func_read[ie].str) {
+                                    if (
+                                        j + s_func_read[ie].len <= len &&
+                                        strncmp(str + j + 1, s_func_read[ie].str, s_func_read[ie].len - 1) == 0
+                                    ) break;
+                                    ie++;
+                                }
+                                if (s_func_read[ie].str) {
+                                    stream__printf(
+                                        obj,
+                                        "pcc_marker_variable__%sauxil, " VARNAME_MARKER_PREFIX "%s%s",
+                                        s_func_read[ie].str, mvars->p[iv], (s_func_read[ie].arg > 0) ? ", " : ""
+                                    );
+                                    i = j + s_func_read[ie].len;
+                                    b = TRUE;
+                                }
+                                else if (kind == CODE_BLOCK_KIND__PROGPRED) {
+                                    ie = 0;
+                                    while (s_func_write[ie].str) {
+                                        if (
+                                            j + s_func_write[ie].len <= len &&
+                                            strncmp(str + j + 1, s_func_write[ie].str, s_func_write[ie].len - 1) == 0
+                                        ) break;
+                                        ie++;
+                                    }
+                                    if (s_func_write[ie].str) {
+                                        stream__printf(
+                                            obj,
+                                            "pcc_marker_variable__%sauxil, " VARNAME_MARKER_PREFIX "%s%s",
+                                            s_func_write[ie].str, mvars->p[iv], (s_func_write[ie].arg > 0) ? ", " : ""
+                                        );
+                                        i = j + s_func_write[ie].len;
+                                        b = TRUE;
+                                    }
+                                }
+                            }
+                            else {
+                                if (kind == CODE_BLOCK_KIND__PROGPRED)
+                                    stream__printf(obj, "pcc_marker_variable__integer(auxil, " VARNAME_MARKER_PREFIX "%s)", mvars->p[iv]);
+                                else
+                                    stream__printf(obj, "pcc_marker_variable__integer_const(auxil, " VARNAME_MARKER_PREFIX "%s)", mvars->p[iv]);
+                                i = j;
+                                b = TRUE;
+                            }
+                        }
+                    }
+                }
+            }
+            if (!b) {
+                stream__putc(obj, '@');
+                i++;
+            }
+        }
+        else {
+            stream__putc(obj, str[i]);
+            i++;
+        }
+    }
+    return lhead;
+}
+
+static bool_t stream__write_code(
+    stream_t *obj, const char *str, size_t len, bool_t lhead, size_t dedent, size_t indent,
+    code_block_kind_t kind, size_t ncapts, const string_array_t *mvars, const subst_map_t *subst, bool_t dircpp
+) {
+    bool_t b = TRUE; /* TRUE if succeeding leading spaces in a line */
+    size_t h = 0;
+    size_t i = 0;
+    if (len == VOID_VALUE) return lhead; /* for safety */
+    while (i < len) {
+        size_t k = 0;
+        if (!dircpp && b && match_directive_c(str, i, len, &k)) {
+            {
+                const size_t j = find_back_preceding_spaces_in_line(str, i);
+                stream__write_text(obj, str + h, j - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+            }
+            {
+                size_t md = VOID_VALUE; /* the minimum indent length of the successive lines */
+                size_t kd = i;
+                find_trailing_spaces_in_line(str, i, k, &kd);
+                while (kd < k) {
+                    const size_t kd0 = kd;
+                    const size_t id = find_first_nonspace_or_eol(str, kd, len);
+                    const size_t jd = find_trailing_spaces_in_line(str, id, len, &kd);
+                    if (id < jd) {
+                        const size_t ld = count_indent_spaces(str, kd0, id, NULL);
+                        if (md == VOID_VALUE || md > ld) md = ld;
+                    }
+                }
+                if (md == VOID_VALUE) md = 0;
+                lhead = stream__write_code(obj, str + i, k - i, FALSE, md, INDENT_UNIT, kind, ncapts, mvars, subst, TRUE);
+            }
+            h = i = k;
+            /* b == TRUE */
+        }
+        else if (match_comment_cxx(str, i, len, &k)) {
+            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, ncapts, mvars, subst);
+            h = i = k;
+            b = TRUE;
+        }
+        else if (match_comment_c(str, i, len, &k)) {
+            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, ncapts, mvars, subst);
+            h = i = k;
+            /* do not change `b` because a C-style comment is dealt as a white space */
+        }
+        else if (
+            match_quotation(str, i, len, '\'', &k) ||
+            match_quotation(str, i, len, '\"', &k)
+        ) {
+            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, ncapts, mvars, subst);
+            h = i = k;
+            b = FALSE;
+        }
+        else if (match_eol(str, i, len, &i)) {
+            b = TRUE;
+        }
+        else {
+            if (!match_spaces_in_line(str, i, len, &i)) {
+                i++;
+                b = FALSE;
+            }
+        }
+    }
+    return stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+}
+
+static void stream__write_code_block(
+    stream_t *obj, const char *str, size_t len, size_t indent, const char *path, size_t lineno,
+    code_block_kind_t kind, size_t ncapts, const string_array_t *mvars, const subst_map_t *subst
+) {
+    size_t m = VOID_VALUE; /* the minimum indent length except for the start line of the code block */
+    size_t b = TRUE; /* TRUE if the code starts at the first line */
+    size_t d = 0; /* the original indent length of the line where the code starts */
+    size_t h = 0; /* the position where the code starts */
+    size_t k = 0;
     if (len == VOID_VALUE) return; /* for safety */
-    j = find_first_trailing_spaces_in_line(str, 0, len, &k);
-    for (i = 0; i < j; i++) {
-        if (
-            str[i] != ' '  &&
-            str[i] != '\v' &&
-            str[i] != '\f' &&
-            str[i] != '\t'
-        ) break;
-    }
-    if (i < j) {
-        if (obj->line != VOID_VALUE)
-            stream__write_line_directive(obj, path, lineno);
-        if (str[i] != '#')
-            stream__write_characters(obj, ' ', indent);
-        stream__write_text(obj, str + i, j - i, isact, subst);
-        stream__putc(obj, '\n');
-        b = TRUE;
-    }
-    else {
+    len = find_trailing_spaces_in_string(str, 0, len);
+    if (len <= 0) return; /* empty */
+    while (k < len) { /* to find the position where the code starts */
+        const size_t k0 = k;
+        const size_t i = find_first_nonspace_or_eol(str, k, len);
+        const size_t j = find_trailing_spaces_in_line(str, i, len, &k);
+        if (i < j) {
+            if (str[i] != '#') {
+                d = count_indent_spaces(str, k0, i, NULL);
+                if (!b) m = d;
+            }
+            h = i;
+            break;
+        }
         lineno++;
+        b = FALSE;
     }
-    if (k < len) {
-        size_t m = VOID_VALUE;
-        size_t h;
-        for (i = k; i < len; i = h) {
-            j = find_first_trailing_spaces_in_line(str, i, len, &h);
-            if (i < j) {
-                if (obj->line != VOID_VALUE && !b)
-                    stream__write_line_directive(obj, path, lineno);
-                if (str[i] != '#') {
-                    const size_t l = count_indent_spaces(str, i, j, NULL);
-                    if (m == VOID_VALUE || m > l) m = l;
-                }
-                b = TRUE;
-            }
-            else {
-                if (!b) {
-                    k = h;
-                    lineno++;
-                }
-            }
-        }
-        for (i = k; i < len; i = h) {
-            j = find_first_trailing_spaces_in_line(str, i, len, &h);
-            if (i < j) {
-                const size_t l = count_indent_spaces(str, i, j, &i);
-                if (str[i] != '#') {
-                    assert(m != VOID_VALUE); /* m must have a valid value */
-                    assert(l >= m);
-                    stream__write_characters(obj, ' ', l - m + indent);
-                }
-                stream__write_text(obj, str + i, j - i, isact, subst);
-                stream__putc(obj, '\n');
-                b = TRUE;
-            }
-            else if (h < len) {
-                stream__putc(obj, '\n');
-            }
+    if (obj->line != VOID_VALUE)
+        stream__write_line_directive(obj, path, lineno);
+    while (k < len) { /* to find the minimum indent length among lines except for blank and directive lines */
+        const size_t k0 = k;
+        const size_t i = find_first_nonspace_or_eol(str, k, len);
+        const size_t j = find_trailing_spaces_in_line(str, i, len, &k);
+        if (i < j && str[i] != '#') {
+            const size_t l = count_indent_spaces(str, k0, i, NULL);
+            if (m == VOID_VALUE || m > l) m = l;
         }
     }
-    if (obj->line != VOID_VALUE && b)
+    if (m == VOID_VALUE) m = 0;
+    if (str[h] != '#') {
+        assert(b || d >= m);
+        stream__write_characters(obj, ' ', indent + (b ? 0 : d - m));
+    }
+    stream__write_code(obj, str + h, len - h, FALSE, m, indent, kind, ncapts, mvars, subst, FALSE);
+    stream__putc(obj, '\n');
+    if (obj->line != VOID_VALUE)
         stream__write_line_directive(obj, obj->path, obj->line + 1);
 }
 
-static void stream__write_footer(stream_t *obj, const char *str, size_t len, const char *path, size_t lineno, const subst_map_t *subst) {
-    bool_t b = FALSE;
-    size_t i, j, k;
-    if (len == VOID_VALUE) return; /* for safety */
-    j = find_first_trailing_spaces_in_line(str, 0, len, &k);
-    for (i = 0; i < j; i++) {
-        if (
-            str[i] != ' '  &&
-            str[i] != '\v' &&
-            str[i] != '\f' &&
-            str[i] != '\t'
-        ) break;
-    }
-    if (i < j) {
-        if (obj->line != VOID_VALUE)
-            stream__write_line_directive(obj, path, lineno);
-        stream__write_text(obj, str + i, j - i, FALSE, subst);
-        stream__putc(obj, '\n');
-        b = TRUE;
-    }
-    else {
-        lineno++;
-    }
-    if (k < len) {
-        size_t h;
-        for (i = k; i < len; i = h) {
-            j = find_first_trailing_spaces_in_line(str, i, len, &h);
-            if (i < j) {
-                if (obj->line != VOID_VALUE && !b)
-                    stream__write_line_directive(obj, path, lineno);
-                b = TRUE;
-                break;
-            }
-            else {
-                if (!b) {
-                    k = h;
-                    lineno++;
-                }
-            }
-        }
-        for (i = k; i < len; i = h) {
-            j = find_first_trailing_spaces_in_line(str, i, len, &h);
-            if (i < j) {
-                stream__write_text(obj, str + i, j - i, FALSE, subst);
-                stream__putc(obj, '\n');
-            }
-            else if (h < len) {
-                stream__putc(obj, '\n');
-            }
-        }
-    }
+static void stream__write_footer(
+    stream_t *obj, const char *str, size_t len, const char *path, size_t lineno, const subst_map_t *subst
+) {
+    stream__write_code_block(obj, str, len, 0, path, lineno, CODE_BLOCK_KIND__NORMAL, 0, NULL, subst);
 }
 
 static char *get_home_directory(void) {
@@ -2892,7 +3189,7 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         input_state__match_spaces(input);
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
-        n_p->data.action.code.len = find_trailing_spaces(n_p->data.action.code.text);
+        n_p->data.action.code.len = find_trailing_spaces_in_string(n_p->data.action.code.text, 0, q - p - 2);
         file_pos__set(&(n_p->data.action.code.fpos), input->path, l, m);
         n_p->data.action.index = rule->data.rule.codes.n;
         node_const_array__add(&(rule->data.rule.codes), n_p);
@@ -2933,7 +3230,7 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
             n_p = create_node(NODE_PROGPRED);
             n_p->data.progpred.neg = (t == '!') ? TRUE : FALSE;
             n_p->data.progpred.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
-            n_p->data.progpred.code.len = find_trailing_spaces(n_p->data.progpred.code.text);
+            n_p->data.progpred.code.len = find_trailing_spaces_in_string(n_p->data.progpred.code.text, 0, q - p - 2);
             file_pos__set(&n_p->data.progpred.code.fpos, input->path, l, m);
             n_p->data.progpred.index = rule->data.rule.preds.n;
             node_const_array__add(&(rule->data.rule.preds), n_p);
@@ -2996,7 +3293,7 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
             n_t = create_node(NODE_ERROR);
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
-            n_t->data.error.code.len = find_trailing_spaces(n_t->data.error.code.text);
+            n_t->data.error.code.len = find_trailing_spaces_in_string(n_t->data.error.code.text, 0, q - p - 2);
             file_pos__set(&(n_t->data.error.code.fpos), input->path, l, m);
             n_t->data.error.index = rule->data.rule.codes.n;
             node_const_array__add(&(rule->data.rule.codes), n_t);
@@ -4255,7 +4552,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->eheader.n; i++) {
                 stream__write_code_block(
                     &hstream, ctx->eheader.p[i].text, ctx->eheader.p[i].len, 0,
-                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, FALSE, &(ctx->subst)
+                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4272,7 +4569,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->header.n; i++) {
                 stream__write_code_block(
                     &hstream, ctx->header.p[i].text, ctx->header.p[i].len, 0,
-                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, FALSE, &(ctx->subst)
+                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4284,7 +4581,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->esource.n; i++) {
                 stream__write_code_block(
                     &sstream, ctx->esource.p[i].text, ctx->esource.p[i].len, 0,
-                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, FALSE, &(ctx->subst)
+                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -4329,7 +4626,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->source.n; i++) {
                 stream__write_code_block(
                     &sstream, ctx->source.p[i].text, ctx->source.p[i].len, 0,
-                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, FALSE, &(ctx->subst)
+                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -5637,7 +5934,10 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    stream__write_code_block(&sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line, TRUE, &(ctx->subst));
+                    stream__write_code_block(
+                        &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
+                        CODE_BLOCK_KIND__PROGPRED, c->n, &(ctx->mvars), &(ctx->subst)
+                    );
                     k = c->n;
                     while (k > 0) {
                         k--;
@@ -5748,7 +6048,10 @@ static bool_t generate(context_t *ctx) {
                         );
                         k++;
                     }
-                    stream__write_code_block(&sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line, TRUE, &(ctx->subst));
+                    stream__write_code_block(
+                        &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
+                        CODE_BLOCK_KIND__ACTION, c->n, &(ctx->mvars), &(ctx->subst)
+                    );
                     k = c->n;
                     while (k > 0) {
                         k--;

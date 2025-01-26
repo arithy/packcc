@@ -8,6 +8,12 @@ check_output_parser() {
 
 @test "Testing substitution.d - generation" {
     test_generate
+}
+
+@test "Testing substitution.d - header" {
     check_output_parser "substitution.d/parser.h"
+}
+
+@test "Testing substitution.d - source" {
     check_output_parser "substitution.d/parser.c"
 }

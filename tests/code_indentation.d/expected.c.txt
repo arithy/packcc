@@ -1,0 +1,68 @@
+TEST:D 0S
+TEST:D 1S-0
+TEST:D 1S-1
+TEST:D 2S-0
+    TEST:D 2S-1
+TEST:D 2S-2
+    TEST:D 3S-0
+TEST:D 3S-1
+    TEST:D 4S-0
+        TEST:D 4S-1
+TEST:D 4S-2
+/* TEST:D 5C */
+/* TEST:D 6C-0
+TEST:D 6C-1 */
+/* TEST:D 7C-0
+    TEST:D 7C-1
+TEST:D 7C-2 */
+    /* TEST:D 8C-0
+TEST:D 8C-1 */
+    /* TEST:D 9C-0
+        TEST:D 9C-1
+TEST:D 9C-2 */
+# TEST:D aD-0
+TEST:D aS-0
+TEST:D bS-0
+# TEST:D bD-1
+TEST:D bS-1
+# TEST:D cD-0 \
+    TEST:D cD-1
+# TEST:D dD-0 \
+    TEST:D dD-1
+TEST:D dS-0
+    TEST:A 0S
+    TEST:A 1S-0
+    TEST:A 1S-1
+    TEST:A 2S-0
+        TEST:A 2S-1
+    TEST:A 2S-2
+        TEST:A 3S-0
+    TEST:A 3S-1
+        TEST:A 4S-0
+            TEST:A 4S-1
+    TEST:A 4S-2
+    /* TEST:A 5C */
+    /* TEST:A 6C-0
+    TEST:A 6C-1 */
+    /* TEST:A 7C-0
+        TEST:A 7C-1
+    TEST:A 7C-2 */
+        /* TEST:A 8C-0
+    TEST:A 8C-1 */
+        /* TEST:A 9C-0
+            TEST:A 9C-1
+    TEST:A 9C-2 */
+# TEST:A aD-0
+    TEST:A aS-0
+    TEST:A bS-0
+# TEST:A bD-0
+    TEST:A bS-1
+# TEST:A cD-0 \
+    TEST:A cD-1
+# TEST:A dD-0 \
+    TEST:A dD-1
+    TEST:A dS-0
+TEST:F 0S-0
+# TEST:F 0D-0 \
+        TEST:F 0D-1 \
+    TEST:F 0D-2

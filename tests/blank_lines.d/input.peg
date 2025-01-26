@@ -1,0 +1,124 @@
+%header {
+
+
+/* HEADER 0 */
+
+
+    }
+
+%source {
+
+
+/* SOURCE 0 */
+
+
+    }
+
+%common {
+
+
+/* COMMON 0 */
+
+
+    }
+
+%earlyheader {
+
+
+/* EARLY HEADER 0 */
+
+
+    }
+
+%earlysource {
+
+
+/* EARLY SOURCE 0 */
+
+
+    }
+
+%earlycommon {
+
+
+/* EARLY COMMON 0 */
+
+
+    }
+
+rule0 <- {
+
+
+/* ACTION 0 */
+
+
+    } {
+
+
+/* ACTION 1 */
+
+
+    }
+
+%header {
+
+
+/* HEADER 1 */
+
+
+    }
+
+%source {
+
+
+/* SOURCE 1 */
+
+
+    }
+
+%common {
+
+
+/* COMMON 1 */
+
+
+    }
+
+%earlyheader {
+
+
+/* EARLY HEADER 1 */
+
+
+    }
+
+%earlysource {
+
+
+/* EARLY SOURCE 1 */
+
+
+    }
+
+%earlycommon {
+
+
+/* EARLY COMMON 1 */
+
+
+    }
+
+rule1 <- {
+
+
+/* ACTION 2 */
+
+
+    }
+
+%%
+
+
+/* FOOTER */
+
+
