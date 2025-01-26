@@ -5885,36 +5885,36 @@ static bool_t generate(context_t *ctx) {
                     const node_const_array_t *const c = &(rule->preds.p[j]->data.progpred.capts);
                     stream__printf(
                         &sstream,
-                        "static void pcc_predicate_%s_" FMT_LU "(%s_context_t *__pcc_ctx, pcc_thunk_chunk_t *__pcc_in, int *__pcc_out) {\n",
+                        "static void pcc_predicate_%s_" FMT_LU "(%s_context_t *pcc_ctx, pcc_thunk_chunk_t *pcc_in, int *pcc_out) {\n",
                         rule->name, (ulong_t)d, get_prefix(ctx)
                     );
                     stream__puts(
                         &sstream,
-                        "#define auxil (__pcc_ctx->auxil)\n"
-                        "#define " VARNAME_PROGPRED_OUT " (*__pcc_out)\n"
+                        "#define auxil (pcc_ctx->auxil)\n"
+                        "#define " VARNAME_PROGPRED_OUT " (*pcc_out)\n"
                     );
                     stream__puts(
                         &sstream,
-                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_get_capture_string(__pcc_ctx, &(__pcc_ctx->capt0))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0s ((const size_t)(__pcc_ctx->pos + __pcc_ctx->capt0.range.start))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0e ((const size_t)(__pcc_ctx->pos + __pcc_ctx->capt0.range.end))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_get_capture_string(pcc_ctx, &(pcc_ctx->capt0))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0s ((const size_t)(pcc_ctx->pos + pcc_ctx->capt0.range.start))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0e ((const size_t)(pcc_ctx->pos + pcc_ctx->capt0.range.end))\n"
                     );
                     k = 0;
                     while (k < c->n) {
                         assert(c->p[k]->type == NODE_CAPTURE);
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_get_capture_string(__pcc_ctx, &(__pcc_in->capts.p[" FMT_LU "]))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_get_capture_string(pcc_ctx, &(pcc_in->capts.p[" FMT_LU "]))\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s ((const size_t)(__pcc_ctx->pos + __pcc_in->capts.p[" FMT_LU "].range.start))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s ((const size_t)(pcc_ctx->pos + pcc_in->capts.p[" FMT_LU "].range.start))\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e ((const size_t)(__pcc_ctx->pos + __pcc_in->capts.p[" FMT_LU "].range.end))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e ((const size_t)(pcc_ctx->pos + pcc_in->capts.p[" FMT_LU "].range.end))\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         k++;
@@ -5989,46 +5989,46 @@ static bool_t generate(context_t *ctx) {
                     }
                     stream__printf(
                         &sstream,
-                        "static void pcc_action_%s_" FMT_LU "(%s_context_t *__pcc_ctx, pcc_thunk_t *__pcc_in, pcc_value_t *__pcc_out) {\n",
+                        "static void pcc_action_%s_" FMT_LU "(%s_context_t *pcc_ctx, pcc_thunk_t *pcc_in, pcc_value_t *pcc_out) {\n",
                         rule->name, (ulong_t)d, get_prefix(ctx)
                     );
                     stream__puts(
                         &sstream,
-                        "#define auxil (__pcc_ctx->auxil)\n"
-                        "#define " VARNAME_ACTION_OUT " (*__pcc_out)\n"
+                        "#define auxil (pcc_ctx->auxil)\n"
+                        "#define " VARNAME_ACTION_OUT " (*pcc_out)\n"
                     );
                     k = 0;
                     while (k < v->n) {
                         assert(v->p[k]->type == NODE_REFERENCE);
                         stream__printf(
                             &sstream,
-                            "#define %s (*(__pcc_in->data.leaf.values.p[" FMT_LU "]))\n",
+                            "#define %s (*(pcc_in->data.leaf.values.p[" FMT_LU "]))\n",
                             v->p[k]->data.reference.rvar, (ulong_t)v->p[k]->data.reference.index
                         );
                         k++;
                     }
                     stream__puts(
                         &sstream,
-                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_get_capture_string(__pcc_ctx, &(__pcc_in->data.leaf.capt0))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0s ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capt0.range.start))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0e ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capt0.range.end))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_get_capture_string(pcc_ctx, &(pcc_in->data.leaf.capt0))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0s ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capt0.range.start))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0e ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capt0.range.end))\n"
                     );
                     k = 0;
                     while (k < c->n) {
                         assert(c->p[k]->type == NODE_CAPTURE);
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_get_capture_string(__pcc_ctx, __pcc_in->data.leaf.capts.p[" FMT_LU "])\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_get_capture_string(pcc_ctx, pcc_in->data.leaf.capts.p[" FMT_LU "])\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.p[" FMT_LU "]->range.start))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capts.p[" FMT_LU "]->range.start))\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e ((const size_t)(__pcc_ctx->pos + __pcc_in->data.leaf.capts.p[" FMT_LU "]->range.end))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capts.p[" FMT_LU "]->range.end))\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         k++;
