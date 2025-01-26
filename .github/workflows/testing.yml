@@ -2,15 +2,15 @@ name: run test cases
 
 on:
   push:
-    branches: [ master ]
+    branches: [master, develop]
   pull_request:
-    branches: [ master ]
+    branches: [master, develop]
 
 jobs:
   testing:
     strategy:
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-22.04, ubuntu-24.04]
         compiler: [gcc, clang]
 
     runs-on: ${{ matrix.os }}
@@ -19,7 +19,7 @@ jobs:
       CC: ${{ matrix.compiler }}
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: install bats
       run: |
         curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz
@@ -33,6 +33,9 @@ jobs:
     - name: build packcc
       run: |
         (
-        cd  build/$CC
-        make all check
+        mkdir -p build
+        cd build
+        cmake -DCMAKE_C_COMPILER=$CC ..
+        cmake --build . --config Debug --target check --clean-first
+        cmake --build . --config Release --target check --clean-first
         )

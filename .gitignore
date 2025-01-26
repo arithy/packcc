@@ -1,8 +1,7 @@
+/.vscode/
+/.cache/
+__pycache__/
+/build/
+/benchmark/tmp/
 *.o
 *.obj
-/build/**/tmp/
-/build/**/bin/
-/build/msvc/**/x86/
-/build/msvc/**/x64/
-/build/msvc/**/.vs/
-/benchmark/tmp/
