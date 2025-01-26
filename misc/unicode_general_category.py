@@ -24,11 +24,11 @@ import os
 import requests
 import re
 
-ucd_url = 'https://www.unicode.org/Public/15.1.0/ucd/UnicodeData.txt'
+ucd_url = 'https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt'
 ucd_gc_list = [
     'Lu', 'Ll', 'Lt', 'Lm', 'Lo', 'Mn', 'Mc', 'Me', 'Nd', 'Nl', 'No',
     'Pc', 'Pd', 'Ps', 'Pe', 'Pi', 'Pf', 'Po', 'Sm', 'Sc', 'Sk', 'So',
-    'Zs', 'Zl', 'Zp', 'Cc', 'Cf', 'Cs', 'Co', 'Cn'
+    'Zs', 'Zl', 'Zp', 'Cc', 'Cf', 'Co', 'Cn'
 ]
 ucd_gc_dict = {
     'Lu': 'Uppercase_Letter',
@@ -58,7 +58,6 @@ ucd_gc_dict = {
     'Zp': 'Paragraph_Separator',
     'Cc': 'Control',
     'Cf': 'Format',
-    'Cs': 'Surrogate',
     'Co': 'Private_Use',
     'Cn': 'Unassigned'
 }
@@ -70,6 +69,12 @@ def get_unicode_data():
     for chunk in res.iter_content(chunk_size=1024*1024):
         txt += chunk.decode()
     return txt
+
+def escape_as_utf16_hex(hex):
+    code = int(hex, 16)
+    if code > 0x10ffff:
+        raise ValueError
+    return f'\\u{code:04x}' if code <= 0xffff else f'\\u{0xd800 | ((code - 0x10000) >> 10):04x}\\u{0xdc00 | (code & 0x3ff):04x}'
 
 def generate_rules(dat):
     str = (
@@ -96,7 +101,7 @@ def generate_rules(dat):
         'Unicode_Punctuation <- Unicode_Connector_Punctuation / Unicode_Dash_Punctuation / Unicode_Open_Punctuation / Unicode_Close_Punctuation / Unicode_Initial_Punctuation / Unicode_Final_Punctuation / Unicode_Other_Punctuation\n'
         'Unicode_Symbol <- Unicode_Math_Symbol / Unicode_Currency_Symbol / Unicode_Modifier_Symbol / Unicode_Other_Symbol\n'
         'Unicode_Separator <- Unicode_Space_Separator / Unicode_Line_Separator / Unicode_Paragraph_Separator\n'
-        'Unicode_Other <- Unicode_Control / Unicode_Format / Unicode_Surrogate / Unicode_Private_Use\n' # The category 'Unassigned' is excluded because currently it has no character.
+        'Unicode_Other <- Unicode_Control / Unicode_Format / Unicode_Private_Use\n' # The category 'Unassigned' is excluded because currently it has no character.
         '\n'
     )
     for gc in ucd_gc_list:
@@ -109,15 +114,15 @@ def generate_rules(dat):
             if cs == '':
                 cs = c
             elif int(c, 16) - int(cp, 16) != 1:
-                cc += '\\u' + cs
+                cc += escape_as_utf16_hex(cs)
                 if cs != cp:
-                    cc += '-\\u' + cp
+                    cc += '-' + escape_as_utf16_hex(cp)
                 cs = c
             cp = c
         if cs != '':
-            cc += '\\u' + cs
+            cc += escape_as_utf16_hex(cs)
             if cs != cp:
-                cc += '-\\u' + cp
+                cc += '-' + escape_as_utf16_hex(cp)
         str += 'Unicode_' + ucd_gc_dict[gc] + ' <- [' + cc + ']\n'
     return str
 
