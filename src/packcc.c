@@ -273,7 +273,8 @@ typedef struct node_quantity_tag {
 
 typedef struct node_predicate_tag {
     bool_t neg;
-    node_t *expr;
+    node_t *expr; /* NULL means having a code block */
+    code_block_t code; /* for C expression predicate */
 } node_predicate_t;
 
 typedef struct node_sequence_tag {
@@ -1617,6 +1618,7 @@ static node_t *create_node(node_type_t type) {
     case NODE_PREDICATE:
         node->data.predicate.neg = FALSE;
         node->data.predicate.expr = NULL;
+        code_block__init(&node->data.predicate.code);
         break;
     case NODE_SEQUENCE:
         node_array__init(&node->data.sequence.nodes);
@@ -1678,6 +1680,7 @@ static void destroy_node(node_t *node) {
         destroy_node(node->data.quantity.expr);
         break;
     case NODE_PREDICATE:
+        code_block__term(&node->data.predicate.code);
         destroy_node(node->data.predicate.expr);
         break;
     case NODE_SEQUENCE:
@@ -2139,7 +2142,13 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_PREDICATE:
         fprintf(stdout, "%*sPredicate(neg:%d) {\n", indent, "", node->data.predicate.neg);
-        dump_node(ctx, node->data.predicate.expr, indent + 2);
+        if (node->data.predicate.expr) {
+            dump_node(ctx, node->data.predicate.expr, indent + 2);
+        } else {
+            fprintf(stdout, "%*scode:{", indent + 2, "");
+            dump_escaped_string(node->data.predicate.code.text);
+            fprintf(stdout, "%*s}\n", indent + 2, "");
+        }
         fprintf(stdout, "%*s}\n", indent, "");
         break;
     case NODE_SEQUENCE:
@@ -2683,7 +2692,25 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
     node_t *n_r = NULL;
     node_t *n_t = NULL;
     const char t = match_character(input, '&') ? '&' : match_character(input, '!') ? '!' : '\0';
-    if (t) match_spaces(input);
+    if (t) {
+        // Try to match a code block following the &/! predicate.
+        size_t pp, ll, mm;
+        match_spaces(input);
+        pp = input->bufcur;
+        ll = input->linenum;
+        mm = column_number(input);
+        if (match_code_block(input)) {
+            const size_t qq = input->bufcur;
+            match_spaces(input);
+            n_t = create_node(NODE_PREDICATE);
+            n_t->data.predicate.expr = NULL;
+            n_t->data.predicate.neg = t == '!' ? TRUE : FALSE;
+            n_t->data.predicate.code.text = strndup_e(input->buffer.buf + pp + 1, qq - pp - 2);
+            n_t->data.predicate.code.len = find_trailing_blanks(n_t->data.predicate.code.text);
+            file_pos__set(&n_t->data.predicate.code.fpos, input->path, ll, mm);
+            return n_t;
+        }
+    }
     n_p = parse_primary(input, rule);
     if (n_p == NULL) goto EXCEPTION;
     if (match_character(input, '*')) {
@@ -3520,61 +3547,82 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
     }
 }
 
-static code_reach_t generate_predicating_code(generate_t *gen, const node_t *expr, bool_t neg, int onfail, size_t indent, bool_t bare) {
+static code_reach_t generate_predicating_code(generate_t *gen,
+        const node_t *expr, const code_block_t *code,
+        bool_t neg, int onfail, size_t indent, bool_t bare) {
     code_reach_t r;
     if (!bare) {
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "{\n");
         indent += 4;
     }
-    stream__write_characters(gen->stream, ' ', indent);
-    stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
-    if (neg) {
-        const int l = ++gen->label;
-        r = generate_code(gen, expr, l, indent, FALSE);
-        if (r != CODE_REACH__ALWAYS_FAIL) {
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "ctx->cur = p;\n");
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "goto L%04d;\n", onfail);
+    if (expr) {
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
+        if (neg) {
+            const int l = ++gen->label;
+            r = generate_code(gen, expr, l, indent, FALSE);
+            if (r != CODE_REACH__ALWAYS_FAIL) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "ctx->cur = p;\n");
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__printf(gen->stream, "goto L%04d;\n", onfail);
+            }
+            if (r != CODE_REACH__ALWAYS_SUCCEED) {
+                if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
+                stream__printf(gen->stream, "L%04d:;\n", l);
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "ctx->cur = p;\n");
+            }
+            switch (r) {
+            case CODE_REACH__ALWAYS_SUCCEED: r = CODE_REACH__ALWAYS_FAIL; break;
+            case CODE_REACH__ALWAYS_FAIL: r = CODE_REACH__ALWAYS_SUCCEED; break;
+            case CODE_REACH__BOTH: break;
+            }
         }
-        if (r != CODE_REACH__ALWAYS_SUCCEED) {
-            if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
-            stream__printf(gen->stream, "L%04d:;\n", l);
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "ctx->cur = p;\n");
+        else {
+            const int l = ++gen->label;
+            const int m = ++gen->label;
+            r = generate_code(gen, expr, l, indent, FALSE);
+            if (r != CODE_REACH__ALWAYS_FAIL) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "ctx->cur = p;\n");
+            }
+            if (r == CODE_REACH__BOTH) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__printf(gen->stream, "goto L%04d;\n", m);
+            }
+            if (r != CODE_REACH__ALWAYS_SUCCEED) {
+                if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
+                stream__printf(gen->stream, "L%04d:;\n", l);
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "ctx->cur = p;\n");
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__printf(gen->stream, "goto L%04d;\n", onfail);
+            }
+            if (r == CODE_REACH__BOTH) {
+                if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
+                stream__printf(gen->stream, "L%04d:;\n", m);
+            }
         }
-        switch (r) {
-        case CODE_REACH__ALWAYS_SUCCEED: r = CODE_REACH__ALWAYS_FAIL; break;
-        case CODE_REACH__ALWAYS_FAIL: r = CODE_REACH__ALWAYS_SUCCEED; break;
-        case CODE_REACH__BOTH: break;
+    } else {
+        // Generate code block.
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "int b;\n");
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "b = ");
+        stream__write_text(gen->stream, code->text, code->len);
+        stream__puts(gen->stream, ";\n");
+        stream__write_characters(gen->stream, ' ', indent);
+        if (neg) {
+            stream__puts(gen->stream, "if (b) ");
+        } else {
+            stream__puts(gen->stream, "if (!b) ");
         }
+        stream__printf(gen->stream, "goto L%04d;\n", onfail);
+        r = CODE_REACH__BOTH;
     }
-    else {
-        const int l = ++gen->label;
-        const int m = ++gen->label;
-        r = generate_code(gen, expr, l, indent, FALSE);
-        if (r != CODE_REACH__ALWAYS_FAIL) {
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "ctx->cur = p;\n");
-        }
-        if (r == CODE_REACH__BOTH) {
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "goto L%04d;\n", m);
-        }
-        if (r != CODE_REACH__ALWAYS_SUCCEED) {
-            if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
-            stream__printf(gen->stream, "L%04d:;\n", l);
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "ctx->cur = p;\n");
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "goto L%04d;\n", onfail);
-        }
-        if (r == CODE_REACH__BOTH) {
-            if (indent > 4) stream__write_characters(gen->stream, ' ', indent - 4);
-            stream__printf(gen->stream, "L%04d:;\n", m);
-        }
-    }
+
     if (!bare) {
         indent -= 4;
         stream__write_characters(gen->stream, ' ', indent);
@@ -3859,7 +3907,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
     case NODE_QUANTITY:
         return generate_quantifying_code(gen, node->data.quantity.expr, node->data.quantity.min, node->data.quantity.max, onfail, indent, bare);
     case NODE_PREDICATE:
-        return generate_predicating_code(gen, node->data.predicate.expr, node->data.predicate.neg, onfail, indent, bare);
+        return generate_predicating_code(gen, node->data.predicate.expr,
+                &node->data.predicate.code, node->data.predicate.neg, onfail, indent, bare);
     case NODE_SEQUENCE:
         return generate_sequential_code(gen, &node->data.sequence.nodes, onfail, indent, bare);
     case NODE_ALTERNATE:
