@@ -141,7 +141,6 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 #define VARNAME_ACTION_OUT "pcc_action_out"
 #define VARNAME_PROGPRED_OUT "pcc_progpred_out"
 #define VARNAME_CAPTURE_PREFIX "pcc_capture__"
-#define VARNAME_MARKER_PREFIX "pcc_marker__"
 
 #define INDENT_UNIT 4
 
@@ -414,6 +413,7 @@ typedef struct generate_tag {
     const node_t *rule;
     int label;
     bool_t ascii;
+    bool_t mvars;
 } generate_t;
 
 typedef enum string_flag_tag {
@@ -1383,11 +1383,11 @@ static bool_t stream__write_text(
                         }
                         if (iv < mvars->n) {
                             if (j < len && str[j] == '.') {
-                                static const char s_get[] = "get_string(";
-                                static const char s_set[] = "set_string(";
-                                static const char s_append[] = "append_string(";
-                                static const char s_save[] = "save(";
-                                static const char s_restore[] = "restore(";
+                                static const char s_get[] = "get_string";
+                                static const char s_set[] = "set_string";
+                                static const char s_append[] = "append_string";
+                                static const char s_save[] = "save";
+                                static const char s_restore[] = "restore";
                                 typedef struct func_entry_tag {
                                     const char *str;
                                     size_t len;
@@ -1407,45 +1407,52 @@ static bool_t stream__write_text(
                                 size_t ie = 0;
                                 while (s_func_read[ie].str) {
                                     if (
-                                        j + s_func_read[ie].len <= len &&
-                                        strncmp(str + j + 1, s_func_read[ie].str, s_func_read[ie].len - 1) == 0
+                                        j + s_func_read[ie].len < len &&
+                                        strncmp(str + j + 1, s_func_read[ie].str, s_func_read[ie].len - 1) == 0 &&
+                                        str[j + s_func_read[ie].len] == '('
                                     ) break;
                                     ie++;
                                 }
                                 if (s_func_read[ie].str) {
                                     stream__printf(
                                         obj,
-                                        "pcc_marker_variable__%sauxil, " VARNAME_MARKER_PREFIX "%s%s",
-                                        s_func_read[ie].str, mvars->p[iv], (s_func_read[ie].arg > 0) ? ", " : ""
+                                        "pcc_marker_variable__%s%s(pcc_ctx, %s%s",
+                                        s_func_read[ie].str,
+                                        (kind == CODE_BLOCK_KIND__PROGPRED) ? "" : "_on_action",
+                                        mvars->p[iv],
+                                        (s_func_read[ie].arg > 0) ? ", " : ""
                                     );
-                                    i = j + s_func_read[ie].len;
+                                    i = j + s_func_read[ie].len + 1;
                                     b = TRUE;
                                 }
                                 else if (kind == CODE_BLOCK_KIND__PROGPRED) {
                                     ie = 0;
                                     while (s_func_write[ie].str) {
                                         if (
-                                            j + s_func_write[ie].len <= len &&
-                                            strncmp(str + j + 1, s_func_write[ie].str, s_func_write[ie].len - 1) == 0
+                                            j + s_func_write[ie].len < len &&
+                                            strncmp(str + j + 1, s_func_write[ie].str, s_func_write[ie].len - 1) == 0 &&
+                                            str[j + s_func_write[ie].len] == '('
                                         ) break;
                                         ie++;
                                     }
                                     if (s_func_write[ie].str) {
                                         stream__printf(
                                             obj,
-                                            "pcc_marker_variable__%sauxil, " VARNAME_MARKER_PREFIX "%s%s",
-                                            s_func_write[ie].str, mvars->p[iv], (s_func_write[ie].arg > 0) ? ", " : ""
+                                            "pcc_marker_variable__%s(pcc_ctx, %s%s",
+                                            s_func_write[ie].str,
+                                            mvars->p[iv],
+                                            (s_func_write[ie].arg > 0) ? ", " : ""
                                         );
-                                        i = j + s_func_write[ie].len;
+                                        i = j + s_func_write[ie].len + 1;
                                         b = TRUE;
                                     }
                                 }
                             }
                             else {
                                 if (kind == CODE_BLOCK_KIND__PROGPRED)
-                                    stream__printf(obj, "pcc_marker_variable__integer(auxil, " VARNAME_MARKER_PREFIX "%s)", mvars->p[iv]);
+                                    stream__printf(obj, "pcc_marker_variable__integer(pcc_ctx, %s)", mvars->p[iv]);
                                 else
-                                    stream__printf(obj, "pcc_marker_variable__integer_const(auxil, " VARNAME_MARKER_PREFIX "%s)", mvars->p[iv]);
+                                    stream__printf(obj, "pcc_marker_variable__integer_on_action(pcc_ctx, %s)", mvars->p[iv]);
                                 i = j;
                                 b = TRUE;
                             }
@@ -4060,6 +4067,10 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 stream__puts(gen->stream, "ctx->cur = p;\n");
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
+                if (gen->mvars) {
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                }
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "break;\n");
             }
@@ -4073,6 +4084,10 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p0;\n");
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n0);\n");
+            if (gen->mvars) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            }
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
@@ -4115,6 +4130,10 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                     stream__puts(gen->stream, "ctx->cur = p;\n");
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
+                    if (gen->mvars) {
+                        stream__write_characters(gen->stream, ' ', indent);
+                        stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                    }
                     if (indent > INDENT_UNIT) stream__write_characters(gen->stream, ' ', indent - INDENT_UNIT);
                     stream__printf(gen->stream, "L%04d:;\n", m);
                 }
@@ -4206,6 +4225,10 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
     stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "int r = %s;\n", neg ? "0" : "1");
+    if (gen->mvars) {
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "pcc_marker_variable_set_record__save(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+    }
     stream__write_characters(gen->stream, ' ', indent);
     stream__puts(gen->stream, "ctx->capt0.range.start = chunk->pos;\n");
     stream__write_characters(gen->stream, ' ', indent);
@@ -4298,6 +4321,10 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         stream__puts(gen->stream, "ctx->cur = p;\n");
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
+        if (gen->mvars) {
+            stream__write_characters(gen->stream, ' ', indent);
+            stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+        }
         if (!c) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -4424,6 +4451,12 @@ static code_reach_t generate_thunking_action_code(
         stream__puts(gen->stream, "thunk->data.leaf.capt0.range.end = ctx->cur;\n");
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "pcc_char_array__resize(ctx->auxil, &(thunk->data.leaf.capt0.string), 0);\n");
+    }
+    if (gen->mvars) {
+        stream__puts(
+            gen->stream,
+            "    pcc_marker_value_set__copy_from(ctx->auxil, &(thunk->data.leaf.mvars), &(ctx->mvars.curr.set));\n"
+        );
     }
     if (error) {
         stream__write_characters(gen->stream, ' ', indent);
@@ -4599,6 +4632,7 @@ static bool_t generate(context_t *ctx) {
             "#define _CRT_NONSTDC_NO_WARNINGS\n"
             "#define _CRT_SECURE_NO_WARNINGS\n"
             "#endif /* _MSC_VER */\n"
+            "#include <stddef.h>\n"
             "#include <stdio.h>\n"
             "#include <stdlib.h>\n"
             "#include <string.h>\n"
@@ -4684,6 +4718,47 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "#define PCC_VOID_VALUE (~(size_t)0)\n"
             "\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "#define pcc_marker_variable__integer(ctx, varname) \\\n"
+                "    (ctx->mvars.curr.set.varname.curr.integer)\n"
+                "#define pcc_marker_variable__get_string(ctx, varname) \\\n"
+                "    ((const char *const)ctx->mvars.curr.set.varname.curr.string.p)\n"
+                "#define pcc_marker_variable__set_string(ctx, varname, str) \\\n"
+                "    do { \\\n"
+                "        pcc_context_t *const c = ctx; \\\n"
+                "        const char *const s = str; \\\n"
+                "        const size_t l = strlen(s) + 1; \\\n"
+                "        pcc_char_array_t *const a = &(c->mvars.curr.set.varname.curr.string); \\\n"
+                "        pcc_char_array__resize(auxil, a, l); \\\n"
+                "        memcpy(a->p, s, l); \\\n"
+                "    } while (0)\n"
+                "#define pcc_marker_variable__append_string(ctx, varname, str) \\\n"
+                "    do { \\\n"
+                "        pcc_context_t *const c = ctx; \\\n"
+                "        const char *const s = str; \\\n"
+                "        const size_t l = strlen(s) + 1; \\\n"
+                "        pcc_char_array_t *const a = &(c->mvars.curr.set.varname.curr.string); \\\n"
+                "        const size_t n = a->n; \\\n"
+                "        const size_t k = (n > 0 && !a->p[n - 1]) ? n - 1 : n; \\\n"
+                "        pcc_char_array__resize(auxil, a, k + l); \\\n"
+                "        memcpy(a->p + k, s, l); \\\n"
+                "    } while (0)\n"
+                "#define pcc_marker_variable__save(ctx, varname) \\\n"
+                "    pcc_marker_value_record__save(auxil, &(ctx->mvars.curr.set.varname))\n"
+                "#define pcc_marker_variable__restore(ctx, varname) \\\n"
+                "    pcc_marker_value_record__restore(auxil, &(ctx->mvars.curr.set.varname))\n"
+                "#define pcc_marker_variable__integer_on_action(ctx, varname) \\\n"
+                "    ((const ptrdiff_t)(pcc_in->data.leaf.mvars.varname.integer))\n"
+                "#define pcc_marker_variable__get_string_on_action(ctx, varname) \\\n"
+                "    ((const char *const)pcc_in->data.leaf.mvars.varname.string.p)\n"
+                "\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "typedef enum pcc_bool_tag {\n"
             "    PCC_FALSE = 0,\n"
             "    PCC_TRUE\n"
@@ -4747,14 +4822,77 @@ static bool_t generate(context_t *ctx) {
             "    const pcc_capture_t **p;\n"
             "} pcc_capture_const_table_t;\n"
             "\n"
+        );
+        if (ctx->mvars.n > 0) {
+            size_t i;
+            stream__puts(
+                &sstream,
+                "typedef struct pcc_marker_value_tag {\n"
+                "    ptrdiff_t integer;\n"
+                "    pcc_char_array_t string;\n"
+                "} pcc_marker_value_t;\n"
+                "\n"
+                "typedef struct pcc_marker_value_stack_tag {\n"
+                "    size_t m, n;\n"
+                "    pcc_marker_value_t *p;\n"
+                "} pcc_marker_value_stack_t;\n"
+                "\n"
+                "typedef struct pcc_marker_value_record_tag {\n"
+                "    pcc_marker_value_t curr;\n"
+                "    pcc_marker_value_stack_t prev;\n"
+                "} pcc_marker_value_record_t;\n"
+                "\n"
+                "typedef struct pcc_marker_variable_set_tag {\n"
+                "    size_t pos;\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value_record_t %s;\n",
+                    ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "} pcc_marker_variable_set_t;\n"
+                "\n"
+                "typedef struct pcc_marker_variable_set_entry_tag {\n"
+                "    size_t pos;\n"
+                "    pcc_marker_variable_set_t set;\n"
+                "} pcc_marker_variable_set_entry_t;\n"
+                "\n"
+                "typedef struct pcc_marker_variable_set_stack_tag {\n"
+                "    size_t m, n;\n"
+                "    pcc_marker_variable_set_entry_t *p;\n"
+                "} pcc_marker_variable_set_stack_t;\n"
+                "\n"
+                "typedef struct pcc_marker_variable_set_record_tag {\n"
+                "    pcc_marker_variable_set_entry_t curr;\n"
+                "    pcc_marker_variable_set_stack_t prev;\n"
+                "} pcc_marker_variable_set_record_t;\n"
+                "\n"
+                "typedef struct pcc_marker_value_set_tag {\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value_t %s;\n",
+                    ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "} pcc_marker_value_set_t;\n"
+                "\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "typedef struct pcc_thunk_tag pcc_thunk_t;\n"
             "typedef struct pcc_thunk_array_tag pcc_thunk_array_t;\n"
             "\n"
             "typedef void (*pcc_action_t)(pcc_context_t *, pcc_thunk_t *, pcc_value_t *);\n"
             "\n"
-        );
-        stream__puts(
-            &sstream,
             "typedef enum pcc_thunk_type_tag {\n"
             "    PCC_THUNK_LEAF,\n"
             "    PCC_THUNK_NODE\n"
@@ -4764,6 +4902,15 @@ static bool_t generate(context_t *ctx) {
             "    pcc_value_refer_table_t values;\n"
             "    pcc_capture_const_table_t capts;\n"
             "    pcc_capture_t capt0;\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_value_set_t mvars;\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_action_t action;\n"
             "} pcc_thunk_leaf_t;\n"
             "\n"
@@ -4903,8 +5050,18 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_table_t lrtable;\n"
             "    pcc_lr_stack_t lrstack;\n"
             "    pcc_thunk_array_t thunks;\n"
+            "    pcc_capture_t capt0; /* used only for programmable predicates */\n",
+            get_prefix(ctx)
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_record_t mvars;\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_auxil_t auxil;\n"
-            "    pcc_capture_t capt0; /* used for programmable predicates */\n"
             "    pcc_memory_recycler_t thunk_recycler;\n"
             "    pcc_memory_recycler_t thunk_chunk_recycler;\n"
             "    pcc_memory_recycler_t lr_head_recycler;\n"
@@ -4912,8 +5069,7 @@ static bool_t generate(context_t *ctx) {
             "    pcc_memory_recycler_t lr_table_entry_recycler;\n"
             "    pcc_memory_recycler_t lr_entry_recycler;\n"
             "};\n"
-            "\n",
-            get_prefix(ctx)
+            "\n"
         );
         stream__puts(
             &sstream,
@@ -4998,6 +5154,13 @@ static bool_t generate(context_t *ctx) {
             "        obj->m = m;\n"
             "    }\n"
             "    obj->p[obj->n++] = ch;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static void pcc_char_array__copy(pcc_auxil_t auxil, pcc_char_array_t *obj, const pcc_char_array_t *src) {\n"
+            "    if (obj == src) return;\n"
+            "    pcc_char_array__resize(auxil, obj, src->n);\n"
+            "    memcpy(obj->p, src->p, src->n);\n"
             "}\n"
             "\n"
         );
@@ -5132,6 +5295,309 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
         );
+        if (ctx->mvars.n > 0) {
+            size_t i;
+            stream__puts(
+                &sstream,
+                "static void pcc_marker_value__initialize(pcc_auxil_t auxil, pcc_marker_value_t *obj) {\n"
+                "    obj->integer = 0;\n"
+                "    pcc_char_array__initialize(auxil, &(obj->string));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value__finalize(pcc_auxil_t auxil, pcc_marker_value_t *obj) {\n"
+                "    pcc_char_array__finalize(auxil, &(obj->string));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value__copy(pcc_auxil_t auxil, pcc_marker_value_t *obj, const pcc_marker_value_t *src) {\n"
+                "    if (obj == src) return;\n"
+                "    obj->integer = src->integer;\n"
+                "    pcc_char_array__copy(auxil, &(obj->string), &(src->string));\n"
+                "}\n"
+                "\n"
+            );
+            stream__puts(
+                &sstream,
+                "static void pcc_marker_value_stack__initialize(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj) {\n"
+                "    obj->m = 0;\n"
+                "    obj->n = 0;\n"
+                "    obj->p = NULL;\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_stack__finalize(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj) {\n"
+                "    while (obj->n > 0) {\n"
+                "        obj->n--;\n"
+                "        pcc_marker_value__finalize(auxil, &(obj->p[obj->n]));\n"
+                "    }\n"
+                "    PCC_FREE(auxil, obj->p);\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_stack__resize(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj, size_t len) {\n"
+                "    size_t i;\n"
+                "    for (i = len; i < obj->n; i++) pcc_marker_value__finalize(auxil, &(obj->p[i]));\n"
+                "    if (obj->m < len) {\n"
+                "        size_t m = obj->m;\n"
+                "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
+                "        while (m < len && m != 0) m <<= 1;\n"
+                "        if (m == 0) m = len;\n"
+                "        obj->p = (pcc_marker_value_t *)PCC_REALLOC(ctx->auxil, obj->p, sizeof(pcc_marker_value_t) * m);\n"
+                "        obj->m = m;\n"
+                "    }\n"
+                "    for (i = obj->n; i < len; i++) pcc_marker_value__initialize(auxil, &obj->p[i]);\n"
+                "    obj->n = len;\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_stack__copy(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj, const pcc_marker_value_stack_t *src) {\n"
+                "    size_t i;\n"
+                "    if (obj == src) return;\n"
+                "    pcc_marker_value_stack__resize(auxil, obj, src->n);\n"
+                "    for (i = 0; i < obj->n; i++) pcc_marker_value__copy(auxil, &(obj->p[i]), &(src->p[i]));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_stack__push(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj, const pcc_marker_value_t *mval) {\n"
+                "    const size_t n = obj->n;\n"
+                "    pcc_marker_value_stack__resize(auxil, obj, n + 1);\n"
+                "    pcc_marker_value__copy(auxil, &(obj->p[n]), mval);\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_stack__pop(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj, pcc_marker_value_t *mval) {\n"
+                "    if (mval) {\n"
+                "        pcc_marker_value__finalize(auxil, mval);\n"
+                "        if (obj->n > 0) {\n"
+                "            const size_t n = obj->n - 1;\n"
+                "            *mval = obj->p[n]; /* move (not copy) for efficiency */\n"
+                "            pcc_marker_value__initialize(auxil, &(obj->p[n]));\n"
+                "            pcc_marker_value_stack__resize(auxil, obj, n);\n"
+                "        }\n"
+                "        else {\n"
+                "            pcc_marker_value__initialize(auxil, mval);\n"
+                "        }\n"
+                "    }\n"
+                "    else {\n"
+                "        if (obj->n > 0) pcc_marker_value_stack__resize(auxil, obj, obj->n - 1);\n"
+                "    }\n"
+                "}\n"
+                "\n"
+            );
+            stream__puts(
+                &sstream,
+                "static void pcc_marker_value_record__initialize(pcc_auxil_t auxil, pcc_marker_value_record_t *obj) {\n"
+                "    pcc_marker_value__initialize(auxil, &(obj->curr));\n"
+                "    pcc_marker_value_stack__initialize(auxil, &(obj->prev));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_record__finalize(pcc_auxil_t auxil, pcc_marker_value_record_t *obj) {\n"
+                "    pcc_marker_value__finalize(auxil, &(obj->curr));\n"
+                "    pcc_marker_value_stack__finalize(auxil, &(obj->prev));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_record__copy(pcc_auxil_t auxil, pcc_marker_value_record_t *obj, const pcc_marker_value_record_t *src) {\n"
+                "    if (obj == src) return;\n"
+                "    pcc_marker_value__copy(auxil, &(obj->curr), &(src->curr));\n"
+                "    pcc_marker_value_stack__copy(auxil, &(obj->prev), &(src->prev));\n"
+                "}\n"
+                "\n"
+                "MARK_FUNC_AS_USED\n"
+                "static void pcc_marker_value_record__save(pcc_auxil_t auxil, pcc_marker_value_record_t *obj) {\n"
+                "    pcc_marker_value_stack__push(auxil, &(obj->prev), &(obj->curr));\n"
+                "}\n"
+                "\n"
+                "MARK_FUNC_AS_USED\n"
+                "static void pcc_marker_value_record__restore(pcc_auxil_t auxil, pcc_marker_value_record_t *obj) {\n"
+                "    pcc_marker_value_stack__pop(auxil, &(obj->prev), &(obj->curr));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set__initialize(pcc_auxil_t auxil, pcc_marker_variable_set_t *obj) {\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value_record__initialize(auxil, &(obj->%s));\n",
+                    ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set__finalize(pcc_auxil_t auxil, pcc_marker_variable_set_t *obj) {\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value_record__finalize(auxil, &(obj->%s));\n",
+                    ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set__copy(pcc_auxil_t auxil, pcc_marker_variable_set_t *obj, const pcc_marker_variable_set_t *src) {\n"
+                "    if (obj == src) return;\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value_record__copy(auxil, &(obj->%s), &(src->%s));\n",
+                    ctx->mvars.p[i], ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_entry__initialize(pcc_auxil_t auxil, pcc_marker_variable_set_entry_t *obj) {\n"
+                "    obj->pos = 0;\n"
+                "    pcc_marker_variable_set__initialize(auxil, &(obj->set));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_entry__finalize(pcc_auxil_t auxil, pcc_marker_variable_set_entry_t *obj) {\n"
+                "    pcc_marker_variable_set__finalize(auxil, &(obj->set));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_entry__copy(pcc_auxil_t auxil, pcc_marker_variable_set_entry_t *obj, const pcc_marker_variable_set_entry_t *src) {\n"
+                "    if (obj == src) return;\n"
+                "    obj->pos = src->pos;\n"
+                "    pcc_marker_variable_set__copy(auxil, &(obj->set), &(src->set));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_stack__initialize(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj) {\n"
+                "    obj->m = 0;\n"
+                "    obj->n = 0;\n"
+                "    obj->p = NULL;\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_stack__finalize(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj) {\n"
+                "    while (obj->n > 0) {\n"
+                "        obj->n--;\n"
+                "        pcc_marker_variable_set_entry__finalize(auxil, &(obj->p[obj->n]));\n"
+                "    }\n"
+                "    PCC_FREE(auxil, obj->p);\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_stack__resize(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, size_t len) {\n"
+                "    size_t i;\n"
+                "    for (i = len; i < obj->n; i++) pcc_marker_variable_set_entry__finalize(auxil, &(obj->p[i]));\n"
+                "    if (obj->m < len) {\n"
+                "        size_t m = obj->m;\n"
+                "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
+                "        while (m < len && m != 0) m <<= 1;\n"
+                "        if (m == 0) m = len;\n"
+                "        obj->p = (pcc_marker_variable_set_entry_t *)PCC_REALLOC(ctx->auxil, obj->p, sizeof(pcc_marker_variable_set_entry_t) * m);\n"
+                "        obj->m = m;\n"
+                "    }\n"
+                "    for (i = obj->n; i < len; i++) pcc_marker_variable_set_entry__initialize(auxil, &obj->p[i]);\n"
+                "    obj->n = len;\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_stack__push(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, const pcc_marker_variable_set_entry_t *mval) {\n"
+                "    const size_t n = obj->n;\n"
+                "    pcc_marker_variable_set_stack__resize(auxil, obj, n + 1);\n"
+                "    pcc_marker_variable_set_entry__copy(auxil, &(obj->p[n]), mval);\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_stack__pop(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, pcc_marker_variable_set_entry_t *mval) {\n"
+                "    if (mval) {\n"
+                "        pcc_marker_variable_set_entry__finalize(auxil, mval);\n"
+                "        if (obj->n > 0) {\n"
+                "            const size_t n = obj->n - 1;\n"
+                "            *mval = obj->p[n]; /* move (not copy) for efficiency */\n"
+                "            pcc_marker_variable_set_entry__initialize(auxil, &(obj->p[n]));\n"
+                "            pcc_marker_variable_set_stack__resize(auxil, obj, n);\n"
+                "        }\n"
+                "        else {\n"
+                "            pcc_marker_variable_set_entry__initialize(auxil, mval);\n"
+                "        }\n"
+                "    }\n"
+                "    else {\n"
+                "        if (obj->n > 0) pcc_marker_variable_set_stack__resize(auxil, obj, obj->n - 1);\n"
+                "    }\n"
+                "}\n"
+                "\n"
+            );
+            stream__puts(
+                &sstream,
+                "static void pcc_marker_variable_set_record__initialize(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj) {\n"
+                "    pcc_marker_variable_set_entry__initialize(auxil, &(obj->curr));\n"
+                "    pcc_marker_variable_set_stack__initialize(auxil, &(obj->prev));\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_variable_set_record__finalize(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj) {\n"
+                "    pcc_marker_variable_set_entry__finalize(auxil, &(obj->curr));\n"
+                "    pcc_marker_variable_set_stack__finalize(auxil, &(obj->prev));\n"
+                "}\n"
+                "\n"
+                "MARK_FUNC_AS_USED\n"
+                "static void pcc_marker_variable_set_record__save(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                "    if (obj->curr.pos < pos) {\n"
+                "        pcc_marker_variable_set_stack__push(auxil, &(obj->prev), &(obj->curr));\n"
+                "        obj->curr.pos = pos;\n"
+                "    }\n"
+                "}\n"
+                "\n"
+                "MARK_FUNC_AS_USED\n"
+                "static void pcc_marker_variable_set_record__restore(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                "    if (obj->curr.pos > pos) {\n"
+                "        size_t n = obj->prev.n;\n"
+                "        while (n > 0 && obj->prev.p[n - 1].pos > pos) n--;\n"
+                "        pcc_marker_variable_set_stack__resize(auxil, &(obj->prev), n);\n"
+                "        pcc_marker_variable_set_stack__pop(auxil, &(obj->prev), &(obj->curr));\n"
+                "    }\n"
+                "}\n"
+                "\n"
+                "MARK_FUNC_AS_USED\n"
+                "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                "    size_t k = 0;\n"
+                "    while (k < obj->prev.n && obj->prev.p[k].pos < pos) k++;\n"
+                "    if (k > 0) {\n"
+                "        size_t i;\n"
+                "        for (i = k; i < obj->prev.n; i++) obj->prev.p[i - k] = obj->prev.p[i];\n"
+                "        pcc_marker_variable_set_stack__resize(auxil, &(obj->prev), obj->prev.n - k);\n"
+                "    }\n"
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_set__initialize(pcc_auxil_t auxil, pcc_marker_value_set_t *obj) {\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value__initialize(auxil, &(obj->%s));\n",
+                    ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "}\n"
+                "\n"
+                "static void pcc_marker_value_set__finalize(pcc_auxil_t auxil, pcc_marker_value_set_t *obj) {\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value__finalize(auxil, &(obj->%s));\n",
+                    ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "}\n"
+                "\n"
+                "MARK_FUNC_AS_USED\n"
+                "static void pcc_marker_value_set__copy_from(pcc_auxil_t auxil, pcc_marker_value_set_t *obj, pcc_marker_variable_set_t *src) {\n"
+            );
+            for (i = 0; i < ctx->mvars.n; i++) {
+                stream__printf(
+                    &sstream,
+                    "    pcc_marker_value__copy(auxil, &(obj->%s), &(src->%s.curr));\n",
+                    ctx->mvars.p[i], ctx->mvars.p[i]
+                );
+            }
+            stream__puts(
+                &sstream,
+                "}\n"
+                "\n"
+            );
+        }
         stream__puts(
             &sstream,
             "static void pcc_memory_recycler__initialize(pcc_auxil_t auxil, pcc_memory_recycler_t *obj, size_t element_size) {\n"
@@ -5193,6 +5659,15 @@ static bool_t generate(context_t *ctx) {
             "    pcc_capture_const_table__initialize(ctx->auxil, &(obj->data.leaf.capts));\n"
             "    pcc_capture_const_table__resize(ctx->auxil, &(obj->data.leaf.capts), captc);\n"
             "    pcc_capture__initialize(ctx->auxil, &(obj->data.leaf.capt0));\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_value_set__initialize(ctx->auxil, &(obj->data.leaf.mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    obj->data.leaf.action = action;\n"
             "    return obj;\n"
             "}\n"
@@ -5212,6 +5687,15 @@ static bool_t generate(context_t *ctx) {
             "        pcc_value_refer_table__finalize(ctx->auxil, &(obj->data.leaf.values));\n"
             "        pcc_capture_const_table__finalize(ctx->auxil, &(obj->data.leaf.capts));\n"
             "        pcc_capture__finalize(ctx->auxil, &(obj->data.leaf.capt0));\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_value_set__finalize(ctx->auxil, &(obj->data.leaf.mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "        break;\n"
             "    case PCC_THUNK_NODE:\n"
             "        break;\n"
@@ -5646,6 +6130,15 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_stack__initialize(auxil, &(ctx->lrstack));\n"
             "    pcc_thunk_array__initialize(ctx, &(ctx->thunks));\n"
             "    pcc_capture__initialize(ctx->auxil, &(ctx->capt0));\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_record__initialize(ctx->auxil, &(ctx->mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_memory_recycler__initialize(auxil, &(ctx->thunk_recycler), sizeof(pcc_thunk_t));\n"
             "    pcc_memory_recycler__initialize(auxil, &(ctx->thunk_chunk_recycler), sizeof(pcc_thunk_chunk_t));\n"
             "    pcc_memory_recycler__initialize(auxil, &(ctx->lr_head_recycler), sizeof(pcc_lr_head_t));\n"
@@ -5656,9 +6149,6 @@ static bool_t generate(context_t *ctx) {
             "    return ctx;\n"
             "}\n"
             "\n"
-        );
-        stream__puts(
-            &sstream,
             "static void pcc_context__destroy(pcc_context_t *ctx) {\n"
             "    if (ctx == NULL) return;\n"
             "    pcc_char_array__finalize(ctx->auxil, &(ctx->buffer));\n"
@@ -5666,6 +6156,15 @@ static bool_t generate(context_t *ctx) {
             "    pcc_lr_stack__finalize(ctx->auxil, &(ctx->lrstack));\n"
             "    pcc_thunk_array__finalize(ctx, &(ctx->thunks));\n"
             "    pcc_capture__finalize(ctx->auxil, &(ctx->capt0));\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_record__finalize(ctx->auxil, &(ctx->mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_memory_recycler__finalize(ctx->auxil, &(ctx->thunk_recycler));\n"
             "    pcc_memory_recycler__finalize(ctx->auxil, &(ctx->thunk_chunk_recycler));\n"
             "    pcc_memory_recycler__finalize(ctx->auxil, &(ctx->lr_head_recycler));\n"
@@ -5688,9 +6187,6 @@ static bool_t generate(context_t *ctx) {
             "    return ctx->buffer.n - ctx->cur;\n"
             "}\n"
             "\n"
-        );
-        stream__puts(
-            &sstream,
             "MARK_FUNC_AS_USED\n"
             "static void pcc_commit_buffer(pcc_context_t *ctx) {\n"
             "    memmove(ctx->buffer.p, ctx->buffer.p + ctx->cur, ctx->buffer.n - ctx->cur);\n"
@@ -5698,11 +6194,17 @@ static bool_t generate(context_t *ctx) {
             "    ctx->pos += ctx->cur;\n"
             "    pcc_lr_table__shift(ctx, &(ctx->lrtable), ctx->cur);\n"
             "    ctx->cur = 0;\n"
-            "}\n"
-            "\n"
         );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_record__shift(ctx->auxil, ctx->pos, &(ctx->mvars));\n"
+            );
+        }
         stream__puts(
             &sstream,
+            "}\n"
+            "\n"
             "MARK_FUNC_AS_USED\n"
             "static const char *pcc_get_capture_string(pcc_context_t *ctx, const pcc_capture_t *capt) {\n"
             "    if (capt->string.n == 0) {\n"
@@ -6108,6 +6610,7 @@ static bool_t generate(context_t *ctx) {
                 g.rule = ctx->rules.p[i];
                 g.label = 0;
                 g.ascii = ctx->opts.ascii;
+                g.mvars = (ctx->mvars.n > 0) ? TRUE : FALSE;
                 stream__printf(
                     &sstream,
                     "static pcc_thunk_chunk_t *pcc_evaluate_rule_%s(pcc_context_t *ctx) {\n",
@@ -6204,6 +6707,15 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "    pcc_thunk_array__revert(ctx, &(ctx->thunks), 0);\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_record__restore(ctx->auxil, 0, &(ctx->mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    return 1;\n"
             "}\n"
             "\n"

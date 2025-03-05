@@ -29,6 +29,9 @@ The usage procedure is shown below.
 3. Create an AST node using either of the following functions in every rule action.
    - `pcc_ast_node_t *pcc_ast_node__create_0(void);`
      + Returns a newly created nullary node.
+   - `pcc_ast_node_t *pcc_ast_node__create_0_str(const char *str);`
+     + Returns a newly created nullary node retaining a copy of the specified string.
+     + The string can be accessed using `const char *${prefix}_ast_node__get_string(pcc_ast_node_t *node)`.
    - `pcc_ast_node_t *pcc_ast_node__create_1(pcc_ast_node_t *node);`
      + Returns a newly created unary node with one child node specified by the argument `node`.
    - `pcc_ast_node_t *pcc_ast_node__create_2(pcc_ast_node_t *node0, pcc_ast_node_t *node1);`
@@ -41,7 +44,19 @@ The usage procedure is shown below.
      + Adds a child node specified by the argument `node` to the variadic node `obj`.
      + Can be used for `obj` as a variadic node only.
 
-   An example is shown below.
+   There are the variants of the node creation functions that enable setting a label as an `int` value.
+   The label can be used for specifying node kinds in order to make it easier to analyze the AST in the later parsing steps.
+   - `pcc_ast_node_t *pcc_ast_node__create_0_ext(int label);`
+   - `pcc_ast_node_t *pcc_ast_node__create_0_ext_str(int label, const char *str);`
+   - `pcc_ast_node_t *pcc_ast_node__create_1_ext(int label, pcc_ast_node_t *node);`
+   - `pcc_ast_node_t *pcc_ast_node__create_2_ext(int label, pcc_ast_node_t *node0, pcc_ast_node_t *node1);`
+   - `pcc_ast_node_t *pcc_ast_node__create_3_ext(int label, pcc_ast_node_t *node0, pcc_ast_node_t *node1, pcc_ast_node_t *node2);`
+   - `pcc_ast_node_t *pcc_ast_node__create_v_ext(int label);`
+
+   Every AST node retains the rule pattern matching range in the member variable `range`.
+   Namely, `obj->range.start` and `obj->range.end` memorize `$0s` and `$0e` respectively at the time when the node `obj` was created in a rule action.
+
+   A usage example is shown below.
    ```
    rule0 <- l:rule1 '+' r:rule1 { $$ = pcc_ast_node__create_2(l, r); }
    rule1 <- [0-9]+ { $$ = pcc_ast_node__create_0(); }

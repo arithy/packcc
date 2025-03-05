@@ -43,73 +43,55 @@ PackCC itself is under MIT license, but you can distribute your generated code u
 
 ## Installation
 
-You can obtain the executable `packcc` by compiling [`src/packcc.c`](src/packcc.c) using your favorite C compiler.
-For convenience, the build environments using GCC, Clang, and Microsoft Visual Studio are prepared under [`build`](build) directory.
+### Building Directly
 
-### Using GCC
+You can obtain the executable `packcc` by compiling [`src/packcc.c`](src/packcc.c) using your favorite C compiler. An example of the compile command is shown below.
 
-#### Other than MinGW
-
-`packcc` will be built in both directories `build/gcc/debug/bin` and `build/gcc/release/bin` using `gcc` by executing the following commands:
-
-```
-cd build/gcc
-make
-make check  # bats-core and uncrustify are required (see tests/README.md)
+```sh
+cc -o packcc src/packcc.c
 ```
 
-`packcc` in the directory `build/gcc/release/bin` is suitable for practical use.
+### Using CMake
 
-#### MinGW
+For your convenience, a build environment using [CMake](https://cmake.org/) is prepared. You can build and test `packcc` by the following commands.
 
-`packcc` will be built in both directories `build/mingw-gcc/debug/bin` and `build/mingw-gcc/release/bin` using `gcc` by executing the following commands:
-
-```
-cd build/mingw-gcc
-make
-make check  # bats-core and uncrustify are required (see tests/README.md)
-```
-
-`packcc` in the directory `build/mingw-gcc/release/bin` is suitable for practical use.
-
-### Using Clang
-
-#### Other than MinGW
-
-`packcc` will be built in both directories `build/clang/debug/bin` and `build/clang/release/bin` using `clang` by executing the following commands:
-
-```
-cd build/clang
-make
-make check  # bats-core and uncrustify are required (see tests/README.md)
+**Setup:**
+First, you have to execute the commands shown below.
+```sh
+mkdir build
+cd build
+cmake ..
 ```
 
-`packcc` in the directory `build/clang/release/bin` is suitable for practical use.
-
-#### MinGW
-
-`packcc` will be built in both directories `build/mingw-clang/debug/bin` and `build/mingw-clang/release/bin` using `clang` by executing the following commands:
-
+**Build:**
+You can build the executable `packcc` by the command shown below.
+```sh
+# Execute this in the directory `build`.
+cmake --build . --config Release
 ```
-cd build/mingw-clang
-make
-make check  # bats-core and uncrustify are required (see tests/README.md)
+If using a build system for a Unix-like OS, MinGW, or Cygwin, which is typically `make`, the executable `packcc` will be created in the current directory `build`. If using [Visual Studio](https://visualstudio.microsoft.com/) on Windows, it will be created in the directory `build\Release`.
+
+**Test:**
+Optionally, you can test `packcc` by the command shown below (Visual Studio is not supported). [Bats-core](https://github.com/bats-core/bats-core) and [Uncrustify](https://github.com/uncrustify/uncrustify) are required (see [`tests/README.md`](tests/README.md) for details).
+```sh
+# Execute this in the directory `build`.
+cmake --build . --config Release --target check
 ```
 
-`packcc` in the directory `build/mingw-clang/release/bin` is suitable for practical use.
+**Install:**
+If you want to install `packcc` with the import files in your system, you can use the command shown below.
+```sh
+# Execute this in the directory `build`.
+cmake --install . --config Release
+```
+For a Unix-like OS, MinGW, or Cygwin, they will be installed in the directory `/usr/local`. If using Visual Studio, they will be installed in the directory `C:\Program Files (x86)\packcc` by default. You can change the installation directory by using the option `--prefix`.
+```sh
+# Execute this in the directory `build`.
+cmake --install . --config Release --prefix /path/to/install/directory
+```
+Here, `/path/to/install/directory` denotes the installation directory.
 
-### Using Microsoft Visual Studio
-
-You have to install Microsoft Visual Studio 2019 in advance.
-After that, you can build `packcc.exe` by the following instructions:
-
-- Open the solution file `build\msvc\msvc.sln`,
-- Select a preferred solution configuration (*Debug* or *Release*) and a preferred solution platform (*x64* or *x86*),
-- Invoke the *Build Solution* menu item.
-
-`packcc.exe` will appear in `build\msvc\XXX\YYY` directory.
-Here, `XXX` is `x64` or `x86`, and `YYY` is `Debug` or `Release`.
-`packcc.exe` in the directory `build\msvc\XXX\Release` is suitable for practical use.
+Note that you have to execute the installation command with the administrative permission, for example, by becoming 'root' or by using `sudo` command, unless your user account is the owner of the installation directory.
 
 ## Usage
 
@@ -119,7 +101,7 @@ You must prepare a PEG source file in advance.
 For details of the PEG source syntax, see the section "Syntax".
 Here, let the file name `example.peg` for example.
 
-```
+```sh
 packcc example.peg
 ```
 
@@ -129,7 +111,7 @@ If no PEG file name is specified, the PEG source is read from the standard input
 
 The base name of the parser source files can be changed by `-o` option.
 
-```
+```sh
 packcc -o parser example.peg
 ```
 
@@ -140,7 +122,7 @@ A directory to search for import files can be added by `-I` option (version 2.0.
 This option can be specified as many times as needed.
 The firstly specified directory will be searched first, the secondly specified directory will be searched next, and so on.
 
-```
+```sh
 packcc -I foo -I bar/baz example.peg
 ```
 
@@ -155,7 +137,7 @@ It is helpful to trace compilation errors of the generated source and header fil
 
 If you want to confirm the version of the `packcc` command, execute the below.
 
-```
+```sh
 packcc -v
 ```
 
@@ -176,7 +158,7 @@ The element stands for the entire pattern in the rule with the name given by _ru
 **_variable_`:`_rulename_**
 
 The element stands for the entire pattern in the rule with the name given by _rulename_.
-The _variable_ is an identifier associated with the semantic value returned from the rule by assigning to `$$` in its action.
+The _variable_ is an identifier of a _rule variable_ associated with the semantic value returned from the rule by assigning to `$$` in its action.
 The identifier can be referred to in subsequent actions as a variable.
 The example is shown below.
 
@@ -184,7 +166,7 @@ The example is shown below.
 term <- l:term _ '+' _ r:factor { $$ = l + r; }
 ```
 
-A variable identifier must consist of alphabets (both uppercase and lowercase letters), digits, and underscores.
+A rule variable identifier must consist of alphabets (both uppercase and lowercase letters), digits, and underscores.
 The first letter must be an alphabet.
 The reserved keywords in C cannot be used.
 
@@ -237,7 +219,7 @@ A set of characters enclosed in square brackets matches any single character fro
 The ANSI C escape sequences are recognized within the characters.
 The UNICODE escape sequences (ex. `\u20AC`) are also recognized including surrogate pairs,
 if the command line option `-a` is not specified (version 1.4.0 or later).
-If the set begins with an up-arrow (`^`), the set is negated (the element matches any character not in the set).
+If the set begins with a caret (`^`), the set is negated (the element matches any character not in the set).
 Any pair of characters separated with a dash (`-`) represents the range of characters from the first to the second, inclusive.
 The examples are shown below.
 
@@ -250,23 +232,27 @@ The examples are shown below.
 **`.`**
 
 A dot (`.`) matches any single character.
-Note that the only time this fails is at the end of input, where there is no character to match.
+Note that the only time this fails is at the end of the input, where there is no character to match.
+
+**`^`**
+
+A caret (`^`) matches the beginning of the input (version 2.1.0 or later).
 
 **_element_ `?`**
 
-The _element_ is optional.
+It specifies that the _element_ is optional.
 If present on the input, it is consumed and the match succeeds.
 If not present on the input, no text is consumed and the match succeeds anyway.
 
 **_element_ `*`**
 
-The _element_ is optional and repeatable.
+It specifies that the _element_ is optional and repeatable.
 If present on the input, one or more occurrences of the _element_ are consumed and the match succeeds.
 If no occurrence of the _element_ is present on the input, the match succeeds anyway.
 
 **_element_ `+`**
 
-The _element_ is repeatable.
+It specifies that the _element_ is repeatable.
 If present on the input, one or more occurrences of the _element_ are consumed and the match succeeds.
 If no occurrence of the _element_ is present on the input, the match fails.
 
@@ -279,7 +265,8 @@ The input text scanned while matching _element_ is not consumed from the input a
 
 The predicate succeeds only if the _element_ cannot be matched.
 The input text scanned while matching _element_ is not consumed from the input and remains available for subsequent matching.
-A popular idiom is the following, which matches the end of input, after the last character of the input has already been consumed.
+
+A popular idiom is the following, which matches the end of the input, after the last character of the input has already been consumed.
 
 ```
 !.
@@ -317,9 +304,15 @@ This matches `[[`...`]]`, `[=[`...`]=]`, `[==[`...`]==]`, etc.
 
 Curly braces surround an action.
 The action is arbitrary C source code to be executed at the end of matching.
+
+The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
+are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
+For the details, see the explanation of `%prefix`.
+
 Any braces within the action must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
-One or more actions can be inserted in any places between elements in the pattern.
+
+One or more actions can be inserted in any places between elements, at the start, and at the end in the pattern.
 Actions are not executed where matching fails.
 
 ```
@@ -333,7 +326,7 @@ All matched actions are guaranteed to be executed only once.
 In the action, the C source code can use the predefined variables below.
 
 - **`$$`** :
-    The output variable, to which the result of the rule is stored.
+    The output variable, to which the result of the rule is to be stored.
     The data type is the one specified by `%value`.
     The default data type is `int`.
 - **`auxil`** :
@@ -341,7 +334,7 @@ In the action, the C source code can use the predefined variables below.
     The data type is the one specified by `%auxil`.
     The default data type is `void *`.
 - _variable_ :
-    The result of another rule that has already been evaluated.
+    The rule variable to store the result of another rule that has already been evaluated.
     If the rule has not been evaluated, it is ensured that the value is zero-cleared (version 1.7.1 or later).
     The data type is the one specified by `%value`.
     The default data type is `int`.
@@ -349,21 +342,31 @@ In the action, the C source code can use the predefined variables below.
     The string of the captured text.
     The _n_ is the positive integer that corresponds to the order of capturing.
     The variable `$1` holds the string of the first captured text.
+    It is read-only.
 - **`$`**_n_**`s`** :
     The start position in the input of the captured text, inclusive.
     The _n_ is the positive integer that corresponds to the order of capturing.
     The variable `$1s` holds the start position of the first captured text.
+    It is read-only.
 - **`$`**_n_**`e`** :
     The end position in the input of the captured text, exclusive.
     The _n_ is the positive integer that corresponds to the order of capturing.
     The variable `$1e` holds the end position of the first captured text.
+    It is read-only.
 - **`$0`** :
     The string of the text between the start position in the input at which the rule pattern begins to match
     and the current position in the input at which the element immediately before the action ends to match.
+    It is read-only.
 - **`$0s`** :
     The start position in the input at which the rule pattern begins to match.
+    It is read-only.
 - **`$0e`** :
     The current position in the input at which the element immediately before the action ends to match.
+    It is read-only.
+- **`@`**_variable_ :
+    The marker variable (version 3.0.0 or later).
+    For the details, see the explanation of `%marker`.
+    It is read-only.
 
 An example is shown below.
 
@@ -380,6 +383,8 @@ and to copy the necessary string data in its member variable.
 Similarly, if they are required to be copied in `auxil`, it is recommended to define a structure as the type of user-defined data using `%auxil`,
 and to copy the necessary string data in its member variable.
 
+The variable `@@` to store a result of the _programmable predicate_ cannot be used in actions (the _programmable predicate_ is available since version 3.0.0).
+
 The position values are 0-based; that is, the first position is 0.
 The data type is `size_t` (before version 1.4.0, it was `int`).
 
@@ -387,12 +392,20 @@ The data type is `size_t` (before version 1.4.0, it was `int`).
 
 Curly braces following tilde (`~`) surround an error action.
 The error action is arbitrary C source code to be executed at the end of matching only if the preceding _element_ matching fails.
+
+The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
+are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
+For the details, see the explanation of `%prefix`.
+
 Any braces within the error action must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+
 One or more error actions can be inserted in any places after elements in the pattern.
 The operator tilde (`~`) binds less tightly than any other operator except alternation (`/`) and sequencing.
+
 The error action is intended to make error handling and recovery code easier to write.
 In the error action, all predefined variables described above are available as well.
+
 The examples are shown below.
 
 ```
@@ -400,27 +413,151 @@ rule1 <- e1 e2 e3 ~{ error("e[12] ok; e3 has failed"); }
 rule2 <- (e1 e2 e3) ~{ error("one of e[123] has failed"); }
 ```
 
+**`&` `{` _c source code_ `}`**
+
+Curly braces following ampersand (`&`) surround a programmable predicate (version 3.0.0 or later).
+The programmable predicate is arbitrary C source code to be executed during matching.
+The matching continues only if a nonzero value is assigned to the output variable `@@`.
+The initial value of `@@` is 1.
+No input text is not consumed from the input and remains available for subsequent matching.
+
+The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
+are replaced with the prefix and the uppercased one respectively.
+For the details, see the explanation of `%prefix`.
+
+Any braces within the programmable predicate must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+
+One or more programmable predicates can be inserted in any places between elements, at the start, and at the end in the pattern.
+All values of marker variables are rolled back when subsequent matching fails.
+
+In the programmable predicate, the C source code can use the predefined variables below.
+
+- **`@@`** :
+    The output variable, to which the result of the predicate is to be stored.
+    The matching continues only if a nonzero value is assigned.
+- **`auxil`** :
+    The user-defined data that has been given via the API function `pcc_create()`.
+    The data type is the one specified by `%auxil`.
+    The default data type is `void *`.
+- **`$`**_n_ :
+    The string of the captured text.
+    The _n_ is the positive integer that corresponds to the order of capturing.
+    The variable `$1` holds the string of the first captured text.
+    It is read-only.
+- **`$`**_n_**`s`** :
+    The start position in the input of the captured text, inclusive.
+    The _n_ is the positive integer that corresponds to the order of capturing.
+    The variable `$1s` holds the start position of the first captured text.
+    It is read-only.
+- **`$`**_n_**`e`** :
+    The end position in the input of the captured text, exclusive.
+    The _n_ is the positive integer that corresponds to the order of capturing.
+    The variable `$1e` holds the end position of the first captured text.
+    It is read-only.
+- **`$0`** :
+    The string of the text between the start position in the input at which the rule pattern begins to match
+    and the current position in the input at which the element immediately before the programmable predicate.
+    It is read-only.
+- **`$0s`** :
+    The start position in the input at which the rule pattern begins to match.
+    It is read-only.
+- **`$0e`** :
+    The current position in the input at which the element immediately before the programmable predicate.
+    It is read-only.
+- **`@`**_variable_ :
+    The marker variable.
+    For the details, see the explanation of `%marker`.
+    It is writable.
+
+Rule variables and `$$` are not accessible in programmable predicates.
+
+**Caution:** The result of the programmable predicate MUST always be the same in the situation
+where the combination of the values of the following variables is the same:
+all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables **`@`**_variable_.
+Otherwise, the generated parser may work incorrectly.
+
+An example is shown below.
+
+```
+%marker @count
+rule <- &{ @count = 0 } ( '#' &{ @count++ } )* &{ @@ = (@count >= 5 && @count <= 10); }
+```
+
+This matches the string that is a sequence of '#' and its length is either of 5 to 10.
+
+Note that the string data held by `$`_n_ and `$0` can be discarded immediately after evaluation of the programmable predicate.
+If the string data are needed after the programmable predicate execution, they must be copied in any of marker variables or `auxil`.
+If they are required to be copied in `auxil`, it is recommended to define a structure as the type of user-defined data using `%auxil`,
+and to copy the necessary string data in its member variable.
+
+The position values are 0-based; that is, the first position is 0.
+The data type is `size_t`.
+
+**`!` `{` _c source code_ `}`**
+
+Curly braces following exclamation (`!`) surround a negative programmable predicate (version 3.0.0 or later).
+The negative programmable predicate is arbitrary C source code to be executed during matching.
+The matching continues only if 0 is assigned to the output variable `@@`.
+The initial value of `@@` is 0.
+No input text is not consumed from the input and remains available for subsequent matching.
+
+The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
+are replaced with the prefix and the uppercased one respectively.
+For the details, see the explanation of `%prefix`.
+
+Any braces within the negative programmable predicate must be properly nested.
+Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+
+One or more negative programmable predicates can be inserted in any places between elements, at the start, and at the end in the pattern.
+All values of marker variables are rolled back when subsequent matching fails.
+
+In the negative programmable predicate, the C source code can use the predefined variables shown in the explanation of the programmable predicate (`&` `{` _c source code_ `}`).
+
+**Caution:** The result of the programmable predicate MUST always be the same in the situation
+where the combination of the values of the following variables is the same:
+all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables **`@`**_variable_.
+Otherwise, the generated parser may work incorrectly.
+
 **`%header` `{` _c source code_ `}`**
 
-The specified C source code is copied verbatim to the C header file before the generated parser API function declarations.
+The specified C source code is copied basically verbatim to the C header file before the generated parser API function declarations.
+There are the following exceptions in verbatim copying.
+- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
+  For the details, see the explanation of `%prefix`.
+- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+
 Any braces in the C source code must be properly nested.
-Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
+
 When `%header` is used multiple times, the respective C source codes are copied in order of their appearance.
 
 **`%source` `{` _c source code_ `}`**
 
-The specified C source code is copied verbatim to the C source file before the generated parser implementation code.
+The specified C source code is copied basically verbatim to the C source file before the generated parser implementation code.
+There are the following exceptions in verbatim copying.
+- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
+  For the details, see the explanation of `%prefix`.
+- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+
 Any braces in the C source code must be properly nested.
-Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
+
 When `%source` is used multiple times, the respective C source codes are copied in order of their appearance.
 
 **`%common` `{` _c source code_ `}`**
 
-The specified C source code is copied verbatim to both of the C header file and the C source file
-before the generated parser API function declarations and the implementation code respectively.
 This has the same effect as `%header {` _c source code_ `} %source {` _c source code_ `}`.
+
+The specified C source code is copied basically verbatim to both of the C header file and the C source file
+before the generated parser API function declarations and the implementation code respectively.
+There are the following exceptions in verbatim copying.
+- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
+  For the details, see the explanation of `%prefix`.
+- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+
 Any braces in the C source code must be properly nested.
-Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
+Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
 
 **`%earlyheader` `{` _c source code_ `}`**
 
@@ -449,6 +586,93 @@ This can be used only once and cannot be used in imported files.
 
 The prefix of the parser API functions is changed to the specified one from the default `pcc`.
 This can be used only once and cannot be used in imported files.
+
+To make an identifier unique to the generated parser, the intrinsic macros `${prefix}` and `${PREFIX}` are useful (version 2.1.0 or later).
+Anywhere in C source codes in any parts, the text `${prefix}` is replaced with the prefix itself,
+and the text `${PREFIX}` is replaced with the uppercased prefix.
+An example is shown below.
+
+```c
+%prefix "my"
+
+%source {
+#define ${PREFIX}_CONSTANT 1
+void ${prefix}_func(void);
+}
+```
+
+The C source code above will become as follows.
+
+```c
+#define MY_CONSTANT 1
+void my_func(void);
+```
+
+Note that the intrinsic macro replacement is in effect even in C preprocessor macros, comments, and string literals.
+
+**`%marker` `@`_identifier1_** [ **`@`_identifier2_** ... ]
+
+The marker variables with the respective specified identifiers are declared (version 3.0.0 or later).
+This can be used multiple times and can be used also in imported files.
+A marker variable identifier must consist of alphabets (both uppercase and lowercase letters), digits, and underscores.
+The first letter must be an alphabet.
+All identifiers of the declared marker variables must be different from each other.
+
+Marker variables are intended to be used as _markers_ of the input text to be parsed,
+so that the parser can confine the text range where a specific pattern matches.
+The values of marker variables are associated with each text position.
+
+A marker variable can be dealt as if it were an integer variable. The data type is `ptrdiff_t`, which is a signed integer type with the same bit length as pointer types. Usually, the bit length is 32 bits in 32-bit programs, and 64 bits in 64-bit programs.
+The initial integer value is 0.
+An example is shown below.
+
+```
+%marker @hashes_l @hashes_r
+
+title <- &{ @hashes_l = 0; } ( '#' &{ @hashes_l++; } )+ [^#]+ &{ @hashes_r = 0; } ( '#' &{ @hashes_r++; } )* &{ @@ = (@hashes_l >= @hashes_r); }
+```
+
+Here, `@hashes_l` and `@hashes_r` are marker variables.
+This rule matches the following text for instance.
+
+```
+# xxx
+# xxx #
+### xxx
+### xxx #
+### xxx ##
+### xxx ###
+```
+
+However, it fails to match following text for instance.
+
+```
+# xxx ###
+### xxx ####
+```
+
+A marker variable can also have a string value, without affecting the existing integer value.
+The initial string value is `NULL`.
+
+```
+%marker @var_0 @var_1
+
+rule_0 <- 'abc'* &{ @var_0.set_string("foo"); }
+rule_1 <- < '012'+ > &{ @var_1.set_string($1); @var_1.append_string(@var_0.get_string()); }
+```
+
+The methods of marker variables are listed below.
+
+- `@`_variable_`.get_string()` : returns the string (`const char *`) stored in the marker variable; can be `NULL`; read-only.
+- `@`_variable_`.set_string(`_str_`)` : stores a string (`const char *`) in the marker variable; the argument _str_ can be `NULL`.
+- `@`_variable_`.append_string(`_str_`)` : appends a string (`const char *`) to the string stored in the marker variable; the argument _str_ can be `NULL`, which has no effect.
+- `@`_variable_`.save()` : saves the current integer and string values by pushing them into the variable-specific stack.
+- `@`_variable_`.restore()` : restores the previous integer and string values by popping them from the variable-specific stack.
+
+Note that the integer and string values are 0 and `NULL` respectively if `restore()` is done more times than `save()` was done.
+
+Marker variables are read-only in actions while they are writable in programmable predicates.
+In the C source codes at the other parts, all marker variables are inaccessible.
 
 **`%import` `"`_import file name_`"`**
 
@@ -481,7 +705,11 @@ A comment can be inserted between `#` and the end of the line.
 **`%%`**
 
 A double percent `%%` terminates the section for rule definitions of the grammar.
-All text following `%%` is copied verbatim to the C source file after the generated parser implementation code.
+All text following `%%` is copied basically verbatim to the C source file after the generated parser implementation code.
+There are the following exceptions in verbatim copying.
+- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
+  For the details, see the explanation of `%prefix`.
+- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 <small>(The specification is determined by referring to [peg/leg](http://piumarta.com/software/peg/) developed by Ian Piumarta.)</small>
 
@@ -494,6 +722,8 @@ The following import files are currently bundled.
     This provides various rules to match an ASCII character belonging to a specific character group.
   - [`char/unicode_general_category.peg`](import/char/unicode_general_category.peg) :
     This provides various rules to match a Unicode character belonging to a specific [general category](https://unicode.org/reports/tr44/#General_Category_Values).
+  - [`char/unicode_derived_core.peg`](import/char/unicode_derived_core.peg) :
+    This provides various rules to match a Unicode character belonging to a specific [derived core property](https://www.unicode.org/reports/tr44/#DerivedCoreProperties.txt).
 - **Utility Codes**
   - [`code/pcc_ast.peg`](import/code/pcc_ast.peg) :
     This provides codes to make it easier to build an AST (abstract syntax tree).
@@ -668,7 +898,7 @@ The `auxil` can be used to pass user-defined data to be bound to the context.
 int pcc_parse(pcc_context_t *ctx, int *ret);
 ```
 
-Parses an input text (from standard input by default) and returns the result in `ret`.
+Parses an input text (from the standard input by default) and returns the result in `ret`.
 The `ret` can be `NULL` if no output data is needed.
 This function returns `0` if no text is left to be parsed, or a nonzero value otherwise.
 
@@ -779,16 +1009,16 @@ This example accepts the same inputs as *Desktop Calculator* shown above.
 ```c
 %prefix "calc"
 
-%value "pcc_ast_node_t *"    # <-- must be set
+%value "calc_ast_node_t *"    # <-- must be set
 
-%auxil "pcc_ast_manager_t *" # <-- must be set
+%auxil "calc_ast_manager_t *" # <-- must be set
 
 %header {
-#define PCC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
+#define CALC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
 
 typedef struct text_data_tag { /* <-- node custom data type */
     char *text;
-} pcc_ast_node_custom_data_t;
+} calc_ast_node_custom_data_t;
 }
 
 %source {
@@ -801,19 +1031,19 @@ statement <- _ e:expression _ EOL { $$ = e; }
 
 expression <- e:term { $$ = e; }
 
-term <- l:term _ '+' _ r:factor { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("+"); }
-      / l:term _ '-' _ r:factor { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("-"); }
+term <- l:term _ '+' _ r:factor { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("+"); }
+      / l:term _ '-' _ r:factor { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("-"); }
       / e:factor                { $$ = e; }
 
-factor <- l:factor _ '*' _ r:unary { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("*"); }
-        / l:factor _ '/' _ r:unary { $$ = pcc_ast_node__create_2(l, r); $$->custom.text = strdup("/"); }
+factor <- l:factor _ '*' _ r:unary { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("*"); }
+        / l:factor _ '/' _ r:unary { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("/"); }
         / e:unary                  { $$ = e; }
 
-unary <- '+' _ e:unary { $$ = pcc_ast_node__create_1(e); $$->custom.text = strdup("+"); }
-       / '-' _ e:unary { $$ = pcc_ast_node__create_1(e); $$->custom.text = strdup("-"); }
+unary <- '+' _ e:unary { $$ = calc_ast_node__create_1(e); $$->custom.text = strdup("+"); }
+       / '-' _ e:unary { $$ = calc_ast_node__create_1(e); $$->custom.text = strdup("-"); }
        / e:primary     { $$ = e; }
 
-primary <- < [0-9]+ >               { $$ = pcc_ast_node__create_0(); $$->custom.text = strdup($1); }
+primary <- < [0-9]+ >               { $$ = calc_ast_node__create_0(); $$->custom.text = strdup($1); }
          / '(' _ e:expression _ ')' { $$ = e; }
 
 _      <- [ \t]*
@@ -822,36 +1052,36 @@ EOL    <- '\n' / '\r\n' / '\r' / ';'
 %import "code/pcc_ast.peg"   # <-- provides AST build functions
 
 %%
-void pcc_ast_node_custom_data__initialize(pcc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__initialize(calc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
     obj->text = NULL;
 }
 
-void pcc_ast_node_custom_data__finalize(pcc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__finalize(calc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
     free(obj->text);
 }
 
-static void dump_ast(const pcc_ast_node_t *obj, int depth) {
+static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
         switch (obj->type) {
-        case PCC_AST_NODE_TYPE_NULLARY:
+        case CALC_AST_NODE_TYPE_NULLARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "nullary", obj->custom.text);
             break;
-        case PCC_AST_NODE_TYPE_UNARY:
+        case CALC_AST_NODE_TYPE_UNARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "unary", obj->custom.text);
             dump_ast(obj->data.unary.node, depth + 1);
             break;
-        case PCC_AST_NODE_TYPE_BINARY:
+        case CALC_AST_NODE_TYPE_BINARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "binary", obj->custom.text);
             dump_ast(obj->data.binary.node[0], depth + 1);
             dump_ast(obj->data.binary.node[1], depth + 1);
             break;
-        case PCC_AST_NODE_TYPE_TERNARY:
+        case CALC_AST_NODE_TYPE_TERNARY:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "ternary", obj->custom.text);
             dump_ast(obj->data.ternary.node[0], depth + 1);
             dump_ast(obj->data.ternary.node[1], depth + 1);
             dump_ast(obj->data.ternary.node[2], depth + 1);
             break;
-        case PCC_AST_NODE_TYPE_VARIADIC:
+        case CALC_AST_NODE_TYPE_VARIADIC:
             printf("%*s%s: \"%s\"\n", 2 * depth, "", "variadic", obj->custom.text);
             {
                 size_t i;
@@ -871,18 +1101,18 @@ static void dump_ast(const pcc_ast_node_t *obj, int depth) {
 }
 
 int main(int argc, char **argv) {
-    pcc_ast_manager_t mgr;
-    pcc_ast_manager__initialize(&mgr);
+    calc_ast_manager_t mgr;
+    calc_ast_manager__initialize(&mgr);
     {
         calc_context_t *ctx = calc_create(&mgr);
-        pcc_ast_node_t *ast = NULL;
+        calc_ast_node_t *ast = NULL;
         while (calc_parse(ctx, &ast)) {
             dump_ast(ast, 0);
-            pcc_ast_node__destroy(ast);
+            calc_ast_node__destroy(ast);
         }
         calc_destroy(ctx);
     }
-    pcc_ast_manager__finalize(&mgr);
+    calc_ast_manager__finalize(&mgr);
     return 0;
 }
 ```

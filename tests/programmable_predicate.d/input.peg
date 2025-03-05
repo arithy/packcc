@@ -1,0 +1,48 @@
+%source {
+#include <string.h>
+}
+
+%marker @count @chars_l @chars_r
+
+rule <- ( rule_count_p / rule_count_n / rule_chars_0_p / rule_chars_0_n / rule_chars_1_p / rule_chars_1_n / rule_other ) EOL
+
+rule_count_p
+   <- &{ @count = 0; } ( '%' &{ @count++; } )+ &{ @@ = (@count >= 5); }
+    {
+        printf("rule_count_p: @count = %d\n", (int)@count);
+    }
+rule_count_n
+   <- &{ @count = 0; } ( '%' &{ @count++; } )+ !{ @@ = (@count >= 5); }
+    {
+        printf("rule_count_n: @count = %d\n", (int)@count);
+    }
+
+rule_chars_0_p
+   <- &{ @chars_l = 0; } ( '#' &{ @chars_l++; } )+ ( !EOL [^#] )+ &{ @chars_r = 0; } ( '#' &{ @chars_r++; } )* &{ @@ = (@chars_l >= @chars_r); }
+    {
+        printf("rule_chars_0_p: @chars_l = %d, @chars_r = %d\n", (int)@chars_l, (int)@chars_r);
+    }
+rule_chars_0_n
+   <- &{ @chars_l = 0; } ( '#' &{ @chars_l++; } )+ ( !EOL [^#] )+ &{ @chars_r = 0; } ( '#' &{ @chars_r++; } )* !{ @@ = (@chars_l >= @chars_r); }
+    {
+        printf("rule_chars_0_n: @chars_l = %d, @chars_r = %d\n", (int)@chars_l, (int)@chars_r);
+    }
+
+rule_chars_1_p
+   <- &{ @chars_l.set_string(""); } ( < [A-Z] > &{ @chars_l.append_string($1); } )+ ' '* < [A-Z]+ > &{ @chars_r.set_string($2); } &{ @@ = (strcmp(@chars_l.get_string(), @chars_r.get_string()) == 0); }
+    {
+        printf("rule_chars_1_p: @chars_l = %s, @chars_r = %s\n", @chars_l.get_string(), @chars_r.get_string());
+    }
+rule_chars_1_n
+   <- &{ @chars_l.set_string(""); } ( < [A-Z] > &{ @chars_l.append_string($1); } )+ ' '* < [A-Z]+ > &{ @chars_r.set_string($2); } !{ @@ = (strcmp(@chars_l.get_string(), @chars_r.get_string()) == 0); }
+    {
+        printf("rule_chars_1_n: @chars_l = %s, @chars_r = %s\n", @chars_l.get_string(), @chars_r.get_string());
+    }
+
+rule_other
+   <- .*
+    {
+        printf("rule_other: %s\n", $0);
+    }
+
+EOL <- '\n' / '\r\n' / '\r'

@@ -168,16 +168,16 @@ TEST COMMON @var.restore()        " @var.restore()        " /* @var.restore()   
     TEST PROGPRED0 ${PREFIX} " ${PREFIX} " /* ${PREFIX} */ // ${PREFIX}
     TEST PROGPRED0 pcc_progpred_out                      " @@                      " /* @@                      */ // @@
     TEST PROGPRED0 @pcc_progpred_out                     " @@@                     " /* @@@                     */ // @@@
-    TEST PROGPRED0 @pcc_marker_variable__integer(auxil, pcc_marker__var)                   " @@var                   " /* @@var                   */ // @@var
-    TEST PROGPRED0 pcc_marker_variable__integer(auxil, pcc_marker__var)                    " @var                    " /* @var                    */ // @var
+    TEST PROGPRED0 @pcc_marker_variable__integer(pcc_ctx, var)                   " @@var                   " /* @@var                   */ // @@var
+    TEST PROGPRED0 pcc_marker_variable__integer(pcc_ctx, var)                    " @var                    " /* @var                    */ // @var
     TEST PROGPRED0 @var.                   " @var.                   " /* @var.                   */ // @var.
     TEST PROGPRED0 @var@                   " @var@                   " /* @var@                   */ // @var@
     TEST PROGPRED0 @var1                   " @var1                   " /* @var1                   */ // @var1
-    TEST PROGPRED0 pcc_marker_variable__get_string(auxil, pcc_marker__var)       " @var.get_string()       " /* @var.get_string()       */ // @var.get_string()
-    TEST PROGPRED0 pcc_marker_variable__set_string(auxil, pcc_marker__var, pcc_capture__0)     " @var.set_string($0)     " /* @var.set_string($0)     */ // @var.set_string($0)
-    TEST PROGPRED0 pcc_marker_variable__append_string(auxil, pcc_marker__var, pcc_capture__0)  " @var.append_string($0)  " /* @var.append_string($0)  */ // @var.append_string($0)
-    TEST PROGPRED0 pcc_marker_variable__save(auxil, pcc_marker__var)             " @var.save()             " /* @var.save()             */ // @var.save()
-    TEST PROGPRED0 pcc_marker_variable__restore(auxil, pcc_marker__var)          " @var.restore()          " /* @var.restore()          */ // @var.restore()
+    TEST PROGPRED0 pcc_marker_variable__get_string(pcc_ctx, var)       " @var.get_string()       " /* @var.get_string()       */ // @var.get_string()
+    TEST PROGPRED0 pcc_marker_variable__set_string(pcc_ctx, var, pcc_capture__0)     " @var.set_string($0)     " /* @var.set_string($0)     */ // @var.set_string($0)
+    TEST PROGPRED0 pcc_marker_variable__append_string(pcc_ctx, var, pcc_capture__0)  " @var.append_string($0)  " /* @var.append_string($0)  */ // @var.append_string($0)
+    TEST PROGPRED0 pcc_marker_variable__save(pcc_ctx, var)             " @var.save()             " /* @var.save()             */ // @var.save()
+    TEST PROGPRED0 pcc_marker_variable__restore(pcc_ctx, var)          " @var.restore()          " /* @var.restore()          */ // @var.restore()
     TEST PROGPRED0 @baz                    " @baz                    " /* @baz                    */ // @baz
     TEST PROGPRED0 @baz.get_string()       " @baz.get_string()       " /* @baz.get_string()       */ // @baz.get_string()
     TEST PROGPRED0 @baz.set_string(pcc_capture__0)     " @baz.set_string($0)     " /* @baz.set_string($0)     */ // @baz.set_string($0)
@@ -243,12 +243,12 @@ TEST COMMON @var.restore()        " @var.restore()        " /* @var.restore()   
     TEST ACTION0 ${PREFIX} " ${PREFIX} " /* ${PREFIX} */ // ${PREFIX}
     TEST ACTION0 @@                      " @@                      " /* @@                      */ // @@
     TEST ACTION0 @@@                     " @@@                     " /* @@@                     */ // @@@
-    TEST ACTION0 @pcc_marker_variable__integer_const(auxil, pcc_marker__var)                   " @@var                   " /* @@var                   */ // @@var
-    TEST ACTION0 pcc_marker_variable__integer_const(auxil, pcc_marker__var)                    " @var                    " /* @var                    */ // @var
+    TEST ACTION0 @pcc_marker_variable__integer_on_action(pcc_ctx, var)                   " @@var                   " /* @@var                   */ // @@var
+    TEST ACTION0 pcc_marker_variable__integer_on_action(pcc_ctx, var)                    " @var                    " /* @var                    */ // @var
     TEST ACTION0 @var.                   " @var.                   " /* @var.                   */ // @var.
     TEST ACTION0 @var@                   " @var@                   " /* @var@                   */ // @var@
     TEST ACTION0 @var1                   " @var1                   " /* @var1                   */ // @var1
-    TEST ACTION0 pcc_marker_variable__get_string(auxil, pcc_marker__var)       " @var.get_string()       " /* @var.get_string()       */ // @var.get_string()
+    TEST ACTION0 pcc_marker_variable__get_string_on_action(pcc_ctx, var)       " @var.get_string()       " /* @var.get_string()       */ // @var.get_string()
     TEST ACTION0 @var.set_string(pcc_capture__0)     " @var.set_string($0)     " /* @var.set_string($0)     */ // @var.set_string($0)
     TEST ACTION0 @var.append_string(pcc_capture__0)  " @var.append_string($0)  " /* @var.append_string($0)  */ // @var.append_string($0)
     TEST ACTION0 @var.save()             " @var.save()             " /* @var.save()             */ // @var.save()

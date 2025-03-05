@@ -1,0 +1,28 @@
+%
+%%
+%%%
+%%%%
+%%%%%
+%%%%%%
+%%%%%%%
+# abc
+# abc #
+# abc ##
+# abc ###
+## abc
+## abc #
+## abc ##
+## abc ###
+### abc
+### abc #
+### abc ##
+### abc ###
+A A
+A AB
+A ABC
+AB A
+AB AB
+AB ABC
+ABC A
+ABC AB
+ABC ABC

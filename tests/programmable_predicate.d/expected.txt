@@ -1,0 +1,28 @@
+rule_count_n: @count = 1
+rule_count_n: @count = 2
+rule_count_n: @count = 3
+rule_count_n: @count = 4
+rule_count_p: @count = 5
+rule_count_p: @count = 6
+rule_count_p: @count = 7
+rule_chars_0_p: @chars_l = 1, @chars_r = 0
+rule_chars_0_p: @chars_l = 1, @chars_r = 1
+rule_chars_0_n: @chars_l = 1, @chars_r = 2
+rule_chars_0_n: @chars_l = 1, @chars_r = 3
+rule_chars_0_p: @chars_l = 2, @chars_r = 0
+rule_chars_0_p: @chars_l = 2, @chars_r = 1
+rule_chars_0_p: @chars_l = 2, @chars_r = 2
+rule_chars_0_n: @chars_l = 2, @chars_r = 3
+rule_chars_0_p: @chars_l = 3, @chars_r = 0
+rule_chars_0_p: @chars_l = 3, @chars_r = 1
+rule_chars_0_p: @chars_l = 3, @chars_r = 2
+rule_chars_0_p: @chars_l = 3, @chars_r = 3
+rule_chars_1_p: @chars_l = A, @chars_r = A
+rule_chars_1_n: @chars_l = A, @chars_r = AB
+rule_chars_1_n: @chars_l = A, @chars_r = ABC
+rule_chars_1_n: @chars_l = AB, @chars_r = A
+rule_chars_1_p: @chars_l = AB, @chars_r = AB
+rule_chars_1_n: @chars_l = AB, @chars_r = ABC
+rule_chars_1_n: @chars_l = ABC, @chars_r = A
+rule_chars_1_n: @chars_l = ABC, @chars_r = AB
+rule_chars_1_p: @chars_l = ABC, @chars_r = ABC

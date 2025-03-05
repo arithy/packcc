@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-# AST utility import file: version 2.0.0
+# AST utility import file: version 2.1.0
 
 %header {
 #ifdef __cplusplus
@@ -27,6 +27,10 @@ extern "C" {
 
 typedef struct ${prefix}_ast_manager_tag ${prefix}_ast_manager_t;
 typedef struct ${prefix}_ast_node_tag ${prefix}_ast_node_t;
+
+typedef struct ${prefix}_ast_range_tag {
+    size_t start, end;
+} ${prefix}_ast_range_t;
 
 typedef enum ${prefix}_ast_node_type_tag {
     ${PREFIX}_AST_NODE_TYPE_NULLARY,
@@ -67,6 +71,11 @@ struct ${prefix}_ast_node_tag {
     ${prefix}_ast_node_t *parent;
     ${prefix}_ast_node_type_t type;
     ${prefix}_ast_node_data_t data;
+    ${prefix}_ast_range_t range;
+    int label;
+#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+    char *string;
+#endif
 #ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
     ${prefix}_ast_node_custom_data_t custom;
 #endif
@@ -79,20 +88,31 @@ struct ${prefix}_ast_manager_tag {
 #endif
 };
 
+${prefix}_ast_range_t ${prefix}_ast_range__new(size_t start, size_t end);
+
 void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj);
 void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj);
+
+char *${prefix}_ast__strdup(${prefix}_ast_manager_t *mgr, const char *str);
 
 void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
 void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
 void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node);
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr);
-${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node);
-${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1);
-${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2);
-${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr);
-${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for variadic node only */
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label);
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_literal(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, const char *string);
+${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node);
+${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1);
+${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2);
+${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label);
+${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for a variadic node only */
 void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj);
+
+#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+#define ${prefix}_ast_node__get_string(obj) ((const char *)(obj->string))
+#else
+#define ${prefix}_ast_node__get_string(obj) ((const char *)NULL)
+#endif
 
 #ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
 void ${prefix}_ast_manager_custom_data__initialize(${prefix}_ast_manager_custom_data_t *obj);
@@ -116,14 +136,25 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_node_custom_data_t *
 }
 
 %source {
-#define ${prefix}_ast_node__create_0() ${prefix}_ast_node__create_nullary(auxil)
-#define ${prefix}_ast_node__create_1(node) ${prefix}_ast_node__create_unary(auxil, node)
-#define ${prefix}_ast_node__create_2(node0, node1) ${prefix}_ast_node__create_binary(auxil, node0, node1)
-#define ${prefix}_ast_node__create_3(node0, node1, node2) ${prefix}_ast_node__create_ternary(auxil, node0, node1, node2)
-#define ${prefix}_ast_node__create_v() ${prefix}_ast_node__create_variadic(auxil)
+#define ${prefix}_ast__matched_range() ${prefix}_ast_range__new(pcc_capture__0s, pcc_capture__0e)
+
+#define ${prefix}_ast_node__create_0() ${prefix}_ast_node__create_nullary(auxil, ${prefix}_ast__matched_range(), 0)
+#define ${prefix}_ast_node__create_0_str(str) ${prefix}_ast_node__create_nullary_with_literal(auxil, ${prefix}_ast__matched_range(), 0, str)
+#define ${prefix}_ast_node__create_1(node) ${prefix}_ast_node__create_unary(auxil, ${prefix}_ast__matched_range(), 0, node)
+#define ${prefix}_ast_node__create_2(node0, node1) ${prefix}_ast_node__create_binary(auxil, ${prefix}_ast__matched_range(), 0, node0, node1)
+#define ${prefix}_ast_node__create_3(node0, node1, node2) ${prefix}_ast_node__create_ternary(auxil, ${prefix}_ast__matched_range(), 0, node0, node1, node2)
+#define ${prefix}_ast_node__create_v() ${prefix}_ast_node__create_variadic(auxil, ${prefix}_ast__matched_range(), 0)
+
+#define ${prefix}_ast_node__create_0_ext(label) ${prefix}_ast_node__create_nullary(auxil, ${prefix}_ast__matched_range(), label)
+#define ${prefix}_ast_node__create_0_ext_str(label, str) ${prefix}_ast_node__create_nullary_with_literal(auxil, ${prefix}_ast__matched_range(), label, str)
+#define ${prefix}_ast_node__create_1_ext(label, node) ${prefix}_ast_node__create_unary(auxil, ${prefix}_ast__matched_range(), label, node)
+#define ${prefix}_ast_node__create_2_ext(label, node0, node1) ${prefix}_ast_node__create_binary(auxil, ${prefix}_ast__matched_range(), label, node0, node1)
+#define ${prefix}_ast_node__create_3_ext(label, node0, node1, node2) ${prefix}_ast_node__create_ternary(auxil, ${prefix}_ast__matched_range(), label, node0, node1, node2)
+#define ${prefix}_ast_node__create_v_ext(label) ${prefix}_ast_node__create_variadic(auxil, ${prefix}_ast__matched_range(), label)
 }
 
 %%
+#include <string.h>
 #include <assert.h>
 
 #ifndef PCC_AST_NODE_ARRAY_MIN_SIZE
@@ -142,6 +173,13 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_node_custom_data_t *
 #define PCC_AST_FREE(mgr, ptr) PCC_FREE(mgr, ptr)
 #endif
 
+${prefix}_ast_range_t ${prefix}_ast_range__new(size_t start, size_t end) {
+    ${prefix}_ast_range_t obj;
+    obj.start = start;
+    obj.end = end;
+    return obj;
+}
+
 void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj) {
     obj->first = NULL;
     ${prefix}_ast_manager_custom_data__initialize(&(obj->custom));
@@ -152,6 +190,18 @@ void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj) {
     while (obj->first) {
         assert(obj->first->manager == obj);
         ${prefix}_ast_node__destroy(obj->first);
+    }
+}
+
+char *${prefix}_ast__strdup(${prefix}_ast_manager_t *mgr, const char *str) {
+    if (str) {
+        const size_t l = strlen(str) + 1;
+        char *const p = (char *)PCC_AST_MALLOC(mgr, l);
+        memcpy(p, str, l);
+        return p;
+    }
+    else {
+        return NULL;
     }
 }
 
@@ -239,7 +289,7 @@ static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
     }
 }
 
-static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t *mgr) {
+static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label) {
     ${prefix}_ast_node_t *const obj = (${prefix}_ast_node_t *)PCC_AST_MALLOC(mgr, sizeof(${prefix}_ast_node_t));
     obj->manager = mgr;
     if (mgr->first) {
@@ -253,18 +303,31 @@ static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t
     obj->prev = NULL;
     mgr->first = obj;
     obj->parent = NULL;
+    obj->range = range;
+    obj->label = label;
+#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+    obj->string = NULL;
+#endif
     return obj;
 }
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr) {
-    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_NULLARY;
     ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
     return obj;
 }
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node) {
-    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_literal(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, const char *string) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_nullary(mgr, range, label);
+#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+    obj->string = ${prefix}_ast__strdup(mgr, string);
+#endif
+    return obj;
+}
+
+${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_UNARY;
     obj->data.unary.node = node;
     if (node) {
@@ -275,8 +338,8 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *
     return obj;
 }
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1) {
-    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_BINARY;
     obj->data.binary.node[0] = node0;
     obj->data.binary.node[1] = node1;
@@ -294,8 +357,8 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t 
     return obj;
 }
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2) {
-    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_TERNARY;
     obj->data.ternary.node[0] = node0;
     obj->data.ternary.node[1] = node1;
@@ -314,8 +377,8 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t
     return obj;
 }
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr) {
-    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr);
+${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_VARIADIC;
     ${prefix}_ast_node_array__initialize(mgr, &(obj->data.variadic));
     ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
@@ -339,6 +402,9 @@ ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, $
 void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
     if (obj) {
         ${prefix}_ast_node_custom_data__finalize(&(obj->custom));
+#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+        PCC_AST_FREE(obj->manager, obj->string);
+#endif
         switch (obj->type) {
         case ${PREFIX}_AST_NODE_TYPE_NULLARY:
             break;
