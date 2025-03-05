@@ -27,7 +27,7 @@ The usage procedure is shown below.
    %auxil "pcc_ast_manager_t *"
    ```
 
-   If the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>`_`</code> are changed to those with the specified prefix as below.
+   If the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix as below.
    ```c
    %prefix "my"
 
@@ -36,33 +36,33 @@ The usage procedure is shown below.
    %auxil "my_ast_manager_t *"
    ```
 3. Create an AST node using either of the following functions in every rule action.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_0(void);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0(void);</code>
      + Returns a newly created nullary node.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_0_str(const char *str);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0_str(const char *str);</code>
      + Returns a newly created nullary node retaining a copy of the specified string.
-     + The string can be accessed using <code>`const char *`<b><i>pcc</i></b>`_ast_node__get_string(`<b><i>pcc</i></b>`_ast_node_t *node)`</code>.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_1(`<b><i>pcc</i></b>`_ast_node_t *node);`</code>
+     + The string can be accessed using <code>const char *<b><i>pcc</i></b>\_ast_node__get_string(<b><i>pcc</i></b>\_ast_node_t *node)</code>.
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_1(<b><i>pcc</i></b>\_ast_node_t *node);</code>
      + Returns a newly created unary node with one child node specified by the argument `node`.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_2(`<b><i>pcc</i></b>`_ast_node_t *node0, `<b><i>pcc</i></b>`_ast_node_t *node1);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_2(<b><i>pcc</i></b>\_ast_node_t *node0, <b><i>pcc</i></b>\_ast_node_t *node1);</code>
      + Returns a newly created binary node with two child nodes specified by the argument `node0` and `node1`.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_3(`<b><i>pcc</i></b>`_ast_node_t *node0, `<b><i>pcc</i></b>`_ast_node_t *node1, `<b><i>pcc</i></b>`_ast_node_t *node2);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_3(<b><i>pcc</i></b>\_ast_node_t *node0, <b><i>pcc</i></b>\_ast_node_t *node1, <b><i>pcc</i></b>\_ast_node_t *node2);</code>
      + Returns a newly created ternary node with three child nodes specified by the argument `node0`, `node1`, and `node2`.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_v(void);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_v(void);</code>
      + Returns a newly created variadic node initially with no child node.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__add_child(`<b><i>pcc</i></b>`_ast_node_t *obj, `<b><i>pcc</i></b>`_ast_node_t *node);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__add_child(<b><i>pcc</i></b>\_ast_node_t *obj, <b><i>pcc</i></b>\_ast_node_t *node);</code>
      + Adds a child node specified by the argument `node` to the variadic node `obj`.
      + Can be used for `obj` as a variadic node only.
 
-   As written above, if the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>`_`</code> are changed to those with the specified prefix.
+   As written above, if the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix.
 
    There are the variants of the node creation functions that enable setting a label as an `int` value.
    The label can be used for specifying node kinds in order to make it easier to analyze the AST in the later parsing steps.
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_0_ext(int label);`</code>
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_0_ext_str(int label, const char *str);`</code>
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_1_ext(int label, `<b><i>pcc</i></b>`_ast_node_t *node);`</code>
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_2_ext(int label, `<b><i>pcc</i></b>`_ast_node_t *node0, `<b><i>pcc</i></b>`_ast_node_t *node1);`</code>
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_3_ext(int label, `<b><i>pcc</i></b>`_ast_node_t *node0, `<b><i>pcc</i></b>`_ast_node_t *node1, `<b><i>pcc</i></b>`_ast_node_t *node2);`</code>
-   - <code><b><i>pcc</i></b>`_ast_node_t *`<b><i>pcc</i></b>`_ast_node__create_v_ext(int label);`</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0_ext(int label);</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0_ext_str(int label, const char *str);</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_1_ext(int label, <b><i>pcc</i></b>\_ast_node_t *node);</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_2_ext(int label, <b><i>pcc</i></b>\_ast_node_t *node0, <b><i>pcc</i></b>\_ast_node_t *node1);</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_3_ext(int label, <b><i>pcc</i></b>\_ast_node_t *node0, <b><i>pcc</i></b>\_ast_node_t *node1, <b><i>pcc</i></b>\_ast_node_t *node2);</code>
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_v_ext(int label);</code>
 
    Every AST node retains the rule pattern matching range in the member variable `range`.
    Namely, `obj->range.start` and `obj->range.end` memorize `$0s` and `$0e` respectively at the time when the node `obj` was created in a rule action.
@@ -92,9 +92,9 @@ The usage procedure is shown below.
 #### Customization
 
 To build a meaningful AST, customization of the node is needed.
-By defining the macro <code><b><i>PCC</i></b>`_AST_NODE_CUSTOM_DATA_DEFINED`</code> in a `%header` section before `%import "code/pcc_ast.peg"`,
-the node member variable `custom` whose data type is <code><b><i>pcc</i></b>`_ast_node_custom_data_t`</code> is enabled for storing node custom data.
-If the prefix is set with `%prefix`, the macro name <code><b><i>PCC</i></b>`_AST_NODE_CUSTOM_DATA_DEFINED`</code> is changed to those with the uppercased prefix as below.
+By defining the macro <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> in a `%header` section before `%import "code/pcc_ast.peg"`,
+the node member variable `custom` whose data type is <code><b><i>pcc</i></b>\_ast_node_custom_data_t</code> is enabled for storing node custom data.
+If the prefix is set with `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
 ```c
 %prefix "my"
 
@@ -134,9 +134,9 @@ The concrete usage procedure is shown below.
    rule1 <- < [0-9]+ > { $$ = my_ast_node__create_0(); $$->custom.text = strdup($1); }
    ```
 3. Implement the initialization and finalization functions for the node custom data.
-   - <code>`void `<b><i>pcc</i></b>`_ast_node_custom_data__initialize(`<b><i>pcc</i></b>`_ast_node_custom_data_t *obj);`</code>
+   - <code>void <b><i>pcc</i></b>\_ast_node_custom_data__initialize(<b><i>pcc</i></b>\_ast_node_custom_data_t *obj);</code>
      + Initializes the node custom data `obj`.
-   - <code>`void `<b><i>pcc</i></b>`_ast_node_custom_data__finalize(`<b><i>pcc</i></b>`_ast_node_custom_data_t *obj);`</code>
+   - <code>void <b><i>pcc</i></b>\_ast_node_custom_data__finalize(<b><i>pcc</i></b>\_ast_node_custom_data_t *obj);</code>
      + Finalizes the node custom data `obj`.
 
    An example is as follows.
@@ -161,7 +161,7 @@ Note that, unlike other symbols, the prefix of these macro names is never change
 **`PCC_AST_MALLOC(`**_mgr_**`,`**_size_**`)`**
 
 The function macro to allocate a memory block.
-The pointer to the instance of <code><b><i>pcc</i></b>`_ast_manager_t`</code> that was passed to the API function <code><b><i>pcc</i></b>`_create()`</code> can be retrieved from the argument _auxil_.
+The pointer to the instance of <code><b><i>pcc</i></b>\_ast_manager_t</code> that was passed to the API function <code><b><i>pcc</i></b>\_create()</code> can be retrieved from the argument _auxil_.
 It can be ignored if the instance does not concern memory allocation.
 The argument _size_ is the number of bytes to allocate.
 This macro must return a pointer to the allocated memory block, or `NULL` if no sufficient memory is available.
@@ -171,7 +171,7 @@ The default is defined as `PCC_MALLOC(mgr, size)`, which is used in the generate
 **`PCC_AST_REALLOC(`**_mgr_**`,`**_ptr_**`,`**_size_**`)`**
 
 The function macro to reallocate the existing memory block.
-The pointer to the instance of <code><b><i>pcc</i></b>`_ast_manager_t`</code> that was passed to the API function <code><b><i>pcc</i></b>`_create()`</code> can be retrieved from the argument _auxil_.
+The pointer to the instance of <code><b><i>pcc</i></b>\_ast_manager_t</code> that was passed to the API function <code><b><i>pcc</i></b>\_create()</code> can be retrieved from the argument _auxil_.
 It can be ignored if the instance does not concern memory allocation.
 The argument _ptr_ is the pointer to the previously allocated memory block.
 The argument _size_ is the new number of bytes to reallocate.
@@ -183,7 +183,7 @@ The default is defined as `PCC_REALLOC(mgr, ptr, size)`, which is used in the ge
 **`PCC_AST_FREE(`**_mgr_**`,`**_ptr_**`)`**
 
 The function macro to free the existing memory block.
-The pointer to the instance of <code><b><i>pcc</i></b>`_ast_manager_t`</code> that was passed to the API function <code><b><i>pcc</i></b>`_create()`</code> can be retrieved from the argument _auxil_.
+The pointer to the instance of <code><b><i>pcc</i></b>\_ast_manager_t</code> that was passed to the API function <code><b><i>pcc</i></b>\_create()</code> can be retrieved from the argument _auxil_.
 It can be ignored if the instance does not concern memory allocation.
 The argument _ptr_ is the pointer to the previously allocated memory block.
 This macro need not return a value.
