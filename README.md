@@ -419,7 +419,7 @@ Curly braces following ampersand (`&`) surround a programmable predicate (versio
 The programmable predicate is arbitrary C source code to be executed during matching.
 The matching continues only if a nonzero value is assigned to the output variable `@@`.
 The initial value of `@@` is 1.
-No input text is not consumed from the input and remains available for subsequent matching.
+No input text is consumed from the input and remains available for subsequent matching.
 
 The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
 are replaced with the prefix and the uppercased one respectively.
@@ -500,7 +500,7 @@ Curly braces following exclamation (`!`) surround a negative programmable predic
 The negative programmable predicate is arbitrary C source code to be executed during matching.
 The matching continues only if 0 is assigned to the output variable `@@`.
 The initial value of `@@` is 0.
-No input text is not consumed from the input and remains available for subsequent matching.
+No input text is consumed from the input and remains available for subsequent matching.
 
 The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
 are replaced with the prefix and the uppercased one respectively.
