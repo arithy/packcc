@@ -136,7 +136,7 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_node_custom_data_t *
 }
 
 %source {
-#define ${prefix}_ast__matched_range() ${prefix}_ast_range__new(pcc_capture__0s, pcc_capture__0e)
+#define ${prefix}_ast__matched_range() ${prefix}_ast_range__new(_0s, _0e)
 
 #define ${prefix}_ast_node__create_0() ${prefix}_ast_node__create_nullary(auxil, ${prefix}_ast__matched_range(), 0)
 #define ${prefix}_ast_node__create_0_str(str) ${prefix}_ast_node__create_nullary_with_literal(auxil, ${prefix}_ast__matched_range(), 0, str)
