@@ -481,7 +481,7 @@ An example is shown below.
 
 ```
 %marker @count
-rule <- &{ @count = 0 } ( '#' &{ @count++ } )* &{ @@ = (@count >= 5 && @count <= 10); }
+rule <- &{ @count = 0; } ( '#' &{ @count++; } )* &{ @@ = (@count >= 5 && @count <= 10); }
 ```
 
 This matches the string that is a sequence of '#' and its length is either of 5 to 10.
