@@ -19,7 +19,7 @@
 # THE SOFTWARE.
 
 %common {
-/* Using AST utility import file version 2.2.0 */
+/* Using AST utility import file version 2.3.0 */
 }
 
 %header {
@@ -75,7 +75,10 @@ struct ${prefix}_ast_node_tag {
     ${prefix}_ast_node_data_t data;
     ${prefix}_ast_range_t range;
     int label;
-#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+    ptrdiff_t integer;
+#endif
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
     char *string;
 #endif
 #ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
@@ -102,7 +105,8 @@ void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_
 void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node);
 
 ${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label);
-${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_literal(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, const char *string);
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_integer(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ptrdiff_t integer);
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_string(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, const char *string);
 ${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node);
 ${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1);
 ${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2);
@@ -110,7 +114,13 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_
 ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for a variadic node only */
 void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj);
 
-#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+#define ${prefix}_ast_node__get_integer(obj) (obj->integer)
+#else
+#define ${prefix}_ast_node__get_integer(obj) 0
+#endif
+
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
 #define ${prefix}_ast_node__get_string(obj) ((const char *)(obj->string))
 #else
 #define ${prefix}_ast_node__get_string(obj) ((const char *)NULL)
@@ -141,14 +151,16 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${pr
 #define ${prefix}_ast__matched_range() ${prefix}_ast_range__new(pcc_capture__0s, pcc_capture__0e)
 
 #define ${prefix}_ast_node__create_0() ${prefix}_ast_node__create_nullary(auxil, ${prefix}_ast__matched_range(), 0)
-#define ${prefix}_ast_node__create_0_str(str) ${prefix}_ast_node__create_nullary_with_literal(auxil, ${prefix}_ast__matched_range(), 0, str)
+#define ${prefix}_ast_node__create_0_int(val) ${prefix}_ast_node__create_nullary_with_integer(auxil, ${prefix}_ast__matched_range(), 0, val)
+#define ${prefix}_ast_node__create_0_str(str) ${prefix}_ast_node__create_nullary_with_string(auxil, ${prefix}_ast__matched_range(), 0, str)
 #define ${prefix}_ast_node__create_1(node) ${prefix}_ast_node__create_unary(auxil, ${prefix}_ast__matched_range(), 0, node)
 #define ${prefix}_ast_node__create_2(node0, node1) ${prefix}_ast_node__create_binary(auxil, ${prefix}_ast__matched_range(), 0, node0, node1)
 #define ${prefix}_ast_node__create_3(node0, node1, node2) ${prefix}_ast_node__create_ternary(auxil, ${prefix}_ast__matched_range(), 0, node0, node1, node2)
 #define ${prefix}_ast_node__create_v() ${prefix}_ast_node__create_variadic(auxil, ${prefix}_ast__matched_range(), 0)
 
 #define ${prefix}_ast_node__create_0_ext(label) ${prefix}_ast_node__create_nullary(auxil, ${prefix}_ast__matched_range(), label)
-#define ${prefix}_ast_node__create_0_ext_str(label, str) ${prefix}_ast_node__create_nullary_with_literal(auxil, ${prefix}_ast__matched_range(), label, str)
+#define ${prefix}_ast_node__create_0_ext_int(label, val) ${prefix}_ast_node__create_nullary_with_integer(auxil, ${prefix}_ast__matched_range(), label, val)
+#define ${prefix}_ast_node__create_0_ext_str(label, str) ${prefix}_ast_node__create_nullary_with_string(auxil, ${prefix}_ast__matched_range(), label, str)
 #define ${prefix}_ast_node__create_1_ext(label, node) ${prefix}_ast_node__create_unary(auxil, ${prefix}_ast__matched_range(), label, node)
 #define ${prefix}_ast_node__create_2_ext(label, node0, node1) ${prefix}_ast_node__create_binary(auxil, ${prefix}_ast__matched_range(), label, node0, node1)
 #define ${prefix}_ast_node__create_3_ext(label, node0, node1, node2) ${prefix}_ast_node__create_ternary(auxil, ${prefix}_ast__matched_range(), label, node0, node1, node2)
@@ -307,7 +319,10 @@ static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t
     obj->parent = NULL;
     obj->range = range;
     obj->label = label;
-#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+    obj->integer = 0;
+#endif
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
     obj->string = NULL;
 #endif
     return obj;
@@ -320,9 +335,17 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t
     return obj;
 }
 
-${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_literal(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, const char *string) {
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_integer(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ptrdiff_t integer) {
     ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_nullary(mgr, range, label);
-#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+    obj->integer = integer;
+#endif
+    return obj;
+}
+
+${prefix}_ast_node_t *${prefix}_ast_node__create_nullary_with_string(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, const char *string) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_nullary(mgr, range, label);
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
     obj->string = ${prefix}_ast__strdup(mgr, string);
 #endif
     return obj;
@@ -404,7 +427,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, $
 void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj) {
     if (obj) {
         ${prefix}_ast_node_custom_data__finalize(mgr, &(obj->custom));
-#ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
         PCC_AST_FREE(obj->manager, obj->string);
 #endif
         switch (obj->type) {

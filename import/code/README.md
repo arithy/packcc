@@ -6,7 +6,7 @@ In this directory, currently one import file that provides utility codes is stor
 
 ## Import File
 
-### `code/pcc_ast.peg` (version 2.2.0)
+### `code/pcc_ast.peg` (version 2.3.0)
 
 #### Synopsis
 
@@ -38,6 +38,9 @@ The usage procedure is shown below.
 3. Create an AST node using either of the following functions in every rule action.
    - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0(void);</code>
      + Returns a newly created nullary node.
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0_int(ptrdiff_t val);</code>
+     + Returns a newly created nullary node retaining an integer value.
+     + The integer value can be accessed using <code>ptrdiff_t <b><i>pcc</i></b>\_ast_node__get_integer(<b><i>pcc</i></b>\_ast_node_t *node)</code>.
    - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_0_str(const char *str);</code>
      + Returns a newly created nullary node retaining a copy of the specified string.
      + The string can be accessed using <code>const char *<b><i>pcc</i></b>\_ast_node__get_string(<b><i>pcc</i></b>\_ast_node_t *node)</code>.
