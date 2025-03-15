@@ -1275,10 +1275,20 @@ static bool_t can_character_follow_identifier_(char ch) {
 
 static bool_t stream__write_text(
     stream_t *obj, const char *str, size_t len, bool_t lhead, size_t dedent, size_t indent,
-    code_block_kind_t kind, size_t ncapts, const string_array_t *mvars, const subst_map_t *subst
+    code_block_kind_t kind, const node_const_array_t *capts, const string_array_t *mvars, const subst_map_t *subst
 ) {
     size_t i = 0;
+    size_t mc = 0;
     if (len == VOID_VALUE) return lhead; /* for safety */
+    if (capts) {
+        size_t ic;
+        for (ic = 0; ic < capts->n; ic++) {
+            size_t kc;
+            assert(capts->p[ic]->type == NODE_CAPTURE);
+            kc = capts->p[ic]->data.capture.index + 1;
+            if (mc < kc) mc = kc;
+        }
+    }
     while (i < len) {
         if (str[i] == '\0') break;
         if (match_eol(str, i, len, &i)) {
@@ -1324,15 +1334,21 @@ static bool_t stream__write_text(
                         c = str[j];
                         if (!(c >= '0' && c <= '9')) break;
                         k = (c - '0') + 10 * k;
-                        if (k > ncapts) k = ncapts + 1; /* to avoid overflow */
+                        if (k > mc) k = mc + 1; /* to avoid overflow */
                         j++;
                     }
                     if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
-                    if ((j >= len || can_character_follow_identifier_(str[j])) && k <= ncapts) {
-                        stream__puts(obj, VARNAME_CAPTURE_PREFIX);
-                        i++;
-                        while (i < j) stream__putc(obj, str[i++]);
-                        b = TRUE;
+                    if (j >= len || can_character_follow_identifier_(str[j])) {
+                        size_t ic;
+                        for (ic = 0; ic < capts->n; ic++) {
+                            if (k == capts->p[ic]->data.capture.index + 1) break;
+                        }
+                        if (ic < capts->n) {
+                            stream__puts(obj, VARNAME_CAPTURE_PREFIX);
+                            i++;
+                            while (i < j) stream__putc(obj, str[i++]);
+                            b = TRUE;
+                        }
                     }
                 }
                 else if (c == '{') { /* ${...} */
@@ -1475,7 +1491,7 @@ static bool_t stream__write_text(
 
 static bool_t stream__write_code(
     stream_t *obj, const char *str, size_t len, bool_t lhead, size_t dedent, size_t indent,
-    code_block_kind_t kind, size_t ncapts, const string_array_t *mvars, const subst_map_t *subst, bool_t dircpp
+    code_block_kind_t kind, const node_const_array_t *capts, const string_array_t *mvars, const subst_map_t *subst, bool_t dircpp
 ) {
     bool_t b = TRUE; /* TRUE if succeeding leading spaces in a line */
     size_t h = 0;
@@ -1486,7 +1502,7 @@ static bool_t stream__write_code(
         if (!dircpp && b && match_directive_c(str, i, len, &k)) {
             {
                 const size_t j = find_back_preceding_spaces_in_line(str, i);
-                stream__write_text(obj, str + h, j - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+                stream__write_text(obj, str + h, j - h, lhead, dedent, indent, kind, capts, mvars, subst);
             }
             {
                 size_t md = VOID_VALUE; /* the minimum indent length of the successive lines */
@@ -1502,20 +1518,20 @@ static bool_t stream__write_code(
                     }
                 }
                 if (md == VOID_VALUE) md = 0;
-                lhead = stream__write_code(obj, str + i, k - i, FALSE, md, INDENT_UNIT, kind, ncapts, mvars, subst, TRUE);
+                lhead = stream__write_code(obj, str + i, k - i, FALSE, md, INDENT_UNIT, kind, capts, mvars, subst, TRUE);
             }
             h = i = k;
             /* b == TRUE */
         }
         else if (match_comment_cxx(str, i, len, &k)) {
-            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, ncapts, mvars, subst);
+            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, capts, mvars, subst);
             h = i = k;
             b = TRUE;
         }
         else if (match_comment_c(str, i, len, &k)) {
-            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, ncapts, mvars, subst);
+            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, capts, mvars, subst);
             h = i = k;
             /* do not change `b` because a C-style comment is dealt as a white space */
         }
@@ -1523,8 +1539,8 @@ static bool_t stream__write_code(
             match_quotation(str, i, len, '\'', &k) ||
             match_quotation(str, i, len, '\"', &k)
         ) {
-            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, ncapts, mvars, subst);
+            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, capts, mvars, subst);
             h = i = k;
             b = FALSE;
         }
@@ -1538,12 +1554,12 @@ static bool_t stream__write_code(
             }
         }
     }
-    return stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, ncapts, mvars, subst);
+    return stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
 }
 
 static void stream__write_code_block(
     stream_t *obj, const char *str, size_t len, size_t indent, const char *path, size_t lineno,
-    code_block_kind_t kind, size_t ncapts, const string_array_t *mvars, const subst_map_t *subst
+    code_block_kind_t kind, const node_const_array_t *capts, const string_array_t *mvars, const subst_map_t *subst
 ) {
     size_t m = VOID_VALUE; /* the minimum indent length except for the start line of the code block */
     size_t b = TRUE; /* TRUE if the code starts at the first line */
@@ -1584,7 +1600,7 @@ static void stream__write_code_block(
         assert(b || d >= m);
         stream__write_characters(obj, ' ', indent + (b ? 0 : d - m));
     }
-    stream__write_code(obj, str + h, len - h, FALSE, m, indent, kind, ncapts, mvars, subst, FALSE);
+    stream__write_code(obj, str + h, len - h, FALSE, m, indent, kind, capts, mvars, subst, FALSE);
     stream__putc(obj, '\n');
     if (obj->line != VOID_VALUE)
         stream__write_line_directive(obj, obj->path, obj->line + 1);
@@ -1593,7 +1609,7 @@ static void stream__write_code_block(
 static void stream__write_footer(
     stream_t *obj, const char *str, size_t len, const char *path, size_t lineno, const subst_map_t *subst
 ) {
-    stream__write_code_block(obj, str, len, 0, path, lineno, CODE_BLOCK_KIND__NORMAL, 0, NULL, subst);
+    stream__write_code_block(obj, str, len, 0, path, lineno, CODE_BLOCK_KIND__NORMAL, NULL, NULL, subst);
 }
 
 static char *get_home_directory(void) {
@@ -4590,7 +4606,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->eheader.n; i++) {
                 stream__write_code_block(
                     &hstream, ctx->eheader.p[i].text, ctx->eheader.p[i].len, 0,
-                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
+                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4607,7 +4623,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->header.n; i++) {
                 stream__write_code_block(
                     &hstream, ctx->header.p[i].text, ctx->header.p[i].len, 0,
-                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
+                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4619,7 +4635,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->esource.n; i++) {
                 stream__write_code_block(
                     &sstream, ctx->esource.p[i].text, ctx->esource.p[i].len, 0,
-                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
+                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -4667,7 +4683,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->source.n; i++) {
                 stream__write_code_block(
                     &sstream, ctx->source.p[i].text, ctx->source.p[i].len, 0,
-                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, 0, NULL, &(ctx->subst)
+                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -6423,7 +6439,7 @@ static bool_t generate(context_t *ctx) {
                     }
                     stream__write_code_block(
                         &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
-                        CODE_BLOCK_KIND__PROGPRED, c->n, &(ctx->mvars), &(ctx->subst)
+                        CODE_BLOCK_KIND__PROGPRED, c, &(ctx->mvars), &(ctx->subst)
                     );
                     k = c->n;
                     while (k > 0) {
@@ -6537,7 +6553,7 @@ static bool_t generate(context_t *ctx) {
                     }
                     stream__write_code_block(
                         &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
-                        CODE_BLOCK_KIND__ACTION, c->n, &(ctx->mvars), &(ctx->subst)
+                        CODE_BLOCK_KIND__ACTION, c, &(ctx->mvars), &(ctx->subst)
                     );
                     k = c->n;
                     while (k > 0) {

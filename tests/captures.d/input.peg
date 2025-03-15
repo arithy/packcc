@@ -1,5 +1,5 @@
 FILE <- (LINE '\n')*
-LINE <- ALL / FIRST / SECOND / MULTI1 / MULTI2 / MORE / CAPTURED / UNKNOWN
+LINE <- ALL / FIRST / SECOND / MULTI1 / MULTI2 / MORE / CAPTURED / ALTERNATE / UNKNOWN
 
 ALL <- <'capture' _ 'all'> { printf("%d,%d:%s\n", (int)$1s, (int)$1e, $1); }
 FIRST <- <'capture'> _ 'first' { printf("%d,%d:%s\n", (int)$1s, (int)$1e, $1); }
@@ -8,6 +8,16 @@ MULTI1 <- 'capture' _ 'multiple1' (_ <[a-z]+>)+ { printf("%d,%d:%s\n", (int)$1s,
 MULTI2 <- 'capture' _ 'multiple2' (_ <[a-z]+> { printf("%d,%d:%s\n", (int)$1s, (int)$1e, $1); })+
 MORE <- <'more'> _ <'captures'> { printf("%d,%d:%s %d,%d:%s\n", (int)$1s, (int)$1e, $1, (int)$2s, (int)$2e, $2); }
 CAPTURED <- "captured" _ <[a-z]+> _ 'and' _ $1 { printf("%d,%d:%s\n", (int)$1s, (int)$1e, $1); }
+ALTERNATE <- < 'capt1' > / ( < 'capt2' > _ ( < 'capt3' > / < 'capt4' > ) _ < 'capt5' > / < 'capt6' > _ ( < 'capt7' > / < 'capt8' >
+            &{
+                printf("predicate $6 = %d,%d:%s\n", (int)$6s, (int)$6e, $6 ? $6 : "(null)");
+                printf("predicate $8 = %d,%d:%s\n", (int)$8s, (int)$8e, $8 ? $8 : "(null)");
+            }
+            {
+                printf("action $6 = %d,%d:%s\n", (int)$6s, (int)$6e, $6 ? $6 : "(null)");
+                printf("action $8 = %d,%d:%s\n", (int)$8s, (int)$8e, $8 ? $8 : "(null)");
+            }
+        ) _ < 'capt9' > )
 
 UNKNOWN <- [^\n]+ { printf("ERROR: %s\n", $0); }
 _ <- " "

@@ -197,6 +197,16 @@ TEST COMMON @var.restore()        " @var.restore()        " /* @var.restore()   
     TEST PROGPRED5 $123  " $123  " /* $123  */
     TEST PROGPRED6 $123s " $123s " /* $123s */
     TEST PROGPRED7 $123e " $123e " /* $123e */
+    TEST PROGPRED8 pcc_capture__0s:pcc_capture__0e=pcc_capture__0 " $0s:$0e=$0 " /* $0s:$0e=$0 */
+    TEST PROGPRED8 $1s:$1e=$1 " $1s:$1e=$1 " /* $1s:$1e=$1 */
+    TEST PROGPRED8 $2s:$2e=$2 " $2s:$2e=$2 " /* $2s:$2e=$2 */
+    TEST PROGPRED8 $3s:$3e=$3 " $3s:$3e=$3 " /* $3s:$3e=$3 */
+    TEST PROGPRED8 $4s:$4e=$4 " $4s:$4e=$4 " /* $4s:$4e=$4 */
+    TEST PROGPRED8 $5s:$5e=$5 " $5s:$5e=$5 " /* $5s:$5e=$5 */
+    TEST PROGPRED8 pcc_capture__6s:pcc_capture__6e=pcc_capture__6 " $6s:$6e=$6 " /* $6s:$6e=$6 */
+    TEST PROGPRED8 $7s:$7e=$7 " $7s:$7e=$7 " /* $7s:$7e=$7 */
+    TEST PROGPRED8 pcc_capture__8s:pcc_capture__8e=pcc_capture__8 " $8s:$8e=$8 " /* $8s:$8e=$8 */
+    TEST PROGPRED8 $9s:$9e=$9 " $9s:$9e=$9 " /* $9s:$9e=$9 */
     TEST ACTION0 pcc_action_out.        " $$.        " /* $$.        */ // $$.
     TEST ACTION0 $pcc_action_out        " $$$        " /* $$$        */ // $$$
     TEST ACTION0 $pcc_capture__0        " $$0        " /* $$0        */ // $$0
@@ -272,6 +282,16 @@ TEST COMMON @var.restore()        " @var.restore()        " /* @var.restore()   
     TEST ACTION5 $123  " $123  " /* $123  */
     TEST ACTION6 $123s " $123s " /* $123s */
     TEST ACTION7 $123e " $123e " /* $123e */
+    TEST ACTION8 pcc_capture__0s:pcc_capture__0e=pcc_capture__0 " $0s:$0e=$0 " /* $0s:$0e=$0 */
+    TEST ACTION8 $1s:$1e=$1 " $1s:$1e=$1 " /* $1s:$1e=$1 */
+    TEST ACTION8 $2s:$2e=$2 " $2s:$2e=$2 " /* $2s:$2e=$2 */
+    TEST ACTION8 $3s:$3e=$3 " $3s:$3e=$3 " /* $3s:$3e=$3 */
+    TEST ACTION8 $4s:$4e=$4 " $4s:$4e=$4 " /* $4s:$4e=$4 */
+    TEST ACTION8 $5s:$5e=$5 " $5s:$5e=$5 " /* $5s:$5e=$5 */
+    TEST ACTION8 pcc_capture__6s:pcc_capture__6e=pcc_capture__6 " $6s:$6e=$6 " /* $6s:$6e=$6 */
+    TEST ACTION8 $7s:$7e=$7 " $7s:$7e=$7 " /* $7s:$7e=$7 */
+    TEST ACTION8 pcc_capture__8s:pcc_capture__8e=pcc_capture__8 " $8s:$8e=$8 " /* $8s:$8e=$8 */
+    TEST ACTION8 $9s:$9e=$9 " $9s:$9e=$9 " /* $9s:$9e=$9 */
 TEST FOOTER $$         " $$         " /* $$         */ // $$
 TEST FOOTER $0         " $0         " /* $0         */ // $0
 TEST FOOTER $0s        " $0s        " /* $0s        */ // $0s
