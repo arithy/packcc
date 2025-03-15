@@ -6,7 +6,7 @@ In this directory, currently one import file that provides utility codes is stor
 
 ## Import File
 
-### `code/pcc_ast.peg`
+### `code/pcc_ast.peg` (version 2.2.0)
 
 #### Synopsis
 
@@ -81,7 +81,7 @@ The usage procedure is shown below.
        my_ast_node_t *ast = NULL; /* ast: the root node of the AST */
        while (my_parse(ctx, &ast)) {
            /* ... do something needed here */
-           my_ast_node__destroy(ast);
+           my_ast_node__destroy(&mgr, ast);
        }
        my_destroy(ctx);
    }
@@ -134,18 +134,18 @@ The concrete usage procedure is shown below.
    rule1 <- < [0-9]+ > { $$ = my_ast_node__create_0(); $$->custom.text = strdup($1); }
    ```
 3. Implement the initialization and finalization functions for the node custom data.
-   - <code>void <b><i>pcc</i></b>\_ast_node_custom_data__initialize(<b><i>pcc</i></b>\_ast_node_custom_data_t *obj);</code>
+   - <code>void <b><i>pcc</i></b>\_ast_node_custom_data__initialize(<b><i>pcc</i></b>\_ast_manager_t *mgr, <b><i>pcc</i></b>\_ast_node_custom_data_t *obj);</code>
      + Initializes the node custom data `obj`.
-   - <code>void <b><i>pcc</i></b>\_ast_node_custom_data__finalize(<b><i>pcc</i></b>\_ast_node_custom_data_t *obj);</code>
+   - <code>void <b><i>pcc</i></b>\_ast_node_custom_data__finalize(<b><i>pcc</i></b>\_ast_manager_t *mgr, <b><i>pcc</i></b>\_ast_node_custom_data_t *obj);</code>
      + Finalizes the node custom data `obj`.
 
    An example is as follows.
    ```c
-   void my_ast_node_custom_data__initialize(my_ast_node_custom_data_t *obj) {
+   void my_ast_node_custom_data__initialize(my_ast_manager_t *mgr, my_ast_node_custom_data_t *obj) {
        obj->text = NULL;
    }
 
-   void my_ast_node_custom_data__finalize(my_ast_node_custom_data_t *obj) {
+   void my_ast_node_custom_data__finalize(my_ast_manager_t *mgr, my_ast_node_custom_data_t *obj) {
        free(obj->text);
    }
    ```
@@ -247,13 +247,13 @@ EOL    <- '\n' / '\r\n' / '\r' / ';'
 %import "code/pcc_ast.peg"   # <-- provides AST build functions
 
 %%
-void calc_ast_node_custom_data__initialize(calc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__initialize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
     obj->text = NULL;
-}
+} /* <-- must be implemented when enabling node custom data */
 
-void calc_ast_node_custom_data__finalize(calc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__finalize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
     free(obj->text);
-}
+} /* <-- must be implemented when enabling node custom data */
 
 static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
         calc_ast_node_t *ast = NULL;
         while (calc_parse(ctx, &ast)) {
             dump_ast(ast, 0);
-            calc_ast_node__destroy(ast);
+            calc_ast_node__destroy(&mgr, ast);
         }
         calc_destroy(ctx);
     }

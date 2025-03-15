@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Arihiro Yoshida. All rights reserved.
+# Copyright (c) 2024-2025 Arihiro Yoshida. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-# AST utility import file: version 2.1.0
+%common {
+/* Using AST utility import file version 2.2.0 */
+}
 
 %header {
 #ifdef __cplusplus
@@ -106,7 +108,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t 
 ${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ${prefix}_ast_node_t *node0, ${prefix}_ast_node_t *node1, ${prefix}_ast_node_t *node2);
 ${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label);
 ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for a variadic node only */
-void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj);
+void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj);
 
 #ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
 #define ${prefix}_ast_node__get_string(obj) ((const char *)(obj->string))
@@ -115,19 +117,19 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj);
 #endif
 
 #ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
-void ${prefix}_ast_manager_custom_data__initialize(${prefix}_ast_manager_custom_data_t *obj);
-void ${prefix}_ast_manager_custom_data__finalize(${prefix}_ast_manager_custom_data_t *obj);
+void ${prefix}_ast_manager_custom_data__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_manager_custom_data_t *obj);
+void ${prefix}_ast_manager_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_manager_custom_data_t *obj);
 #else
-#define ${prefix}_ast_manager_custom_data__initialize(obj) ((void)0)
-#define ${prefix}_ast_manager_custom_data__finalize(obj) ((void)0)
+#define ${prefix}_ast_manager_custom_data__initialize(mgr, obj) ((void)0)
+#define ${prefix}_ast_manager_custom_data__finalize(mgr, obj) ((void)0)
 #endif
 
 #ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
-void ${prefix}_ast_node_custom_data__initialize(${prefix}_ast_node_custom_data_t *obj);
-void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_node_custom_data_t *obj);
+void ${prefix}_ast_node_custom_data__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_custom_data_t *obj);
+void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_custom_data_t *obj);
 #else
-#define ${prefix}_ast_node_custom_data__initialize(obj) ((void)0)
-#define ${prefix}_ast_node_custom_data__finalize(obj) ((void)0)
+#define ${prefix}_ast_node_custom_data__initialize(mgr, obj) ((void)0)
+#define ${prefix}_ast_node_custom_data__finalize(mgr, obj) ((void)0)
 #endif
 
 #ifdef __cplusplus
@@ -182,14 +184,14 @@ ${prefix}_ast_range_t ${prefix}_ast_range__new(size_t start, size_t end) {
 
 void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj) {
     obj->first = NULL;
-    ${prefix}_ast_manager_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_manager_custom_data__initialize(obj, &(obj->custom));
 }
 
 void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj) {
-    ${prefix}_ast_manager_custom_data__finalize(&(obj->custom));
+    ${prefix}_ast_manager_custom_data__finalize(obj, &(obj->custom));
     while (obj->first) {
         assert(obj->first->manager == obj);
-        ${prefix}_ast_node__destroy(obj->first);
+        ${prefix}_ast_node__destroy(obj, obj->first);
     }
 }
 
@@ -214,7 +216,7 @@ void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix
 void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
     while (obj->len > 0) {
         obj->len--;
-        ${prefix}_ast_node__destroy(obj->node[obj->len]);
+        ${prefix}_ast_node__destroy(mgr, obj->node[obj->len]);
     }
     PCC_AST_FREE(mgr, obj->node);
 }
@@ -314,7 +316,7 @@ static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t
 ${prefix}_ast_node_t *${prefix}_ast_node__create_nullary(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label) {
     ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_NULLARY;
-    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
     return obj;
 }
 
@@ -334,7 +336,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_unary(${prefix}_ast_manager_t *
         ${prefix}_ast_node__unlink_parent_(node);
         node->parent = obj;
     }
-    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
     return obj;
 }
 
@@ -353,7 +355,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_binary(${prefix}_ast_manager_t 
             }
         }
     }
-    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
     return obj;
 }
 
@@ -373,7 +375,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_ternary(${prefix}_ast_manager_t
             }
         }
     }
-    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
     return obj;
 }
 
@@ -381,7 +383,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_
     ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
     obj->type = ${PREFIX}_AST_NODE_TYPE_VARIADIC;
     ${prefix}_ast_node_array__initialize(mgr, &(obj->data.variadic));
-    ${prefix}_ast_node_custom_data__initialize(&(obj->custom));
+    ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
     return obj;
 }
 
@@ -399,9 +401,9 @@ ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, $
     return obj;
 }
 
-void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
+void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj) {
     if (obj) {
-        ${prefix}_ast_node_custom_data__finalize(&(obj->custom));
+        ${prefix}_ast_node_custom_data__finalize(mgr, &(obj->custom));
 #ifndef ${PREFIX}_AST_NODE_STRING_CAPTURING_DISABLED
         PCC_AST_FREE(obj->manager, obj->string);
 #endif
@@ -414,7 +416,7 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
                 if (node) {
                     assert(node->parent == obj);
                     node->parent = NULL;
-                    ${prefix}_ast_node__destroy(node);
+                    ${prefix}_ast_node__destroy(mgr, node);
                 }
             }
             break;
@@ -426,7 +428,7 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
                     if (node) {
                         assert(node->parent == obj);
                         node->parent = NULL;
-                        ${prefix}_ast_node__destroy(node);
+                        ${prefix}_ast_node__destroy(mgr, node);
                     }
                 }
             }
@@ -439,7 +441,7 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
                     if (node) {
                         assert(node->parent == obj);
                         node->parent = NULL;
-                        ${prefix}_ast_node__destroy(node);
+                        ${prefix}_ast_node__destroy(mgr, node);
                     }
                 }
             }
@@ -451,7 +453,7 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_node_t *obj) {
                 if (node) {
                     assert(node->parent == obj);
                     node->parent = NULL;
-                    ${prefix}_ast_node__destroy(node);
+                    ${prefix}_ast_node__destroy(mgr, node);
                     obj->data.variadic.node[i] = NULL;
                 }
             }

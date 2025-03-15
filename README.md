@@ -1052,13 +1052,13 @@ EOL    <- '\n' / '\r\n' / '\r' / ';'
 %import "code/pcc_ast.peg"   # <-- provides AST build functions
 
 %%
-void calc_ast_node_custom_data__initialize(calc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__initialize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
     obj->text = NULL;
-}
+} /* <-- must be implemented when enabling node custom data */
 
-void calc_ast_node_custom_data__finalize(calc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__finalize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
     free(obj->text);
-}
+} /* <-- must be implemented when enabling node custom data */
 
 static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
@@ -1108,7 +1108,7 @@ int main(int argc, char **argv) {
         calc_ast_node_t *ast = NULL;
         while (calc_parse(ctx, &ast)) {
             dump_ast(ast, 0);
-            calc_ast_node__destroy(ast);
+            calc_ast_node__destroy(&mgr, ast);
         }
         calc_destroy(ctx);
     }
