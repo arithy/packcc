@@ -19,7 +19,7 @@
 # THE SOFTWARE.
 
 %common {
-/* Using AST utility import file version 2.3.0 */
+/* Using AST utility import file version 2.3.1 (deprecated) */
 }
 
 %header {
@@ -115,15 +115,15 @@ ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, $
 void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj);
 
 #ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
-#define ${prefix}_ast_node__get_integer(obj) (obj->integer)
+#define ${prefix}_ast_node__get_integer(obj) ((const ptrdiff_t)(obj->integer))
 #else
 #define ${prefix}_ast_node__get_integer(obj) 0
 #endif
 
 #ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
-#define ${prefix}_ast_node__get_string(obj) ((const char *)(obj->string))
+#define ${prefix}_ast_node__get_string(obj) ((const char *const)(obj->string))
 #else
-#define ${prefix}_ast_node__get_string(obj) ((const char *)NULL)
+#define ${prefix}_ast_node__get_string(obj) ((const char *const)NULL)
 #endif
 
 #ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
@@ -256,7 +256,7 @@ static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
             if (obj->parent->data.unary.node == obj)
                 obj->parent->data.unary.node = NULL;
             else
-                assert(((void)"parent node with no backward link", 0));
+                assert(((void)"Parent node with no backward link", 0));
             break;
         case ${PREFIX}_AST_NODE_TYPE_BINARY:
             {
@@ -267,7 +267,7 @@ static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
                 if (i < 2)
                     obj->parent->data.binary.node[i] = NULL;
                 else
-                    assert(((void)"parent node with no backward link", 0));
+                    assert(((void)"Parent node with no backward link", 0));
             }
             break;
         case ${PREFIX}_AST_NODE_TYPE_TERNARY:
@@ -279,7 +279,7 @@ static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
                 if (i < 3)
                     obj->parent->data.ternary.node[i] = NULL;
                 else
-                    assert(((void)"parent node with no backward link", 0));
+                    assert(((void)"Parent node with no backward link", 0));
             }
             break;
         case ${PREFIX}_AST_NODE_TYPE_VARIADIC:
@@ -292,7 +292,7 @@ static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
                 if (i < n)
                     obj->parent->data.variadic.node[i] = NULL;
                 else
-                    assert(((void)"parent node with no backward link", 0));
+                    assert(((void)"Parent node with no backward link", 0));
             }
             break;
         default:
@@ -419,7 +419,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, $
         }
     }
     else {
-        assert(((void)"Attempted to add node to non-variadic node", obj->next->prev == NULL));
+        assert(((void)"Attempted to add node to non-variadic node", 0));
     }
     return obj;
 }
