@@ -1,0 +1,456 @@
+# Copyright (c) 2024-2025 Arihiro Yoshida. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+%common {
+/* Using AST utility import file version 3.0.0 */
+}
+
+%header {
+#ifndef ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY
+#define ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY 3
+#endif
+#if !(${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY >= 0)
+#error "${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY must be greater than or equal to 0"
+#endif
+#if !(${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY <= 9)
+#error "${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY must be less than or equal to 9"
+#endif
+
+#define ${PREFIX}_AST_NODE_VARIADIC_ARITY (~(size_t)0)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef size_t ${prefix}_ast_node_arity_t;
+
+typedef struct ${prefix}_ast_manager_tag ${prefix}_ast_manager_t;
+typedef struct ${prefix}_ast_node_tag ${prefix}_ast_node_t;
+
+typedef struct ${prefix}_ast_range_tag {
+    size_t start, end;
+} ${prefix}_ast_range_t;
+
+typedef struct ${prefix}_ast_node_tuple_tag {
+    ${prefix}_ast_node_t *node[${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY];
+} ${prefix}_ast_node_tuple_t;
+
+typedef struct ${prefix}_ast_node_array_tag {
+    ${prefix}_ast_node_t **node;
+    size_t max, len;
+} ${prefix}_ast_node_array_t;
+
+typedef union ${prefix}_ast_node_data_tag {
+    ${prefix}_ast_node_tuple_t constant;
+    ${prefix}_ast_node_array_t variadic;
+} ${prefix}_ast_node_data_t;
+
+struct ${prefix}_ast_node_tag {
+    ${prefix}_ast_manager_t *manager;
+    ${prefix}_ast_node_t *next; /* the next element in the doubly linked list of managed nodes */
+    ${prefix}_ast_node_t *prev; /* the previous element in the doubly linked list of managed nodes */
+    ${prefix}_ast_node_t *parent;
+    ${prefix}_ast_node_arity_t arity;
+    ${prefix}_ast_node_data_t data;
+    ${prefix}_ast_range_t range;
+    int label;
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+    ptrdiff_t integer;
+#endif
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
+    char *string;
+#endif
+#ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
+    ${prefix}_ast_node_custom_data_t custom;
+#endif
+};
+
+struct ${prefix}_ast_manager_tag {
+    ${prefix}_ast_node_t *first; /* the first element in the doubly linked list of managed nodes */
+#ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
+    ${prefix}_ast_manager_custom_data_t custom;
+#endif
+};
+
+${prefix}_ast_range_t ${prefix}_ast_range__new(size_t start, size_t end);
+
+void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj);
+void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj);
+
+char *${prefix}_ast__strdup(${prefix}_ast_manager_t *mgr, const char *str);
+
+void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
+void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
+void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node);
+
+${prefix}_ast_node_t *${prefix}_ast_node__create_constant(${prefix}_ast_manager_t *mgr, size_t arity, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string, ...);
+${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string);
+${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for a variadic node only */
+void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj);
+
+#ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
+void ${prefix}_ast_manager_custom_data__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_manager_custom_data_t *obj);
+void ${prefix}_ast_manager_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_manager_custom_data_t *obj);
+#else
+#define ${prefix}_ast_manager_custom_data__initialize(mgr, obj) ((void)0)
+#define ${prefix}_ast_manager_custom_data__finalize(mgr, obj) ((void)0)
+#endif
+
+#ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
+void ${prefix}_ast_node_custom_data__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_custom_data_t *obj);
+void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_custom_data_t *obj);
+#else
+#define ${prefix}_ast_node_custom_data__initialize(mgr, obj) ((void)0)
+#define ${prefix}_ast_node_custom_data__finalize(mgr, obj) ((void)0)
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#define ${prefix}_ast_node__is_variadic(obj) (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY)
+#define ${prefix}_ast_node__get_child_count(obj) ((const size_t)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.len : obj->arity))
+#define ${prefix}_ast_node__get_child_array(obj) ((${prefix}_ast_node_t *const *const)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.node : obj->data.constant.node))
+#define ${prefix}_ast_node__get_range(obj) ((const ${prefix}_ast_range_t)obj->range)
+
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+#define ${prefix}_ast_node__get_int(obj) ((const ptrdiff_t)(obj->integer))
+#else
+#define ${prefix}_ast_node__get_int(obj) 0
+#endif
+
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
+#define ${prefix}_ast_node__get_str(obj) ((const char *const)(obj->string))
+#else
+#define ${prefix}_ast_node__get_str(obj) ((const char *const)NULL)
+#endif
+
+#ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
+#define ${prefix}_ast_manager__get_custom_data(obj) (&(obj->custom))
+#endif
+
+#ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
+#define ${prefix}_ast_node__get_custom_data(obj) (&(obj->custom))
+#endif
+}
+
+%source {
+#define ${prefix}_ast__matched_range() ${prefix}_ast_range__new(pcc_capture__0s, pcc_capture__0e)
+
+#define ${prefix}_ast_node__create_0() \
+    ${prefix}_ast_node__create_constant(auxil, 0, ${prefix}_ast__matched_range(), 0, 0, NULL)
+#define ${prefix}_ast_node__create_0_int(val) \
+    ${prefix}_ast_node__create_constant(auxil, 0, ${prefix}_ast__matched_range(), 0, val, NULL)
+#define ${prefix}_ast_node__create_0_str(str) \
+    ${prefix}_ast_node__create_constant(auxil, 0, ${prefix}_ast__matched_range(), 0, 0, str)
+#define ${prefix}_ast_node__create_1(node0) \
+    ${prefix}_ast_node__create_constant(auxil, 1, ${prefix}_ast__matched_range(), 0, 0, NULL, node0)
+#define ${prefix}_ast_node__create_2(node0, node1) \
+    ${prefix}_ast_node__create_constant(auxil, 2, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1)
+#define ${prefix}_ast_node__create_3(node0, node1, node2) \
+    ${prefix}_ast_node__create_constant(auxil, 3, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2)
+#define ${prefix}_ast_node__create_4(node0, node1, node2, node3) \
+    ${prefix}_ast_node__create_constant(auxil, 4, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2, node3)
+#define ${prefix}_ast_node__create_5(node0, node1, node2, node3, node4) \
+    ${prefix}_ast_node__create_constant(auxil, 5, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2, node3, node4)
+#define ${prefix}_ast_node__create_6(node0, node1, node2, node3, node4, node5) \
+    ${prefix}_ast_node__create_constant(auxil, 6, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2, node3, node4, node5)
+#define ${prefix}_ast_node__create_7(node0, node1, node2, node3, node4, node5, node6) \
+    ${prefix}_ast_node__create_constant(auxil, 7, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2, node3, node4, node5, node6)
+#define ${prefix}_ast_node__create_8(node0, node1, node2, node3, node4, node5, node6, node7) \
+    ${prefix}_ast_node__create_constant(auxil, 8, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2, node3, node4, node5, node6, node7)
+#define ${prefix}_ast_node__create_9(node0, node1, node2, node3, node4, node5, node6, node7, node8) \
+    ${prefix}_ast_node__create_constant(auxil, 9, ${prefix}_ast__matched_range(), 0, 0, NULL, node0, node1, node2, node3, node4, node5, node6, node7, node8)
+#define ${prefix}_ast_node__create_v() \
+    ${prefix}_ast_node__create_variadic(auxil, ${prefix}_ast__matched_range(), 0, 0, NULL)
+
+#define ${prefix}_ast_node__create_0_ext(label) \
+    ${prefix}_ast_node__create_constant(auxil, 0, ${prefix}_ast__matched_range(), label, 0, NULL)
+#define ${prefix}_ast_node__create_0_ext_int(label, val) \
+    ${prefix}_ast_node__create_constant(auxil, 0, ${prefix}_ast__matched_range(), label, val, NULL)
+#define ${prefix}_ast_node__create_0_ext_str(label, str) \
+    ${prefix}_ast_node__create_constant(auxil, 0, ${prefix}_ast__matched_range(), label, 0, str)
+#define ${prefix}_ast_node__create_1_ext(label, node0) \
+    ${prefix}_ast_node__create_constant(auxil, 1, ${prefix}_ast__matched_range(), label, 0, NULL, node0)
+#define ${prefix}_ast_node__create_2_ext(label, node0, node1) \
+    ${prefix}_ast_node__create_constant(auxil, 2, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1)
+#define ${prefix}_ast_node__create_3_ext(label, node0, node1, node2) \
+    ${prefix}_ast_node__create_constant(auxil, 3, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2)
+#define ${prefix}_ast_node__create_4_ext(label, node0, node1, node2, node3) \
+    ${prefix}_ast_node__create_constant(auxil, 4, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2, node3)
+#define ${prefix}_ast_node__create_5_ext(label, node0, node1, node2, node3, node4) \
+    ${prefix}_ast_node__create_constant(auxil, 5, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2, node3, node4)
+#define ${prefix}_ast_node__create_6_ext(label, node0, node1, node2, node3, node4, node5) \
+    ${prefix}_ast_node__create_constant(auxil, 6, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2, node3, node4, node5)
+#define ${prefix}_ast_node__create_7_ext(label, node0, node1, node2, node3, node4, node5, node6) \
+    ${prefix}_ast_node__create_constant(auxil, 7, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2, node3, node4, node5, node6)
+#define ${prefix}_ast_node__create_8_ext(label, node0, node1, node2, node3, node4, node5, node6, node7) \
+    ${prefix}_ast_node__create_constant(auxil, 8, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2, node3, node4, node5, node6, node7)
+#define ${prefix}_ast_node__create_9_ext(label, node0, node1, node2, node3, node4, node5, node6, node7, node8) \
+    ${prefix}_ast_node__create_constant(auxil, 9, ${prefix}_ast__matched_range(), label, 0, NULL, node0, node1, node2, node3, node4, node5, node6, node7, node8)
+#define ${prefix}_ast_node__create_v_ext(label) \
+    ${prefix}_ast_node__create_variadic(auxil, ${prefix}_ast__matched_range(), label, 0, NULL)
+}
+
+%%
+#include <string.h>
+#include <stdarg.h>
+#include <assert.h>
+
+#ifndef PCC_AST_NODE_ARRAY_MIN_SIZE
+#define PCC_AST_NODE_ARRAY_MIN_SIZE 4
+#endif
+
+#ifndef PCC_AST_MALLOC
+#define PCC_AST_MALLOC(mgr, size) PCC_MALLOC(mgr, size)
+#endif
+
+#ifndef PCC_AST_REALLOC
+#define PCC_AST_REALLOC(mgr, ptr, size) PCC_REALLOC(mgr, ptr, size)
+#endif
+
+#ifndef PCC_AST_FREE
+#define PCC_AST_FREE(mgr, ptr) PCC_FREE(mgr, ptr)
+#endif
+
+${prefix}_ast_range_t ${prefix}_ast_range__new(size_t start, size_t end) {
+    ${prefix}_ast_range_t obj;
+    obj.start = start;
+    obj.end = end;
+    return obj;
+}
+
+void ${prefix}_ast_manager__initialize(${prefix}_ast_manager_t *obj) {
+    obj->first = NULL;
+    ${prefix}_ast_manager_custom_data__initialize(obj, &(obj->custom));
+}
+
+void ${prefix}_ast_manager__finalize(${prefix}_ast_manager_t *obj) {
+    ${prefix}_ast_manager_custom_data__finalize(obj, &(obj->custom));
+    while (obj->first) {
+        assert(obj->first->manager == obj);
+        ${prefix}_ast_node__destroy(obj, obj->first);
+    }
+}
+
+char *${prefix}_ast__strdup(${prefix}_ast_manager_t *mgr, const char *str) {
+    if (str) {
+        const size_t l = strlen(str) + 1;
+        char *const p = (char *)PCC_AST_MALLOC(mgr, l);
+        memcpy(p, str, l);
+        return p;
+    }
+    else {
+        return NULL;
+    }
+}
+
+void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
+    obj->len = 0;
+    obj->max = 0;
+    obj->node = NULL;
+}
+
+void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
+    while (obj->len > 0) {
+        obj->len--;
+        ${prefix}_ast_node__destroy(mgr, obj->node[obj->len]);
+    }
+    PCC_AST_FREE(mgr, obj->node);
+}
+
+void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node) {
+    if (obj->max <= obj->len) {
+        const size_t n = obj->len + 1;
+        size_t m = obj->max;
+        if (m == 0) m = PCC_AST_NODE_ARRAY_MIN_SIZE;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n;
+        obj->node = (${prefix}_ast_node_t **)PCC_AST_REALLOC(mgr, obj->node, sizeof(${prefix}_ast_node_t *) * m);
+        obj->max = m;
+    }
+    obj->node[obj->len++] = node;
+}
+
+static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
+    if (obj->parent) {
+        if (obj->parent->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
+            const size_t n = obj->parent->data.variadic.len;
+            size_t i;
+            for (i = 0; i < n; i++) {
+                if (obj->parent->data.variadic.node[i] == obj) break;
+            }
+            if (i < n)
+                obj->parent->data.variadic.node[i] = NULL;
+            else
+                assert(((void)"Parent node with no backward link", 0));
+        }
+        else if (obj->parent->arity > 0 && obj->parent->arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) { /* arity != 0 */
+            const size_t n = obj->parent->arity;
+            size_t i;
+            for (i = 0; i < n; i++) {
+                if (obj->parent->data.constant.node[i] == obj) break;
+            }
+            if (i < n)
+                obj->parent->data.constant.node[i] = NULL;
+            else
+                assert(((void)"Parent node with no backward link", 0));
+        }
+        else {
+            assert(((void)"Parent node with invalid arity", 0));
+        }
+        obj->parent = NULL;
+    }
+}
+
+static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label) {
+    ${prefix}_ast_node_t *const obj = (${prefix}_ast_node_t *)PCC_AST_MALLOC(mgr, sizeof(${prefix}_ast_node_t));
+    obj->manager = mgr;
+    if (mgr->first) {
+        obj->next = mgr->first;
+        assert(((void)"Inconsistency in the doubly linked list of managed nodes", obj->next->prev == NULL));
+        obj->next->prev = obj;
+    }
+    else {
+        obj->next = NULL;
+    }
+    obj->prev = NULL;
+    mgr->first = obj;
+    obj->parent = NULL;
+    obj->range = range;
+    obj->label = label;
+    return obj;
+}
+
+${prefix}_ast_node_t *${prefix}_ast_node__create_constant(
+    ${prefix}_ast_manager_t *mgr, size_t arity, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string, ...
+) {
+    if (arity >= 0 && arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) {
+        ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
+        obj->arity = arity;
+        {
+            size_t i;
+            va_list ap;
+            va_start(ap, string);
+            for (i = 0; i < arity; i++) {
+                ${prefix}_ast_node_t *const node = va_arg(ap, ${prefix}_ast_node_t *);
+                if (node) {
+                    ${prefix}_ast_node__unlink_parent_(node);
+                    node->parent = obj;
+                }
+                obj->data.constant.node[i] = node;
+            }
+            va_end(ap);
+        }
+        ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+        obj->integer = integer;
+#endif
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
+        obj->string = ${prefix}_ast__strdup(mgr, string);
+#endif
+        return obj;
+    }
+    else {
+        assert(((void)"Attempted to create a node with invalid arity", 0));
+        return NULL;
+    }
+}
+
+${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(
+    ${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string
+) {
+    ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
+    obj->arity = ${PREFIX}_AST_NODE_VARIADIC_ARITY;
+    ${prefix}_ast_node_array__initialize(mgr, &(obj->data.variadic));
+    ${prefix}_ast_node_custom_data__initialize(mgr, &(obj->custom));
+#ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
+    obj->integer = integer;
+#endif
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
+    obj->string = ${prefix}_ast__strdup(mgr, string);
+#endif
+    return obj;
+}
+
+${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node) {
+    if (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
+        ${prefix}_ast_node_array__add(obj->manager, &(obj->data.variadic), node);
+        if (node) {
+            ${prefix}_ast_node__unlink_parent_(node);
+            node->parent = obj;
+        }
+    }
+    else {
+        assert(((void)"Attempted to add node to non-variadic node", 0));
+    }
+    return obj;
+}
+
+void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj) {
+    if (obj) {
+        ${prefix}_ast_node_custom_data__finalize(mgr, &(obj->custom));
+#ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
+        PCC_AST_FREE(obj->manager, obj->string);
+#endif
+        if (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
+            while (obj->data.variadic.len > 0) {
+                const size_t i = --obj->data.variadic.len;
+                ${prefix}_ast_node_t *const node = obj->data.variadic.node[i];
+                if (node) {
+                    assert(node->parent == obj);
+                    node->parent = NULL;
+                    ${prefix}_ast_node__destroy(mgr, node);
+                    obj->data.variadic.node[i] = NULL;
+                }
+            }
+            ${prefix}_ast_node_array__finalize(obj->manager, &(obj->data.variadic));
+        }
+        else if (obj->arity >= 0 && obj->arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) {
+            const size_t n = obj->arity;
+            size_t i;
+            for (i = 0; i < n; i++) {
+                ${prefix}_ast_node_t *const node = obj->data.constant.node[i];
+                if (node) {
+                    assert(node->parent == obj);
+                    node->parent = NULL;
+                    ${prefix}_ast_node__destroy(mgr, node);
+                }
+            }
+        }
+        else {
+            assert(((void)"Parent node with invalid arity", 0));
+        }
+        ${prefix}_ast_node__unlink_parent_(obj);
+        if (obj->prev) {
+            assert(obj->prev->next == obj);
+            obj->prev->next = obj->next;
+        }
+        else {
+            assert(obj->manager->first == obj);
+            obj->manager->first = obj->next;
+        }
+        if (obj->next) {
+            assert(obj->next->prev == obj);
+            obj->next->prev = obj->prev;
+        }
+        PCC_AST_FREE(obj->manager, obj);
+    }
+}

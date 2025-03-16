@@ -1,0 +1,107 @@
+# This code is hereby placed in the public domain.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHORS ''AS IS'' AND ANY EXPRESS
+# OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+# BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+# OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+# EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+%prefix "calc"
+
+%value "calc_ast_node_t *"    # <-- must be set
+
+%auxil "calc_ast_manager_t *" # <-- must be set
+
+%header {
+#define CALC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
+
+typedef struct text_data_tag { /* <-- node custom data type */
+    char *text;
+} calc_ast_node_custom_data_t;
+}
+
+%source {
+#include <stdio.h>
+#include <string.h>
+}
+
+statement <- _ e:expression _ EOL { $$ = e; }
+           / ( !EOL . )* EOL      { $$ = NULL; }
+
+expression <- e:term { $$ = e; }
+
+term <- l:term _ '+' _ r:factor { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("+"); }
+      / l:term _ '-' _ r:factor { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("-"); }
+      / e:factor                { $$ = e; }
+
+factor <- l:factor _ '*' _ r:unary { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("*"); }
+        / l:factor _ '/' _ r:unary { $$ = calc_ast_node__create_2(l, r); $$->custom.text = strdup("/"); }
+        / e:unary                  { $$ = e; }
+
+unary <- '+' _ e:unary { $$ = calc_ast_node__create_1(e); $$->custom.text = strdup("+"); }
+       / '-' _ e:unary { $$ = calc_ast_node__create_1(e); $$->custom.text = strdup("-"); }
+       / e:primary     { $$ = e; }
+
+primary <- < [0-9]+ >               { $$ = calc_ast_node__create_0(); $$->custom.text = strdup($1); }
+         / '(' _ e:expression _ ')' { $$ = e; }
+
+_      <- [ \t]*
+EOL    <- '\n' / '\r\n' / '\r' / ';'
+
+%import "code/pcc_ast.v3.peg"   # <-- provides AST build functions
+
+%%
+void calc_ast_node_custom_data__initialize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
+    obj->text = NULL;
+} /* <-- must be implemented when enabling node custom data */
+
+void calc_ast_node_custom_data__finalize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
+    free(obj->text);
+} /* <-- must be implemented when enabling node custom data */
+
+static void dump_ast(const calc_ast_node_t *obj, int depth) {
+    if (obj) {
+        const size_t n = calc_ast_node__get_child_count(obj);
+        const calc_ast_node_t *const *const p = calc_ast_node__get_child_array(obj);
+        const calc_ast_node_custom_data_t *const d = &(obj->custom);
+        const int b = calc_ast_node__is_variadic(obj);
+        if (b || n <= 3) {
+            static const char *const arity_name[] = { "nullary", "unary", "binary", "ternary" };
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", b ? "variadic" : arity_name[n], d->text);
+            {
+                size_t i;
+                for (i = 0; i < n; i++) {
+                    dump_ast(p[i], depth + 1);
+                }
+            }
+        }
+        else {
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "(unknown)", d->text);
+        }
+    }
+    else {
+        printf("%*s(null)\n", 2 * depth, "");
+    }
+}
+
+int main(int argc, char **argv) {
+    calc_ast_manager_t mgr;
+    calc_ast_manager__initialize(&mgr);
+    {
+        calc_context_t *ctx = calc_create(&mgr);
+        calc_ast_node_t *ast = NULL;
+        while (calc_parse(ctx, &ast)) {
+            dump_ast(ast, 0);
+            calc_ast_node__destroy(&mgr, ast);
+        }
+        calc_destroy(ctx);
+    }
+    calc_ast_manager__finalize(&mgr);
+    return 0;
+}
