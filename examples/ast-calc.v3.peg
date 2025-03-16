@@ -54,7 +54,7 @@ primary <- < [0-9]+ >               { $$ = calc_ast_node__create_0(); $$->custom
 _      <- [ \t]*
 EOL    <- '\n' / '\r\n' / '\r' / ';'
 
-%import "code/pcc_ast.peg"   # <-- provides AST build functions
+%import "code/pcc_ast.v3.peg"   # <-- provides AST build functions
 
 %%
 void calc_ast_node_custom_data__initialize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
@@ -67,37 +67,22 @@ void calc_ast_node_custom_data__finalize(calc_ast_manager_t *mgr, calc_ast_node_
 
 static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
-        switch (obj->type) {
-        case CALC_AST_NODE_TYPE_NULLARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "nullary", obj->custom.text);
-            break;
-        case CALC_AST_NODE_TYPE_UNARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "unary", obj->custom.text);
-            dump_ast(obj->data.unary.node, depth + 1);
-            break;
-        case CALC_AST_NODE_TYPE_BINARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "binary", obj->custom.text);
-            dump_ast(obj->data.binary.node[0], depth + 1);
-            dump_ast(obj->data.binary.node[1], depth + 1);
-            break;
-        case CALC_AST_NODE_TYPE_TERNARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "ternary", obj->custom.text);
-            dump_ast(obj->data.ternary.node[0], depth + 1);
-            dump_ast(obj->data.ternary.node[1], depth + 1);
-            dump_ast(obj->data.ternary.node[2], depth + 1);
-            break;
-        case CALC_AST_NODE_TYPE_VARIADIC:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "variadic", obj->custom.text);
+        const size_t n = calc_ast_node__get_child_count(obj);
+        const calc_ast_node_t *const *const p = calc_ast_node__get_child_array(obj);
+        const calc_ast_node_custom_data_t *const d = &(obj->custom);
+        const int b = calc_ast_node__is_variadic(obj);
+        if (b || n <= 3) {
+            static const char *const arity_name[] = { "nullary", "unary", "binary", "ternary" };
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", b ? "variadic" : arity_name[n], d->text);
             {
                 size_t i;
-                for (i = 0; i < obj->data.variadic.len; i++) {
-                    dump_ast(obj->data.variadic.node[i], depth + 1);
+                for (i = 0; i < n; i++) {
+                    dump_ast(p[i], depth + 1);
                 }
             }
-            break;
-        default:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "(unknown)", obj->custom.text);
-            break;
+        }
+        else {
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "(unknown)", d->text);
         }
     }
     else {

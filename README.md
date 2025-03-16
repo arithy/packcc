@@ -725,7 +725,7 @@ The following import files are currently bundled.
   - [`char/unicode_derived_core.peg`](import/char/unicode_derived_core.peg) :
     This provides various rules to match a Unicode character belonging to a specific [derived core property](https://www.unicode.org/reports/tr44/#DerivedCoreProperties.txt).
 - **Utility Codes**
-  - [`code/pcc_ast.peg`](import/code/pcc_ast.peg) :
+  - [`code/pcc_ast.v3.peg`](import/code/pcc_ast.v3.peg) :
     This provides codes to make it easier to build an AST (abstract syntax tree).
 
 For details, see [here](import).
@@ -1049,50 +1049,35 @@ primary <- < [0-9]+ >               { $$ = calc_ast_node__create_0(); $$->custom
 _      <- [ \t]*
 EOL    <- '\n' / '\r\n' / '\r' / ';'
 
-%import "code/pcc_ast.peg"   # <-- provides AST build functions
+%import "code/pcc_ast.v3.peg"   # <-- provides AST build functions
 
 %%
-void calc_ast_node_custom_data__initialize(calc_ast_node_custom_data_t *obj) { /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__initialize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
     obj->text = NULL;
-}
+} /* <-- must be implemented when enabling node custom data */
 
-void calc_ast_node_custom_data__finalize(calc_ast_node_custom_data_t *obj) {   /* <-- must be implemented when enabling node custom data */
+void calc_ast_node_custom_data__finalize(calc_ast_manager_t *mgr, calc_ast_node_custom_data_t *obj) {
     free(obj->text);
-}
+} /* <-- must be implemented when enabling node custom data */
 
 static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
-        switch (obj->type) {
-        case CALC_AST_NODE_TYPE_NULLARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "nullary", obj->custom.text);
-            break;
-        case CALC_AST_NODE_TYPE_UNARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "unary", obj->custom.text);
-            dump_ast(obj->data.unary.node, depth + 1);
-            break;
-        case CALC_AST_NODE_TYPE_BINARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "binary", obj->custom.text);
-            dump_ast(obj->data.binary.node[0], depth + 1);
-            dump_ast(obj->data.binary.node[1], depth + 1);
-            break;
-        case CALC_AST_NODE_TYPE_TERNARY:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "ternary", obj->custom.text);
-            dump_ast(obj->data.ternary.node[0], depth + 1);
-            dump_ast(obj->data.ternary.node[1], depth + 1);
-            dump_ast(obj->data.ternary.node[2], depth + 1);
-            break;
-        case CALC_AST_NODE_TYPE_VARIADIC:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "variadic", obj->custom.text);
+        const size_t n = calc_ast_node__get_child_count(obj);
+        const calc_ast_node_t *const *const p = calc_ast_node__get_child_array(obj);
+        const calc_ast_node_custom_data_t *const d = &(obj->custom);
+        const int b = calc_ast_node__is_variadic(obj);
+        if (b || n <= 3) {
+            static const char *const arity_name[] = { "nullary", "unary", "binary", "ternary" };
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", b ? "variadic" : arity_name[n], d->text);
             {
                 size_t i;
-                for (i = 0; i < obj->data.variadic.len; i++) {
-                    dump_ast(obj->data.variadic.node[i], depth + 1);
+                for (i = 0; i < n; i++) {
+                    dump_ast(p[i], depth + 1);
                 }
             }
-            break;
-        default:
-            printf("%*s%s: \"%s\"\n", 2 * depth, "", "(unknown)", obj->custom.text);
-            break;
+        }
+        else {
+            printf("%*s%s: \"%s\"\n", 2 * depth, "", "(unknown)", d->text);
         }
     }
     else {
@@ -1108,7 +1093,7 @@ int main(int argc, char **argv) {
         calc_ast_node_t *ast = NULL;
         while (calc_parse(ctx, &ast)) {
             dump_ast(ast, 0);
-            calc_ast_node__destroy(ast);
+            calc_ast_node__destroy(&mgr, ast);
         }
         calc_destroy(ctx);
     }
@@ -1117,9 +1102,9 @@ int main(int argc, char **argv) {
 }
 ```
 
-The key point is the line `%import "code/pcc_ast.peg"`.
-The import file [`code/pcc_ast.peg`](import/code) makes it easier to build ASTs.
-For more details, see [here](import/code/README.md).
+The key point is the line `%import "code/pcc_ast.v3.peg"`.
+The import file [`code/pcc_ast.v3.peg`](import/code) makes it easier to build ASTs.
+For more details, see [here](import/code/pcc_ast.v3.md).
 
 An execution example is as follows.
 
