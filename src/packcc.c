@@ -262,11 +262,11 @@ typedef struct node_reference_tag {
 } node_reference_t;
 
 typedef struct node_string_tag {
-    char *value;
+    char_array_t value; /* can contain null characters */
 } node_string_t;
 
 typedef struct node_charclass_tag {
-    char *value; /* NULL means any character */
+    char_array_t value; /* can contain null characters; value.n == 0 means any character */
 } node_charclass_t;
 
 typedef struct node_position_tag {
@@ -678,10 +678,10 @@ static bool_t is_pointer_type(const char *str) {
     return (n > 0 && str[n - 1] == '*') ? TRUE : FALSE;
 }
 
-static bool_t is_valid_utf8_string(const char *str) {
+static bool_t is_valid_utf8_string(const char *str, size_t len) {
     int k = 1, n = 0, u = 0;
     size_t i;
-    for (i = 0; str[i]; i++) {
+    for (i = 0; (len == VOID_VALUE) ? (str[i] != '\0') : (i < len); i++) {
         const int c = (int)(unsigned char)str[i];
         switch (k) {
         case 1:
@@ -765,14 +765,13 @@ static size_t utf8_to_utf32(const char *seq, int *out) { /* with checking UTF-8 
     return n;
 }
 
-static bool_t unescape_string(char *str, bool_t cls) { /* cls: TRUE if used for character class matching */
+static bool_t unescape_string(char *str, size_t *len, bool_t cls) { /* cls: TRUE if used for character class matching */
     bool_t b = TRUE;
     size_t i, j;
-    for (j = 0, i = 0; str[i]; i++) {
+    for (j = 0, i = 0; len ? (i < *len) : (str[i] != '\0'); i++) {
         if (str[i] == '\\') {
             i++;
             switch (str[i]) {
-            case '\0': str[j++] = '\\'; str[j] = '\0'; return FALSE;
             case '\'': str[j++] = '\''; break;
             case '\"': str[j++] = '\"'; break;
             case '0': str[j++] = '\x00'; break;
@@ -900,7 +899,12 @@ static bool_t unescape_string(char *str, bool_t cls) { /* cls: TRUE if used for 
             str[j++] = str[i];
         }
     }
-    str[j] = '\0';
+    if (len) {
+        *len = j;
+    }
+    else {
+        str[j] = '\0';
+    }
     return b;
 }
 
@@ -1774,6 +1778,10 @@ static void char_array__finalize(char_array_t *obj) {
     free(obj->p);
 }
 
+static void char_array__clear(char_array_t *obj) {
+    obj->n = 0;
+}
+
 static void char_array__add(char_array_t *obj, char ch) {
     if (obj->m <= obj->n) {
         const size_t n = obj->n + 1;
@@ -1785,6 +1793,20 @@ static void char_array__add(char_array_t *obj, char ch) {
         obj->m = m;
     }
     obj->p[obj->n++] = ch;
+}
+
+static void char_array__set_chars(char_array_t *obj, const char *str, size_t len) {
+    const size_t n = (len != VOID_VALUE) ? len : str ? strlen(str) : 0;
+    if (obj->m < n) {
+        size_t m = obj->m;
+        if (m == 0) m = BUFFER_MIN_SIZE;
+        while (m < n && m != 0) m <<= 1;
+        if (m == 0) m = n; /* in case of shift overflow */
+        obj->p = (char *)realloc_e(obj->p, m);
+        obj->m = m;
+    }
+    obj->n = n;
+    memcpy(obj->p, str, n);
 }
 
 static void string_array__initialize(string_array_t *obj) {
@@ -2381,10 +2403,10 @@ static node_t *create_node(node_type_t type) {
         file_pos__initialize(&(node->data.reference.fpos));
         break;
     case NODE_STRING:
-        node->data.string.value = NULL;
+        char_array__initialize(&(node->data.string.value));
         break;
     case NODE_CHARCLASS:
-        node->data.charclass.value = NULL;
+        char_array__initialize(&(node->data.charclass.value));
         break;
     case NODE_POSITION:
         node->data.position.value = 0;
@@ -2455,10 +2477,10 @@ static void destroy_node(node_t *node) {
         file_pos__finalize(&(node->data.reference.fpos));
         break;
     case NODE_STRING:
-        free(node->data.string.value);
+        char_array__finalize(&(node->data.string.value));
         break;
     case NODE_CHARCLASS:
-        free(node->data.charclass.value);
+        char_array__finalize(&(node->data.charclass.value));
         break;
     case NODE_POSITION:
         break;
@@ -2895,14 +2917,15 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-static void dump_escaped_string(const char *str) {
+static void dump_escaped_string(const char *str, size_t len) {
     char s[5];
+    size_t i;
     if (str == NULL) {
         fprintf(stdout, "null");
         return;
     }
-    while (*str) {
-        fprintf(stdout, "%s", escape_character(*str++, &s));
+    for (i = 0; (len == VOID_VALUE) ? (str[i] != '\0') : (i < len); i++) {
+        fprintf(stdout, "%s", escape_character(str[i], &s));
     }
 }
 
@@ -2938,12 +2961,12 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         break;
     case NODE_STRING:
         fprintf(stdout, "%*sString(value:'", indent, "");
-        dump_escaped_string(node->data.string.value);
+        dump_escaped_string(node->data.string.value.p, node->data.string.value.n);
         fprintf(stdout, "')\n");
         break;
     case NODE_CHARCLASS:
         fprintf(stdout, "%*sCharclass(value:'", indent, "");
-        dump_escaped_string(node->data.charclass.value);
+        dump_escaped_string(node->data.charclass.value.p, node->data.charclass.value.n);
         fprintf(stdout, "')\n");
         break;
     case NODE_POSITION:
@@ -2963,7 +2986,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*sProgrammable Predicate(index:", indent, "");
         dump_integer_value(node->data.progpred.index);
         fprintf(stdout, ", neg:%d, code:{", node->data.progpred.neg);
-        dump_escaped_string(node->data.progpred.code.text);
+        dump_escaped_string(node->data.progpred.code.text, VOID_VALUE);
         fprintf(stdout, "}, capts:");
         if (node->data.progpred.capts.n > 0) {
             size_t i;
@@ -3019,7 +3042,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*sAction(index:", indent, "");
         dump_integer_value(node->data.action.index);
         fprintf(stdout, ", code:{");
-        dump_escaped_string(node->data.action.code.text);
+        dump_escaped_string(node->data.action.code.text, VOID_VALUE);
         fprintf(stdout, "}, vars:");
         if (node->data.action.rvars.n + node->data.action.capts.n > 0) {
             size_t i;
@@ -3040,7 +3063,7 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*sError(index:", indent, "");
         dump_integer_value(node->data.error.index);
         fprintf(stdout, ", code:{");
-        dump_escaped_string(node->data.error.code.text);
+        dump_escaped_string(node->data.error.code.text, VOID_VALUE);
         fprintf(stdout, "}, vars:\n");
         {
             size_t i;
@@ -3176,7 +3199,7 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
     else if (input_state__match_character(input, '.')) {
         input_state__match_spaces(input);
         n_p = create_node(NODE_CHARCLASS);
-        n_p->data.charclass.value = NULL;
+        char_array__clear(&(n_p->data.charclass.value));
         if (!input->ascii) {
             input->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
@@ -3185,16 +3208,20 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         const size_t q = input->bufcur;
         input_state__match_spaces(input);
         n_p = create_node(NODE_CHARCLASS);
-        n_p->data.charclass.value = strndup_e(input->buffer.p + p + 1, q - p - 2);
-        if (!unescape_string(n_p->data.charclass.value, TRUE)) {
+        char_array__set_chars(&(n_p->data.charclass.value), input->buffer.p + p + 1, q - p - 2);
+        if (n_p->data.charclass.value.n == 0) {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Character missing\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+            input->errnum++;
+        }
+        if (!unescape_string(n_p->data.charclass.value.p, &(n_p->data.charclass.value.n), TRUE)) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
             input->errnum++;
         }
-        if (!input->ascii && !is_valid_utf8_string(n_p->data.charclass.value)) {
+        if (!input->ascii && !is_valid_utf8_string(n_p->data.charclass.value.p, n_p->data.charclass.value.n)) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
             input->errnum++;
         }
-        if (!input->ascii && n_p->data.charclass.value[0] != '\0') {
+        if (!input->ascii) {
             input->flags |= CODE_FLAG__UTF8_CHARCLASS_USED;
         }
     }
@@ -3202,12 +3229,12 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         const size_t q = input->bufcur;
         input_state__match_spaces(input);
         n_p = create_node(NODE_STRING);
-        n_p->data.string.value = strndup_e(input->buffer.p + p + 1, q - p - 2);
-        if (!unescape_string(n_p->data.string.value, FALSE)) {
+        char_array__set_chars(&(n_p->data.string.value), input->buffer.p + p + 1, q - p - 2);
+        if (!unescape_string(n_p->data.string.value.p, &(n_p->data.string.value.n), FALSE)) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
             input->errnum++;
         }
-        if (!input->ascii && !is_valid_utf8_string(n_p->data.string.value)) {
+        if (!input->ascii && !is_valid_utf8_string(n_p->data.string.value.p, n_p->data.string.value.n)) {
             print_error("%s:" FMT_LU ":" FMT_LU ": Invalid UTF-8 string\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
             input->errnum++;
         }
@@ -3510,7 +3537,7 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
             q = input->bufcur;
             input_state__match_spaces(input);
             s = strndup_e(input->buffer.p + p + 1, q - p - 2);
-            if (!unescape_string(s, FALSE)) {
+            if (!unescape_string(s, NULL, FALSE)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Illegal escape sequence\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 input->errnum++;
             }
@@ -3812,26 +3839,25 @@ static bool_t parse(context_t *ctx) {
     return (ctx->errnum == 0) ? TRUE : FALSE;
 }
 
-static code_reach_t generate_matching_string_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
-    const size_t n = (value != NULL) ? strlen(value) : 0;
-    if (n > 0) {
+static code_reach_t generate_matching_string_code(generate_t *gen, const char_array_t *value, int onfail, size_t indent, bool_t bare) {
+    if (value->n > 0) {
         char s[5];
-        if (n > 1) {
+        if (value->n > 1) {
             size_t i;
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "if (\n");
-            for (i = 0; i < n; i++) {
+            for (i = 0; i < value->n; i++) {
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__printf(
                     gen->stream,
                     "pcc_refill_buffer(ctx, " FMT_LU ") < " FMT_LU " || (ctx->buffer.p + ctx->cur)[" FMT_LU "] != '%s'%s\n",
-                    (ulong_t)i + 1, (ulong_t)i + 1, (ulong_t)i, escape_character(value[i], &s), (i < n - 1) ? " ||" : ""
+                    (ulong_t)i + 1, (ulong_t)i + 1, (ulong_t)i, escape_character(value->p[i], &s), (i < value->n - 1) ? " ||" : ""
                 );
             }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, ") goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "ctx->cur += " FMT_LU ";\n", (ulong_t)n);
+            stream__printf(gen->stream, "ctx->cur += " FMT_LU ";\n", (ulong_t)(value->n));
             return CODE_REACH__BOTH;
         }
         else {
@@ -3840,7 +3866,7 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__puts(gen->stream, "pcc_refill_buffer(ctx, 1) < 1 ||\n");
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-            stream__printf(gen->stream, "ctx->buffer.p[ctx->cur] != '%s'\n", escape_character(value[0], &s));
+            stream__printf(gen->stream, "ctx->buffer.p[ctx->cur] != '%s'\n", escape_character(value->p[0], &s));
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, ") goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
@@ -3854,100 +3880,92 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char *v
     }
 }
 
-static code_reach_t generate_matching_charclass_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
+static code_reach_t generate_matching_charclass_code(generate_t *gen, const char_array_t *value, int onfail, size_t indent, bool_t bare) {
     assert(gen->ascii);
-    if (value != NULL) {
-        const size_t n = strlen(value);
-        if (n > 0) {
-            char s[5], t[5];
-            if (n > 1) {
-                const bool_t a = (value[0] == '^') ? TRUE : FALSE;
-                size_t i = a ? 1 : 0;
-                if (i + 1 == n) { /* fulfilled only if a == TRUE */
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "if (\n");
-                    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                    stream__puts(gen->stream, "pcc_refill_buffer(ctx, 1) < 1 ||\n");
-                    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                    stream__printf(gen->stream, "ctx->buffer.p[ctx->cur] == '%s'\n", escape_character(value[i], &s));
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__printf(gen->stream, ") goto L%04d;\n", onfail);
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "ctx->cur++;\n");
-                    return CODE_REACH__BOTH;
-                }
-                else {
-                    if (!bare) {
-                        stream__write_characters(gen->stream, ' ', indent);
-                        stream__puts(gen->stream, "{\n");
-                        indent += INDENT_UNIT;
-                    }
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "char c;\n");
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__printf(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "c = ctx->buffer.p[ctx->cur];\n");
-                    if (i + 3 == n && value[i] != '\\' && value[i + 1] == '-') {
-                        stream__write_characters(gen->stream, ' ', indent);
-                        stream__printf(
-                            gen->stream,
-                            a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n"
-                              : "if (!(c >= '%s' && c <= '%s')) goto L%04d;\n",
-                            escape_character(value[i], &s), escape_character(value[i + 2], &t), onfail
-                        );
-                    }
-                    else {
-                        stream__write_characters(gen->stream, ' ', indent);
-                        stream__puts(gen->stream, a ? "if (\n" : "if (!(\n");
-                        for (; i < n; i++) {
-                            stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                            if (value[i] == '\\' && i + 1 < n) i++;
-                            if (i + 2 < n && value[i + 1] == '-') {
-                                stream__printf(
-                                    gen->stream, "(c >= '%s' && c <= '%s')%s\n",
-                                    escape_character(value[i], &s), escape_character(value[i + 2], &t), (i + 3 == n) ? "" : " ||"
-                                );
-                                i += 2;
-                            }
-                            else {
-                                stream__printf(
-                                    gen->stream, "c == '%s'%s\n",
-                                    escape_character(value[i], &s), (i + 1 == n) ? "" : " ||"
-                                );
-                            }
-                        }
-                        stream__write_characters(gen->stream, ' ', indent);
-                        stream__printf(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
-                    }
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "ctx->cur++;\n");
-                    if (!bare) {
-                        indent -= INDENT_UNIT;
-                        stream__write_characters(gen->stream, ' ', indent);
-                        stream__puts(gen->stream, "}\n");
-                    }
-                    return CODE_REACH__BOTH;
-                }
-            }
-            else {
+    if (value->n > 0) {
+        char s[5], t[5];
+        if (value->n > 1) {
+            const bool_t a = (value->p[0] == '^') ? TRUE : FALSE;
+            size_t i = a ? 1 : 0;
+            if (i + 1 == value->n) { /* fulfilled only if a == TRUE */
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "if (\n");
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "pcc_refill_buffer(ctx, 1) < 1 ||\n");
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                stream__printf(gen->stream, "ctx->buffer.p[ctx->cur] != '%s'\n", escape_character(value[0], &s));
+                stream__printf(gen->stream, "ctx->buffer.p[ctx->cur] == '%s'\n", escape_character(value->p[i], &s));
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__printf(gen->stream, ") goto L%04d;\n", onfail);
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "ctx->cur++;\n");
                 return CODE_REACH__BOTH;
             }
+            else {
+                if (!bare) {
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__puts(gen->stream, "{\n");
+                    indent += INDENT_UNIT;
+                }
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "char c;\n");
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__printf(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "c = ctx->buffer.p[ctx->cur];\n");
+                if (i + 3 == value->n && value->p[i] != '\\' && value->p[i + 1] == '-') {
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__printf(
+                        gen->stream,
+                        a ? "if (c >= '%s' && c <= '%s') goto L%04d;\n"
+                          : "if (!(c >= '%s' && c <= '%s')) goto L%04d;\n",
+                        escape_character(value->p[i], &s), escape_character(value->p[i + 2], &t), onfail
+                    );
+                }
+                else {
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__puts(gen->stream, a ? "if (\n" : "if (!(\n");
+                    for (; i < value->n; i++) {
+                        stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+                        if (value->p[i] == '\\' && i + 1 < value->n) i++;
+                        if (i + 2 < value->n && value->p[i + 1] == '-') {
+                            stream__printf(
+                                gen->stream, "(c >= '%s' && c <= '%s')%s\n",
+                                escape_character(value->p[i], &s), escape_character(value->p[i + 2], &t), (i + 3 == value->n) ? "" : " ||"
+                            );
+                            i += 2;
+                        }
+                        else {
+                            stream__printf(
+                                gen->stream, "c == '%s'%s\n",
+                                escape_character(value->p[i], &s), (i + 1 == value->n) ? "" : " ||"
+                            );
+                        }
+                    }
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__printf(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
+                }
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "ctx->cur++;\n");
+                if (!bare) {
+                    indent -= INDENT_UNIT;
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__puts(gen->stream, "}\n");
+                }
+                return CODE_REACH__BOTH;
+            }
         }
         else {
             stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, "goto L%04d;\n", onfail);
-            return CODE_REACH__ALWAYS_FAIL;
+            stream__puts(gen->stream, "if (\n");
+            stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+            stream__puts(gen->stream, "pcc_refill_buffer(ctx, 1) < 1 ||\n");
+            stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+            stream__printf(gen->stream, "ctx->buffer.p[ctx->cur] != '%s'\n", escape_character(value->p[0], &s));
+            stream__write_characters(gen->stream, ' ', indent);
+            stream__printf(gen->stream, ") goto L%04d;\n", onfail);
+            stream__write_characters(gen->stream, ' ', indent);
+            stream__puts(gen->stream, "ctx->cur++;\n");
+            return CODE_REACH__BOTH;
         }
     }
     else {
@@ -3959,70 +3977,62 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
     }
 }
 
-static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const char *value, int onfail, size_t indent, bool_t bare) {
-    const size_t n = (value != NULL) ? strlen(value) : 0;
-    if (value == NULL || n > 0) {
-        const bool_t a = (n > 0 && value[0] == '^') ? TRUE : FALSE;
-        size_t i = a ? 1 : 0;
-        if (!bare) {
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "{\n");
-            indent += INDENT_UNIT;
-        }
+static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const char_array_t *value, int onfail, size_t indent, bool_t bare) {
+    const bool_t a = (value->n > 0 && value->p[0] == '^') ? TRUE : FALSE;
+    size_t i = a ? 1 : 0;
+    if (!bare) {
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "int u;\n");
+        stream__puts(gen->stream, "{\n");
+        indent += INDENT_UNIT;
+    }
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "int u;\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "const size_t n = pcc_get_char_as_utf32(ctx, &u);\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(gen->stream, "if (n == 0) goto L%04d;\n", onfail);
+    if (value->n > 0 && !(a && value->n == 1)) { /* not '.' or '[^]' */
+        int u0 = 0;
+        bool_t r = FALSE;
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "const size_t n = pcc_get_char_as_utf32(ctx, &u);\n");
-        stream__write_characters(gen->stream, ' ', indent);
-        stream__printf(gen->stream, "if (n == 0) goto L%04d;\n", onfail);
-        if (value != NULL && !(a && n == 1)) { /* not '.' or '[^]' */
-            int u0 = 0;
-            bool_t r = FALSE;
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, a ? "if (\n" : "if (!(\n");
-            while (i < n) {
-                int u = 0;
-                if (value[i] == '\\' && i + 1 < n) i++;
-                i += utf8_to_utf32(value + i, &u);
-                if (r) { /* character range */
-                    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                    stream__printf(gen->stream, "(u >= 0x%06x && u <= 0x%06x)%s\n", u0, u, (i < n) ? " ||" : "");
-                    u0 = 0;
-                    r = FALSE;
-                }
-                else if (
-                    value[i] != '-' ||
-                    i == n - 1 /* the individual '-' character is valid when it is at the first or the last position */
-                ) { /* single character */
-                    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                    stream__printf(gen->stream, "u == 0x%06x%s\n", u, (i < n) ? " ||" : "");
-                    u0 = 0;
-                    r = FALSE;
-                }
-                else {
-                    assert(value[i] == '-');
-                    i++;
-                    u0 = u;
-                    r = TRUE;
-                }
+        stream__puts(gen->stream, a ? "if (\n" : "if (!(\n");
+        while (i < value->n) {
+            int u = 0;
+            if (value->p[i] == '\\' && i + 1 < value->n) i++;
+            i += utf8_to_utf32(value->p + i, &u);
+            if (r) { /* character range */
+                stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+                stream__printf(gen->stream, "(u >= 0x%06x && u <= 0x%06x)%s\n", u0, u, (i < value->n) ? " ||" : "");
+                u0 = 0;
+                r = FALSE;
             }
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__printf(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
+            else if (
+                value->p[i] != '-' ||
+                i == value->n - 1 /* the individual '-' character is valid when it is at the first or the last position */
+            ) { /* single character */
+                stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+                stream__printf(gen->stream, "u == 0x%06x%s\n", u, (i < value->n) ? " ||" : "");
+                u0 = 0;
+                r = FALSE;
+            }
+            else {
+                assert(value->p[i] == '-');
+                i++;
+                u0 = u;
+                r = TRUE;
+            }
         }
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "ctx->cur += n;\n");
-        if (!bare) {
-            indent -= INDENT_UNIT;
-            stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "}\n");
-        }
-        return CODE_REACH__BOTH;
+        stream__printf(gen->stream, a ? ") goto L%04d;\n" : ")) goto L%04d;\n", onfail);
     }
-    else {
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "ctx->cur += n;\n");
+    if (!bare) {
+        indent -= INDENT_UNIT;
         stream__write_characters(gen->stream, ' ', indent);
-        stream__printf(gen->stream, "goto L%04d;\n", onfail);
-        return CODE_REACH__ALWAYS_FAIL;
+        stream__puts(gen->stream, "}\n");
     }
+    return CODE_REACH__BOTH;
 }
 
 static code_reach_t generate_position_code(generate_t *gen, size_t value, int onfail, size_t indent, bool_t bare) {
@@ -4550,11 +4560,11 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         }
         return CODE_REACH__BOTH;
     case NODE_STRING:
-        return generate_matching_string_code(gen, node->data.string.value, onfail, indent, bare);
+        return generate_matching_string_code(gen, &(node->data.string.value), onfail, indent, bare);
     case NODE_CHARCLASS:
         return gen->ascii ?
-               generate_matching_charclass_code(gen, node->data.charclass.value, onfail, indent, bare) :
-               generate_matching_utf8_charclass_code(gen, node->data.charclass.value, onfail, indent, bare);
+               generate_matching_charclass_code(gen, &(node->data.charclass.value), onfail, indent, bare) :
+               generate_matching_utf8_charclass_code(gen, &(node->data.charclass.value), onfail, indent, bare);
     case NODE_POSITION:
         return generate_position_code(gen, node->data.position.value, onfail, indent, bare);
     case NODE_QUANTITY:
