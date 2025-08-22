@@ -12,7 +12,7 @@ check_output() {
 
 run_for_input() {
     run timeout 5s "$BATS_TEST_DIRNAME/parser" < "$1"
-    check_output "$1"
+    check_output "${2:-$1}"
 }
 
 in_header() {

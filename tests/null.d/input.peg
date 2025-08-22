@@ -1,0 +1,13 @@
+FILE <- (LINE ';\n')+
+LINE <- CHAR / CHAR_CLASS_0 / CHAR_CLASS_1 / CHAR_CLASS_2 / CHAR_CLASS_3 / STRING_0 / STRING_1 / STRING_2 / STRING_3 / CAPTURED
+
+CHAR <- "char_a:" '\0' { printf("CHAR_A\n"); } / "char_b:" '\x00' { printf("CHAR_B\n"); }
+CHAR_CLASS_0 <- "char_class_0_a:" [abc\0-!123]+ { printf("CHAR_CLASS_0_A\n"); } / "char_class_0_b:" [abc\x00-!123]+ { printf("CHAR_CLASS_0_B\n"); }
+CHAR_CLASS_1 <- "char_class_1_a:" [abc\0]+ { printf("CHAR_CLASS_1_A\n"); } / "char_class_1_b:" [abc\x00]+ { printf("CHAR_CLASS_1_B\n"); }
+CHAR_CLASS_2 <- "char_class_2_a:" [\0-!]+ { printf("CHAR_CLASS_2_A\n"); } / "char_class_2_b:" [\x00-!]+ { printf("CHAR_CLASS_2_B\n"); }
+CHAR_CLASS_3 <- "char_class_3_a:" [\0]+ { printf("CHAR_CLASS_3_A\n"); } / "char_class_3_b:" [\x00]+ { printf("CHAR_CLASS_3_B\n"); }
+STRING_0 <- "string_0_a:" "abc\0123" { printf("STRING_0_A\n"); } / "string_0_b:" "abc\x00123" { printf("STRING_0_B\n"); }
+STRING_1 <- "string_1_a:" "abc\0" { printf("STRING_1_A\n"); } / "string_1_b:" "abc\x00" { printf("STRING_1_B\n"); }
+STRING_2 <- "string_2_a:" "\0123" { printf("STRING_2_A\n"); } / "string_2_b:" "\x00123" { printf("STRING_2_B\n"); }
+STRING_3 <- "string_3_a:" "\0" { printf("STRING_3_A\n"); } / "string_3_b:" "\x00" { printf("STRING_3_B\n"); }
+CAPTURED <- "captured_a:" < CHAR_CLASS_0 "xyz\0123" > "|" $1 { printf("CAPTURED_A\n"); } / "captured_b:" < CHAR_CLASS_0 "xyz\x00123" > "|" $2 { printf("CAPTURED_B\n"); }
