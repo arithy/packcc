@@ -4459,7 +4459,7 @@ static code_reach_t generate_thunking_action_code(
             assert(rvars->p[i]->type == NODE_REFERENCE);
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(
-                gen->stream, "thunk->data.leaf.values.p[" FMT_LU "] = &(chunk->values.p[" FMT_LU "]);\n",
+                gen->stream, "thunk->data.leaf.values.pointers[" FMT_LU "] = &(chunk->values.p[" FMT_LU "]);\n",
                 (ulong_t)rvars->p[i]->data.reference.index, (ulong_t)rvars->p[i]->data.reference.index
             );
         }
@@ -4830,7 +4830,7 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "typedef struct pcc_value_refer_table_tag {\n"
             "    size_t m, n;\n"
-            "    pcc_value_t **p;\n"
+            "    pcc_value_t **pointers;\n"
             "} pcc_value_refer_table_t;\n"
             "\n"
             "typedef struct pcc_capture_tag {\n"
@@ -5226,11 +5226,11 @@ static bool_t generate(context_t *ctx) {
             "static void pcc_value_refer_table__initialize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj) {\n"
             "    obj->m = 0;\n"
             "    obj->n = 0;\n"
-            "    obj->p = NULL;\n"
+            "    obj->pointers = NULL;\n"
             "}\n"
             "\n"
             "static void pcc_value_refer_table__finalize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj) {\n"
-            "    PCC_FREE(auxil, obj->p);\n"
+            "    PCC_FREE(auxil, obj->pointers);\n"
             "}\n"
             "\n"
             "static void pcc_value_refer_table__resize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj, size_t len) {\n"
@@ -5240,10 +5240,10 @@ static bool_t generate(context_t *ctx) {
             "        if (m == 0) m = PCC_ARRAY_MIN_SIZE;\n"
             "        while (m < len && m != 0) m <<= 1;\n"
             "        if (m == 0) m = len;\n"
-            "        obj->p = (pcc_value_t **)PCC_REALLOC(auxil, obj->p, sizeof(pcc_value_t *) * m);\n"
+            "        obj->pointers = (pcc_value_t **)PCC_REALLOC(auxil, obj->pointers, sizeof(pcc_value_t *) * m);\n"
             "        obj->m = m;\n"
             "    }\n"
-            "    for (i = obj->n; i < len; i++) obj->p[i] = NULL;\n"
+            "    for (i = obj->n; i < len; i++) obj->pointers[i] = NULL;\n"
             "    obj->n = len;\n"
             "}\n"
             "\n"
@@ -6530,7 +6530,7 @@ static bool_t generate(context_t *ctx) {
                         assert(v->p[k]->type == NODE_REFERENCE);
                         stream__printf(
                             &sstream,
-                            "#define %s (*(pcc_in->data.leaf.values.p[" FMT_LU "]))\n",
+                            "#define %s (*(pcc_in->data.leaf.values.pointers[" FMT_LU "]))\n",
                             v->p[k]->data.reference.rvar, (ulong_t)v->p[k]->data.reference.index
                         );
                         k++;
@@ -6646,7 +6646,7 @@ static bool_t generate(context_t *ctx) {
                     &sstream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx);\n"
                     "    chunk->pos = ctx->cur;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->buffer.n - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, %s, ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->buffer.n - chunk->pos));\n"
                     "    ctx->level++;\n",
                     rule->name
                 );
@@ -6672,7 +6672,7 @@ static bool_t generate(context_t *ctx) {
                 stream__printf(
                     &sstream,
                     "    ctx->level--;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, %s, ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
                     "    return chunk;\n",
                     rule->name
                 );
@@ -6681,7 +6681,7 @@ static bool_t generate(context_t *ctx) {
                         &sstream,
                         "L0000:;\n"
                         "    ctx->level--;\n"
-                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
+                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, %s, ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx, chunk);\n"
                         "    return NULL;\n",
                         rule->name
