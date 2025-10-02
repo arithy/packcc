@@ -6646,7 +6646,7 @@ static bool_t generate(context_t *ctx) {
                     &sstream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx);\n"
                     "    chunk->pos = ctx->cur;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, %s, ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->buffer.n - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->buffer.n - chunk->pos));\n"
                     "    ctx->level++;\n",
                     rule->name
                 );
@@ -6672,7 +6672,7 @@ static bool_t generate(context_t *ctx) {
                 stream__printf(
                     &sstream,
                     "    ctx->level--;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, %s, ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
                     "    return chunk;\n",
                     rule->name
                 );
@@ -6681,7 +6681,7 @@ static bool_t generate(context_t *ctx) {
                         &sstream,
                         "L0000:;\n"
                         "    ctx->level--;\n"
-                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, %s, ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
+                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
                         "    pcc_thunk_chunk__destroy(ctx, chunk);\n"
                         "    return NULL;\n",
                         rule->name
