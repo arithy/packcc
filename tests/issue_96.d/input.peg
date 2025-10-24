@@ -1,0 +1,9 @@
+%source {
+#include <stdio.h>
+#include <stdlib.h>
+}
+
+rule <- o:num _ '+' _ p:num _ EOL { $$ = o + p; printf("%d + %d = %d\n", o, p, $$); }
+num <- < [0-9]+ > { $$ = atoi($1); }
+_ <- [ \t]*
+EOL <- '\n' / '\r\n' / '\r' / ';'

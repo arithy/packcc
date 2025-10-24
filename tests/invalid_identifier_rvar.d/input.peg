@@ -1,0 +1,4 @@
+rule <- foo:num _ '+' _ _foo:num _ '+' _ pcc_foo:num _ '+' _ PCC_foo:num _ '+' _ bar:num _ EOL
+num <- [0-9]+
+_ <- [ \t]*
+EOL <- '\n' / '\r\n' / '\r' / ';'
