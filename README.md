@@ -167,7 +167,7 @@ term <- l:term _ '+' _ r:factor { $$ = l + r; }
 ```
 
 A rule variable identifier must consist of alphabets (both uppercase and lowercase letters), digits, and underscores.
-The first letter must be an alphabet.
+It must start with an alphabet, and must not start with `pcc_` or `PCC_`.
 The reserved keywords in C cannot be used.
 
 **_sequence1_ `/` _sequence2_ `/` ... `/` _sequenceN_**
@@ -615,7 +615,7 @@ Note that the intrinsic macro replacement is in effect even in C preprocessor ma
 The marker variables with the respective specified identifiers are declared (version 3.0.0 or later).
 This can be used multiple times and can be used also in imported files.
 A marker variable identifier must consist of alphabets (both uppercase and lowercase letters), digits, and underscores.
-The first letter must be an alphabet.
+It must start with an alphabet, and must not start with `pcc_` or `PCC_`.
 All identifiers of the declared marker variables must be different from each other.
 
 Marker variables are intended to be used as _markers_ of the input text to be parsed,

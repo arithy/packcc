@@ -3123,6 +3123,20 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
                 );
                 input->errnum++;
             }
+            if (strncmp(n_p->data.reference.rvar, "pcc_", 4) == 0) {
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Starting with 'pcc_' in rule variable identifier '%s'\n",
+                    input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.rvar
+                );
+                input->errnum++;
+            }
+            if (strncmp(n_p->data.reference.rvar, "PCC_", 4) == 0) {
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Starting with 'PCC_' in rule variable identifier '%s'\n",
+                    input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), n_p->data.reference.rvar
+                );
+                input->errnum++;
+            }
             {
                 size_t i;
                 for (i = 0; i < rule->data.rule.rvars.n; i++) {
@@ -3625,6 +3639,20 @@ static bool_t parse_directive_marker_(input_state_t *input, const char *name, st
                 if (output->p[i][0] == '_') {
                     print_error(
                         "%s:" FMT_LU ":" FMT_LU ": Leading underscore in marker variable identifier '%s'\n",
+                        input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), output->p[i]
+                    );
+                    input->errnum++;
+                }
+                if (strncmp(output->p[i], "pcc_", 4) == 0) {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Starting with 'pcc_' in marker variable identifier '%s'\n",
+                        input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), output->p[i]
+                    );
+                    input->errnum++;
+                }
+                if (strncmp(output->p[i], "PCC_", 4) == 0) {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Starting with 'PCC_' in marker variable identifier '%s'\n",
                         input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), output->p[i]
                     );
                     input->errnum++;
@@ -6403,6 +6431,79 @@ static bool_t generate(context_t *ctx) {
             "}\n"
             "\n"
         );
+        stream__puts(
+            &sstream,
+            "MARK_FUNC_AS_USED\n"
+            "static pcc_auxil_t pcc_ref_auxil_(pcc_context_t *ctx) {\n"
+            "    return ctx->auxil;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static const char *pcc_ref_capture_0_(pcc_context_t *ctx) {\n"
+            "    return pcc_get_capture_string(ctx, &(ctx->capt0));\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_capture_0s_(pcc_context_t *ctx) {\n"
+            "    return ctx->pos + ctx->capt0.range.start;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_capture_0e_(pcc_context_t *ctx) {\n"
+            "    return ctx->pos + ctx->capt0.range.end;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static const char *pcc_ref_capture_(pcc_context_t *ctx, pcc_thunk_chunk_t *in, size_t index) {\n"
+            "    return pcc_get_capture_string(ctx, &(in->capts.p[index]));\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_capture_s_(pcc_context_t *ctx, pcc_thunk_chunk_t *in, size_t index) {\n"
+            "    return ctx->pos + in->capts.p[index].range.start;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_capture_e_(pcc_context_t *ctx, pcc_thunk_chunk_t *in, size_t index) {\n"
+            "    return ctx->pos + in->capts.p[index].range.end;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static const char *pcc_ref_leaf_capture_0_(pcc_context_t *ctx, pcc_thunk_t *in) {\n"
+            "    return pcc_get_capture_string(ctx, &(in->data.leaf.capt0));\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_leaf_capture_0s_(pcc_context_t *ctx, pcc_thunk_t *in) {\n"
+            "    return ctx->pos + in->data.leaf.capt0.range.start;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_leaf_capture_0e_(pcc_context_t *ctx, pcc_thunk_t *in) {\n"
+            "    return ctx->pos + in->data.leaf.capt0.range.end;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static const char *pcc_ref_leaf_capture_(pcc_context_t *ctx, pcc_thunk_t *in, size_t index) {\n"
+            "    return pcc_get_capture_string(ctx, in->data.leaf.capts.p[index]);\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_leaf_capture_s_(pcc_context_t *ctx, pcc_thunk_t *in, size_t index) {\n"
+            "    return ctx->pos + in->data.leaf.capts.p[index]->range.start;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static size_t pcc_ref_leaf_capture_e_(pcc_context_t *ctx, pcc_thunk_t *in, size_t index) {\n"
+            "    return ctx->pos + in->data.leaf.capts.p[index]->range.end;\n"
+            "}\n"
+            "\n"
+            "MARK_FUNC_AS_USED\n"
+            "static pcc_value_t *pcc_ref_leaf_variable_(pcc_context_t *ctx, pcc_thunk_t *in, size_t index) {\n"
+            "    return in->data.leaf.values.p[index];\n"
+            "}\n"
+            "\n"
+        );
         {
             size_t i, j, k;
             for (i = 0; i < ctx->rules.n; i++) {
@@ -6418,31 +6519,31 @@ static bool_t generate(context_t *ctx) {
                     );
                     stream__puts(
                         &sstream,
-                        "#define auxil (pcc_ctx->auxil)\n"
+                        "#define auxil pcc_ref_auxil_(pcc_ctx)\n"
                         "#define " VARNAME_PROGPRED_OUT " (*pcc_out)\n"
                     );
                     stream__puts(
                         &sstream,
-                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_get_capture_string(pcc_ctx, &(pcc_ctx->capt0))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0s ((const size_t)(pcc_ctx->pos + pcc_ctx->capt0.range.start))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0e ((const size_t)(pcc_ctx->pos + pcc_ctx->capt0.range.end))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_ref_capture_0_(pcc_ctx)\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0s pcc_ref_capture_0s_(pcc_ctx)\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0e pcc_ref_capture_0e_(pcc_ctx)\n"
                     );
                     k = 0;
                     while (k < c->n) {
                         assert(c->p[k]->type == NODE_CAPTURE);
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_get_capture_string(pcc_ctx, &(pcc_in->capts.p[" FMT_LU "]))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_ref_capture_(pcc_ctx, pcc_in, " FMT_LU ")\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s ((const size_t)(pcc_ctx->pos + pcc_in->capts.p[" FMT_LU "].range.start))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s pcc_ref_capture_s_(pcc_ctx, pcc_in, " FMT_LU ")\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e ((const size_t)(pcc_ctx->pos + pcc_in->capts.p[" FMT_LU "].range.end))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e pcc_ref_capture_e_(pcc_ctx, pcc_in, " FMT_LU ")\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         k++;
@@ -6522,7 +6623,7 @@ static bool_t generate(context_t *ctx) {
                     );
                     stream__puts(
                         &sstream,
-                        "#define auxil (pcc_ctx->auxil)\n"
+                        "#define auxil pcc_ref_auxil_(pcc_ctx)\n"
                         "#define " VARNAME_ACTION_OUT " (*pcc_out)\n"
                     );
                     k = 0;
@@ -6530,33 +6631,33 @@ static bool_t generate(context_t *ctx) {
                         assert(v->p[k]->type == NODE_REFERENCE);
                         stream__printf(
                             &sstream,
-                            "#define %s (*(pcc_in->data.leaf.values.p[" FMT_LU "]))\n",
+                            "#define %s (*pcc_ref_leaf_variable_(pcc_ctx, pcc_in, " FMT_LU "))\n",
                             v->p[k]->data.reference.rvar, (ulong_t)v->p[k]->data.reference.index
                         );
                         k++;
                     }
                     stream__puts(
                         &sstream,
-                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_get_capture_string(pcc_ctx, &(pcc_in->data.leaf.capt0))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0s ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capt0.range.start))\n"
-                        "#define " VARNAME_CAPTURE_PREFIX "0e ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capt0.range.end))\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0 pcc_ref_leaf_capture_0_(pcc_ctx, pcc_in)\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0s pcc_ref_leaf_capture_0s_(pcc_ctx, pcc_in)\n"
+                        "#define " VARNAME_CAPTURE_PREFIX "0e pcc_ref_leaf_capture_0e_(pcc_ctx, pcc_in)\n"
                     );
                     k = 0;
                     while (k < c->n) {
                         assert(c->p[k]->type == NODE_CAPTURE);
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_get_capture_string(pcc_ctx, pcc_in->data.leaf.capts.p[" FMT_LU "])\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU " pcc_ref_leaf_capture_(pcc_ctx, pcc_in, " FMT_LU ")\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capts.p[" FMT_LU "]->range.start))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "s pcc_ref_leaf_capture_s_(pcc_ctx, pcc_in, " FMT_LU ")\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         stream__printf(
                             &sstream,
-                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e ((const size_t)(pcc_ctx->pos + pcc_in->data.leaf.capts.p[" FMT_LU "]->range.end))\n",
+                            "#define " VARNAME_CAPTURE_PREFIX FMT_LU "e pcc_ref_leaf_capture_e_(pcc_ctx, pcc_in, " FMT_LU ")\n",
                             (ulong_t)(c->p[k]->data.capture.index + 1), (ulong_t)c->p[k]->data.capture.index
                         );
                         k++;
