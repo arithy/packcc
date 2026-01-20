@@ -1,4 +1,6 @@
-PackCC: a packrat parser generator for C.
+PackCC: A parser generator for C.
+
+MIT License
 
 Copyright (c) 2014, 2019-2025 Arihiro Yoshida. All rights reserved.
 
