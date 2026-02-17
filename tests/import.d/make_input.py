@@ -1,6 +1,4 @@
-#!/usr/bin/python3
-
-# Copyright (c) 2024 Arihiro Yoshida. All rights reserved.
+# Copyright (c) 2024-2026 Arihiro Yoshida. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,25 +22,27 @@ import sys
 import os
 import re
 
-def main():
-    args = sys.argv
+
+def main() -> None:
+    args: list[str] = [*sys.argv]
     if len(args) < 4:
         print('Too few arguments')
         sys.exit(1)
-    root = args.pop(1)
-    path = args.pop(1)
-    more = args.pop(1)
+    root: str = args.pop(1)
+    path: str = args.pop(1)
+    more: str = args.pop(1)
     os.makedirs(os.path.dirname(root + '/' + path), exist_ok=True)
-    id = re.sub(r'[^_a-zA-Z0-9]', '_', re.sub(r'\.peg$', '', os.path.basename(path)))
+    id: str = re.sub(r'[^_a-zA-Z0-9]', '_', re.sub(r'\.peg$', '', os.path.basename(path)))
     with open(root + '/template.peg', 'r') as file:
-        text = file.read()
+        text: str = file.read()
     text = text.replace('${ID}', id + '_')
     text = text.replace('${MORE}', '    / ' + more + '_FILE' if more != '' else '')
     for i in range(4):
-        imp = args.pop(1) if len(args) > 1 else ''
+        imp: str = args.pop(1) if len(args) > 1 else ''
         text = text.replace('${IMPORT_' + str(i) + '}', '%import "' + imp + '"' if imp != '' else '')
     with open(root + '/' + path, 'w', newline='\n') as file:
         file.write(text)
+
 
 if __name__ == '__main__':
     main()
