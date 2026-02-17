@@ -36,12 +36,19 @@ jobs:
       run: |
         curl -LO http://launchpadlibrarian.net/516341795/uncrustify_0.72.0+dfsg1-2_arm64.deb
         sudo dpkg -i uncrustify_0.72.0+dfsg1-2_arm64.deb || true
-    - name: build packcc
+    - name: build and test of debug version
       run: |
         (
         mkdir -p build
         cd build
-        cmake -DCMAKE_C_COMPILER=$CC ..
+        cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Debug ..
         cmake --build . --config Debug --target check --clean-first
+        )
+    - name: build and test of release version
+      run: |
+        (
+        mkdir -p build
+        cd build
+        cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release ..
         cmake --build . --config Release --target check --clean-first
         )

@@ -1,6 +1,4 @@
-#!/usr/bin/python3
-
-# Copyright (c) 2024 Arihiro Yoshida. All rights reserved.
+# Copyright (c) 2024-2026 Arihiro Yoshida. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,17 +18,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+from typing import Any
 import os
-import requests
 import re
+import requests  # type: ignore[import-untyped]
 
-ucd_url = 'https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt'
-ucd_gc_list = [
+UCD_URL: str = 'https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt'
+UCD_GC_LIST: list[str] = [
     'Lu', 'Ll', 'Lt', 'Lm', 'Lo', 'Mn', 'Mc', 'Me', 'Nd', 'Nl', 'No',
     'Pc', 'Pd', 'Ps', 'Pe', 'Pi', 'Pf', 'Po', 'Sm', 'Sc', 'Sk', 'So',
     'Zs', 'Zl', 'Zp', 'Cc', 'Cf', 'Co', 'Cn'
 ]
-ucd_gc_dict = {
+UCD_GC_DICT: dict[str, str] = {
     'Lu': 'Uppercase_Letter',
     'Ll': 'Lowercase_Letter',
     'Lt': 'Titlecase_Letter',
@@ -62,22 +61,25 @@ ucd_gc_dict = {
     'Cn': 'Unassigned'
 }
 
-def get_unicode_data():
-    res = requests.get(ucd_url, stream=True)
+
+def get_unicode_data() -> str:
+    res: requests.Response = requests.get(UCD_URL, stream=True)
     res.raise_for_status()
-    txt = ''
+    txt: str = ''
     for chunk in res.iter_content(chunk_size=1024*1024):
         txt += chunk.decode()
     return txt
 
-def escape_as_utf16_hex(hex):
-    code = int(hex, 16)
+
+def escape_as_utf16_hex(hex: str) -> str:
+    code: int = int(hex, 16)
     if code > 0x10ffff:
         raise ValueError
     return f'\\u{code:04x}' if code <= 0xffff else f'\\u{0xd800 | ((code - 0x10000) >> 10):04x}\\u{0xdc00 | (code & 0x3ff):04x}'
 
-def generate_rules(dat):
-    str = (
+
+def generate_rules(dat: dict[str, list[str]]) -> str:
+    peg: str = (
         '# This file was generated using the script \'' + os.path.basename(__file__) + '\'.\n'
         '\n'
         '# This file is hereby placed in the public domain.\n'
@@ -101,15 +103,15 @@ def generate_rules(dat):
         'Unicode_Punctuation <- Unicode_Connector_Punctuation / Unicode_Dash_Punctuation / Unicode_Open_Punctuation / Unicode_Close_Punctuation / Unicode_Initial_Punctuation / Unicode_Final_Punctuation / Unicode_Other_Punctuation\n'
         'Unicode_Symbol <- Unicode_Math_Symbol / Unicode_Currency_Symbol / Unicode_Modifier_Symbol / Unicode_Other_Symbol\n'
         'Unicode_Separator <- Unicode_Space_Separator / Unicode_Line_Separator / Unicode_Paragraph_Separator\n'
-        'Unicode_Other <- Unicode_Control / Unicode_Format / Unicode_Private_Use\n' # The category 'Unassigned' is excluded because currently it has no character.
+        'Unicode_Other <- Unicode_Control / Unicode_Format / Unicode_Private_Use\n'  # The category 'Unassigned' is excluded because currently it has no character.
         '\n'
     )
-    for gc in ucd_gc_list:
+    for gc in UCD_GC_LIST:
         if gc not in dat:
             continue
-        cc = ''
-        cs = ''
-        cp = ''
+        cc: str = ''
+        cs: str = ''
+        cp: str = ''
         for c in dat[gc]:
             if cs == '':
                 cs = c
@@ -123,19 +125,23 @@ def generate_rules(dat):
             cc += escape_as_utf16_hex(cs)
             if cs != cp:
                 cc += '-' + escape_as_utf16_hex(cp)
-        str += 'Unicode_' + ucd_gc_dict[gc] + ' <- [' + cc + ']\n'
-    return str
+        peg += 'Unicode_' + UCD_GC_DICT[gc] + ' <- [' + cc + ']\n'
+    return peg
 
-def main():
-    pat = re.compile(r'^([0-9a-fA-F]+);[^;]*;([0-9a-zA-Z_]+);')
-    dat = {}
+
+def main() -> None:
+    pat: re.Pattern[str] = re.compile(r'^([0-9a-fA-F]+);[^;]*;([0-9a-zA-Z_]+);')
+    dat: dict[str, list[str]] = {}
     for ent in get_unicode_data().splitlines():
-        res = pat.search(ent)
-        cat = res.group(2)
+        res: re.Match[str] | None = pat.search(ent)
+        if res is None:
+            continue
+        cat: str | Any = res.group(2)
         if cat not in dat:
             dat[cat] = []
-        dat[cat] += [res.group(1)]
+        dat[cat].append(res.group(1))
     print(generate_rules(dat), end='')
+
 
 if __name__ == '__main__':
     main()

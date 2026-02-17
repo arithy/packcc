@@ -1806,7 +1806,7 @@ static void char_array__set_chars(char_array_t *obj, const char *str, size_t len
         obj->m = m;
     }
     obj->n = n;
-    memcpy(obj->p, str, n);
+    if (n > 0) memcpy(obj->p, str, n);
 }
 
 static void string_array__initialize(string_array_t *obj) {
@@ -2030,7 +2030,8 @@ static void input_state__commit_buffer(input_state_t *obj) {
     assert(obj->buffer.n >= obj->bufcur);
     if (obj->linepos < obj->bufpos + obj->bufcur)
         obj->charnum += obj->ascii ? obj->bufcur : count_characters(obj->buffer.p, 0, obj->bufcur);
-    memmove(obj->buffer.p, obj->buffer.p + obj->bufcur, obj->buffer.n - obj->bufcur);
+    if (obj->bufcur < obj->buffer.n)
+        memmove(obj->buffer.p, obj->buffer.p + obj->bufcur, obj->buffer.n - obj->bufcur);
     obj->buffer.n -= obj->bufcur;
     obj->bufpos += obj->bufcur;
     obj->bufcur = 0;
@@ -5214,7 +5215,7 @@ static bool_t generate(context_t *ctx) {
             "static void pcc_char_array__copy(pcc_auxil_t auxil, pcc_char_array_t *obj, const pcc_char_array_t *src) {\n"
             "    if (obj == src) return;\n"
             "    pcc_char_array__resize(auxil, obj, src->n);\n"
-            "    memcpy(obj->p, src->p, src->n);\n"
+            "    if (src->n > 0) memcpy(obj->p, src->p, src->n);\n"
             "}\n"
             "\n"
         );
@@ -6243,7 +6244,8 @@ static bool_t generate(context_t *ctx) {
             "\n"
             "MARK_FUNC_AS_USED\n"
             "static void pcc_commit_buffer(pcc_context_t *ctx) {\n"
-            "    memmove(ctx->buffer.p, ctx->buffer.p + ctx->cur, ctx->buffer.n - ctx->cur);\n"
+            "    if (ctx->cur < ctx->buffer.n)\n"
+            "        memmove(ctx->buffer.p, ctx->buffer.p + ctx->cur, ctx->buffer.n - ctx->cur);\n"
             "    ctx->buffer.n -= ctx->cur;\n"
             "    ctx->pos += ctx->cur;\n"
             "    pcc_lr_table__shift(ctx, &(ctx->lrtable), ctx->cur);\n"

@@ -1,6 +1,4 @@
-#!/usr/bin/python3
-
-# Copyright (c) 2024 Arihiro Yoshida. All rights reserved.
+# Copyright (c) 2024-2026 Arihiro Yoshida. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,27 +22,30 @@ import sys
 import os
 import re
 
-def main():
-    args = sys.argv
+
+def main() -> None:
+    args: list[str] = [*sys.argv]
     if len(args) < 3:
         print('Too few arguments')
         sys.exit(1)
-    optp = args.pop(1) if args[1] == '--only-pre' else ''
-    word = args.pop(1)
-    path = args.pop(1)
+    optp: str = args.pop(1) if args[1] == '--only-pre' else ''
+    word: str = args.pop(1)
+    path: str = args.pop(1)
     with open(path, 'r') as file:
-        text = file.read().split('\n')
-    for i, s in enumerate(text):
+        text: list[str] = file.read().split('\n')
+    i: int = -1
+    for j, s in enumerate(text):
         if s.find(word) >= 0:
+            i = j
             break
-    if i >= len(text):
+    if i < 0:
         print('Keyword not found')
         sys.exit(2)
     if optp == '':
         if i == 0 or i == len(text) - 1:
             print('Keyword found in invalid line')
             sys.exit(2)
-        m = re.search(r'^#line ([0-9]+) "(.*)"$', text[i + 1])
+        m: re.Match[str] | None = re.search(r'^#line ([0-9]+) "(.*)"$', text[i + 1])
         if m is None:
             print('#line directive not found one line after keyword')
             sys.exit(2)
@@ -71,6 +72,7 @@ def main():
     if text[j].find(word) < 0:
         print('#line directive with inconsistent line number')
         sys.exit(2)
+
 
 if __name__ == '__main__':
     main()
