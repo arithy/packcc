@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 Arihiro Yoshida. All rights reserved.
+# Copyright (c) 2024-2026 Arihiro Yoshida. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
 # THE SOFTWARE.
 
 %common {
-/* Using AST utility import file version 3.0.0 */
+/* Using AST utility import file version 3.1.0 */
 }
 
 %header {
@@ -49,12 +49,12 @@ typedef struct ${prefix}_ast_range_tag {
 } ${prefix}_ast_range_t;
 
 typedef struct ${prefix}_ast_node_tuple_tag {
-    ${prefix}_ast_node_t *node[${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY];
+    ${prefix}_ast_node_t *p[${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY];
 } ${prefix}_ast_node_tuple_t;
 
 typedef struct ${prefix}_ast_node_array_tag {
-    ${prefix}_ast_node_t **node;
-    size_t max, len;
+    size_t m, n;
+    ${prefix}_ast_node_t **p;
 } ${prefix}_ast_node_array_t;
 
 typedef union ${prefix}_ast_node_data_tag {
@@ -98,10 +98,12 @@ char *${prefix}_ast__strdup(${prefix}_ast_manager_t *mgr, const char *str);
 
 void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
 void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj);
+void ${prefix}_ast_node_array__insert(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, size_t index, ${prefix}_ast_node_t *node);
 void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node);
 
 ${prefix}_ast_node_t *${prefix}_ast_node__create_constant(${prefix}_ast_manager_t *mgr, size_t arity, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string, ...);
 ${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(${prefix}_ast_manager_t *mgr, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string);
+${prefix}_ast_node_t *${prefix}_ast_node__insert_child(${prefix}_ast_node_t *obj, size_t index, ${prefix}_ast_node_t *node); /* for a variadic node only */
 ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node); /* for a variadic node only */
 void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_t *obj);
 
@@ -126,8 +128,8 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${pr
 #endif
 
 #define ${prefix}_ast_node__is_variadic(obj) (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY)
-#define ${prefix}_ast_node__get_child_count(obj) ((const size_t)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.len : obj->arity))
-#define ${prefix}_ast_node__get_child_array(obj) ((${prefix}_ast_node_t *const *const)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.node : obj->data.constant.node))
+#define ${prefix}_ast_node__get_child_count(obj) ((const size_t)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.n : obj->arity))
+#define ${prefix}_ast_node__get_child_array(obj) ((${prefix}_ast_node_t *const *const)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.p : obj->data.constant.p))
 #define ${prefix}_ast_node__get_range(obj) ((const ${prefix}_ast_range_t)obj->range)
 
 #ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
@@ -263,42 +265,53 @@ char *${prefix}_ast__strdup(${prefix}_ast_manager_t *mgr, const char *str) {
 }
 
 void ${prefix}_ast_node_array__initialize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
-    obj->len = 0;
-    obj->max = 0;
-    obj->node = NULL;
+    obj->m = 0;
+    obj->n = 0;
+    obj->p = NULL;
 }
 
 void ${prefix}_ast_node_array__finalize(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj) {
-    while (obj->len > 0) {
-        obj->len--;
-        ${prefix}_ast_node__destroy(mgr, obj->node[obj->len]);
+    while (obj->n > 0) {
+        obj->n--;
+        ${prefix}_ast_node__destroy(mgr, obj->p[obj->n]);
     }
-    PCC_AST_FREE(mgr, obj->node);
+    PCC_AST_FREE(mgr, obj->p);
 }
 
-void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node) {
-    if (obj->max <= obj->len) {
-        const size_t n = obj->len + 1;
-        size_t m = obj->max;
+void ${prefix}_ast_node_array__insert(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, size_t index, ${prefix}_ast_node_t *node) {
+    size_t i = obj->n;
+    if (index > i) index = i;
+    if (obj->m <= obj->n) {
+        const size_t n = obj->n + 1;
+        size_t m = obj->m;
         if (m == 0) m = PCC_AST_NODE_ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n;
-        obj->node = (${prefix}_ast_node_t **)PCC_AST_REALLOC(mgr, obj->node, sizeof(${prefix}_ast_node_t *) * m);
-        obj->max = m;
+        obj->p = (${prefix}_ast_node_t **)PCC_AST_REALLOC(mgr, obj->p, sizeof(${prefix}_ast_node_t *) * m);
+        obj->m = m;
     }
-    obj->node[obj->len++] = node;
+    obj->n++;
+    while (i > index) {
+        obj->p[i] = obj->p[i - 1];
+        i--;
+    }
+    obj->p[index] = node;
+}
+
+void ${prefix}_ast_node_array__add(${prefix}_ast_manager_t *mgr, ${prefix}_ast_node_array_t *obj, ${prefix}_ast_node_t *node) {
+    ${prefix}_ast_node_array__insert(mgr, obj, obj->n, node);
 }
 
 static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
     if (obj->parent) {
         if (obj->parent->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
-            const size_t n = obj->parent->data.variadic.len;
+            const size_t n = obj->parent->data.variadic.n;
             size_t i;
             for (i = 0; i < n; i++) {
-                if (obj->parent->data.variadic.node[i] == obj) break;
+                if (obj->parent->data.variadic.p[i] == obj) break;
             }
             if (i < n)
-                obj->parent->data.variadic.node[i] = NULL;
+                obj->parent->data.variadic.p[i] = NULL;
             else
                 assert(((void)"Parent node with no backward link", 0));
         }
@@ -306,10 +319,10 @@ static void ${prefix}_ast_node__unlink_parent_(${prefix}_ast_node_t *obj) {
             const size_t n = obj->parent->arity;
             size_t i;
             for (i = 0; i < n; i++) {
-                if (obj->parent->data.constant.node[i] == obj) break;
+                if (obj->parent->data.constant.p[i] == obj) break;
             }
             if (i < n)
-                obj->parent->data.constant.node[i] = NULL;
+                obj->parent->data.constant.p[i] = NULL;
             else
                 assert(((void)"Parent node with no backward link", 0));
         }
@@ -355,7 +368,7 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_constant(
                     ${prefix}_ast_node__unlink_parent_(node);
                     node->parent = obj;
                 }
-                obj->data.constant.node[i] = node;
+                obj->data.constant.p[i] = node;
             }
             va_end(ap);
         }
@@ -390,6 +403,20 @@ ${prefix}_ast_node_t *${prefix}_ast_node__create_variadic(
     return obj;
 }
 
+${prefix}_ast_node_t *${prefix}_ast_node__insert_child(${prefix}_ast_node_t *obj, size_t index, ${prefix}_ast_node_t *node) {
+    if (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
+        ${prefix}_ast_node_array__insert(obj->manager, &(obj->data.variadic), index, node);
+        if (node) {
+            ${prefix}_ast_node__unlink_parent_(node);
+            node->parent = obj;
+        }
+    }
+    else {
+        assert(((void)"Attempted to add node to non-variadic node", 0));
+    }
+    return obj;
+}
+
 ${prefix}_ast_node_t *${prefix}_ast_node__add_child(${prefix}_ast_node_t *obj, ${prefix}_ast_node_t *node) {
     if (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
         ${prefix}_ast_node_array__add(obj->manager, &(obj->data.variadic), node);
@@ -411,14 +438,14 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_nod
         PCC_AST_FREE(obj->manager, obj->string);
 #endif
         if (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) {
-            while (obj->data.variadic.len > 0) {
-                const size_t i = --obj->data.variadic.len;
-                ${prefix}_ast_node_t *const node = obj->data.variadic.node[i];
+            while (obj->data.variadic.n > 0) {
+                const size_t i = --obj->data.variadic.n;
+                ${prefix}_ast_node_t *const node = obj->data.variadic.p[i];
                 if (node) {
                     assert(node->parent == obj);
                     node->parent = NULL;
                     ${prefix}_ast_node__destroy(mgr, node);
-                    obj->data.variadic.node[i] = NULL;
+                    obj->data.variadic.p[i] = NULL;
                 }
             }
             ${prefix}_ast_node_array__finalize(obj->manager, &(obj->data.variadic));
@@ -427,7 +454,7 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_nod
             const size_t n = obj->arity;
             size_t i;
             for (i = 0; i < n; i++) {
-                ${prefix}_ast_node_t *const node = obj->data.constant.node[i];
+                ${prefix}_ast_node_t *const node = obj->data.constant.p[i];
                 if (node) {
                     assert(node->parent == obj);
                     node->parent = NULL;

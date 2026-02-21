@@ -1,4 +1,4 @@
-### `code/pcc_ast.v3.peg` (version 3.0.0)
+### `code/pcc_ast.v3.peg` (version 3.1.0)
 
 #### Synopsis
 
@@ -46,8 +46,11 @@ The usage procedure is shown below.
      + Returns a newly created ternary node with three child nodes specified by the argument `node0`, `node1`, and `node2`.
    - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__create_v(void);</code>
      + Returns a newly created variadic node initially with no child node.
+   - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__insert_child(<b><i>pcc</i></b>\_ast_node_t *obj, size_t index, <b><i>pcc</i></b>\_ast_node_t *node);</code>
+     + Inserts the child node specified by the argument `node` right before the child node at the specified index in the variadic node `obj`.
+     + Can be used for `obj` as a variadic node only.
    - <code><b><i>pcc</i></b>\_ast_node_t *<b><i>pcc</i></b>\_ast_node__add_child(<b><i>pcc</i></b>\_ast_node_t *obj, <b><i>pcc</i></b>\_ast_node_t *node);</code>
-     + Adds a child node specified by the argument `node` to the variadic node `obj`.
+     + Adds the child node specified by the argument `node` right after the last child node in the variadic node `obj`.
      + Can be used for `obj` as a variadic node only.
 
    As written above, if the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix.
