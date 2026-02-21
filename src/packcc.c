@@ -1,7 +1,7 @@
 /*
  * PackCC: A parser generator for C.
  *
- * Copyright (c) 2014, 2019-2025 Arihiro Yoshida. All rights reserved.
+ * Copyright (c) 2014, 2019-2026 Arihiro Yoshida. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,7 @@
  */
 
 #define PACKCC_VERSION "3.0.0"
-#define PACKCC_YEARS "2014, 2019-2025"
+#define PACKCC_YEARS "2014, 2019-2026"
 #define PACKCC_WEBSITE "https://github.com/arithy/packcc"
 
 #ifdef _MSC_VER
@@ -417,23 +417,23 @@ typedef struct generate_tag {
 } generate_t;
 
 typedef enum string_flag_tag {
-    STRING_FLAG__NONE = 0,
-    STRING_FLAG__NOTEMPTY = 1,
-    STRING_FLAG__NOTVOID = 2,
-    STRING_FLAG__IDENTIFIER = 4
+    STRING_FLAG_NONE = 0,
+    STRING_FLAG_NOTEMPTY = 1,
+    STRING_FLAG_NOTVOID = 2,
+    STRING_FLAG_IDENTIFIER = 4
 } string_flag_t;
 
 typedef enum code_reach_tag {
-    CODE_REACH__BOTH = 0,
-    CODE_REACH__ALWAYS_SUCCEED = 1,
-    CODE_REACH__ALWAYS_FAIL = -1
+    CODE_REACH_BOTH = 0,
+    CODE_REACH_ALWAYS_SUCCEED = 1,
+    CODE_REACH_ALWAYS_FAIL = -1
 } code_reach_t;
 
 typedef enum code_block_kind_tag {
-    CODE_BLOCK_KIND__NONE = 0,
-    CODE_BLOCK_KIND__NORMAL,
-    CODE_BLOCK_KIND__ACTION,
-    CODE_BLOCK_KIND__PROGPRED
+    CODE_BLOCK_KIND_NONE = 0,
+    CODE_BLOCK_KIND_NORMAL,
+    CODE_BLOCK_KIND_ACTION,
+    CODE_BLOCK_KIND_PROGPRED
 } code_block_kind_t;
 
 static const char *g_cmdname = "packcc"; /* replaced later with actual one */
@@ -1316,14 +1316,14 @@ static bool_t stream__write_text(
             size_t j = i + 1;
             if (j < len) {
                 char c = str[j++];
-                if (c == '$' && kind == CODE_BLOCK_KIND__ACTION) { /* $$ */
+                if (c == '$' && kind == CODE_BLOCK_KIND_ACTION) { /* $$ */
                     if (j >= len || can_character_follow_identifier_(str[j])) {
                         stream__puts(obj, VARNAME_ACTION_OUT);
                         i = j;
                         b = TRUE;
                     }
                 }
-                else if (c == '0' && (kind == CODE_BLOCK_KIND__ACTION || kind == CODE_BLOCK_KIND__PROGPRED)) { /* $0, $0s, $0e */
+                else if (c == '0' && (kind == CODE_BLOCK_KIND_ACTION || kind == CODE_BLOCK_KIND_PROGPRED)) { /* $0, $0s, $0e */
                     if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
                     if (j >= len || can_character_follow_identifier_(str[j])) {
                         stream__puts(obj, VARNAME_CAPTURE_PREFIX);
@@ -1332,7 +1332,7 @@ static bool_t stream__write_text(
                         b = TRUE;
                     }
                 }
-                else if (c >= '1' && c <= '9' && (kind == CODE_BLOCK_KIND__ACTION || kind == CODE_BLOCK_KIND__PROGPRED)) { /* $N, $Ns, $Ne (N >= 1) */
+                else if (c >= '1' && c <= '9' && (kind == CODE_BLOCK_KIND_ACTION || kind == CODE_BLOCK_KIND_PROGPRED)) { /* $N, $Ns, $Ne (N >= 1) */
                     size_t k = c - '0';
                     while (j < len) {
                         c = str[j];
@@ -1380,7 +1380,7 @@ static bool_t stream__write_text(
             size_t j = i + 1;
             if (j < len) {
                 char c = str[j++];
-                if (c == '@' && kind == CODE_BLOCK_KIND__PROGPRED) { /* @@ */
+                if (c == '@' && kind == CODE_BLOCK_KIND_PROGPRED) { /* @@ */
                     if (j >= len || can_character_follow_identifier_(str[j])) {
                         stream__puts(obj, VARNAME_PROGPRED_OUT);
                         i = j;
@@ -1389,7 +1389,7 @@ static bool_t stream__write_text(
                 }
                 else if (
                     ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) &&
-                    (kind == CODE_BLOCK_KIND__ACTION || kind == CODE_BLOCK_KIND__PROGPRED)
+                    (kind == CODE_BLOCK_KIND_ACTION || kind == CODE_BLOCK_KIND_PROGPRED)
                 ) { /* @VAR */
                     while (j < len) {
                         c = str[j];
@@ -1438,14 +1438,14 @@ static bool_t stream__write_text(
                                         obj,
                                         "pcc_marker_variable__%s%s(pcc_ctx, %s%s",
                                         s_func_read[ie].str,
-                                        (kind == CODE_BLOCK_KIND__PROGPRED) ? "" : "_on_action",
+                                        (kind == CODE_BLOCK_KIND_PROGPRED) ? "" : "_on_action",
                                         mvars->p[iv],
                                         (s_func_read[ie].arg > 0) ? ", " : ""
                                     );
                                     i = j + s_func_read[ie].len + 1;
                                     b = TRUE;
                                 }
-                                else if (kind == CODE_BLOCK_KIND__PROGPRED) {
+                                else if (kind == CODE_BLOCK_KIND_PROGPRED) {
                                     ie = 0;
                                     while (s_func_write[ie].str) {
                                         if (
@@ -1469,7 +1469,7 @@ static bool_t stream__write_text(
                                 }
                             }
                             else {
-                                if (kind == CODE_BLOCK_KIND__PROGPRED)
+                                if (kind == CODE_BLOCK_KIND_PROGPRED)
                                     stream__printf(obj, "pcc_marker_variable__integer(pcc_ctx, %s)", mvars->p[iv]);
                                 else
                                     stream__printf(obj, "pcc_marker_variable__integer_on_action(pcc_ctx, %s)", mvars->p[iv]);
@@ -1529,13 +1529,13 @@ static bool_t stream__write_code(
         }
         else if (match_comment_cxx(str, i, len, &k)) {
             lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, capts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND_NONE, capts, mvars, subst);
             h = i = k;
             b = TRUE;
         }
         else if (match_comment_c(str, i, len, &k)) {
             lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, capts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND_NONE, capts, mvars, subst);
             h = i = k;
             /* do not change `b` because a C-style comment is dealt as a white space */
         }
@@ -1544,7 +1544,7 @@ static bool_t stream__write_code(
             match_quotation(str, i, len, '\"', &k)
         ) {
             lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND__NONE, capts, mvars, subst);
+            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND_NONE, capts, mvars, subst);
             h = i = k;
             b = FALSE;
         }
@@ -1613,7 +1613,7 @@ static void stream__write_code_block(
 static void stream__write_footer(
     stream_t *obj, const char *str, size_t len, const char *path, size_t lineno, const subst_map_t *subst
 ) {
-    stream__write_code_block(obj, str, len, 0, path, lineno, CODE_BLOCK_KIND__NORMAL, NULL, NULL, subst);
+    stream__write_code_block(obj, str, len, 0, path, lineno, CODE_BLOCK_KIND_NORMAL, NULL, NULL, subst);
 }
 
 static char *get_home_directory(void) {
@@ -3562,27 +3562,27 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
             input->errnum++;
         }
         if (s != NULL) {
-            string_flag_t f = STRING_FLAG__NONE;
+            string_flag_t f = STRING_FLAG_NONE;
             bool_t b = TRUE;
             remove_leading_spaces(s);
             remove_trailing_spaces(s);
             assert((mode & ~7) == 0);
-            if ((mode & STRING_FLAG__NOTEMPTY) && !is_filled_string(s)) {
+            if ((mode & STRING_FLAG_NOTEMPTY) && !is_filled_string(s)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 input->errnum++;
-                f |= STRING_FLAG__NOTEMPTY;
+                f |= STRING_FLAG_NOTEMPTY;
             }
-            if ((mode & STRING_FLAG__NOTVOID) && strcmp(s, "void") == 0) {
+            if ((mode & STRING_FLAG_NOTVOID) && strcmp(s, "void") == 0) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": 'void' not allowed\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 input->errnum++;
-                f |= STRING_FLAG__NOTVOID;
+                f |= STRING_FLAG_NOTVOID;
             }
-            if ((mode & STRING_FLAG__IDENTIFIER) && !is_identifier_string(s)) {
-                if (!(f & STRING_FLAG__NOTEMPTY)) {
+            if ((mode & STRING_FLAG_IDENTIFIER) && !is_identifier_string(s)) {
+                if (!(f & STRING_FLAG_NOTEMPTY)) {
                     print_error("%s:" FMT_LU ":" FMT_LU ": Invalid identifier\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                     input->errnum++;
                 }
-                f |= STRING_FLAG__IDENTIFIER;
+                f |= STRING_FLAG_IDENTIFIER;
             }
             if (output == NULL) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Definition of %s not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
@@ -3594,7 +3594,7 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
                 input->errnum++;
                 b = FALSE;
             }
-            if (f == STRING_FLAG__NONE && b) {
+            if (f == STRING_FLAG_NONE && b) {
                 assert(output != NULL);
                 *output = s;
             }
@@ -3701,7 +3701,7 @@ static void parse_file_(context_t *ctx) {
             m = input_state__column_number(ctx->input);
             n = ctx->input->charnum;
             o = ctx->input->linepos;
-            if (parse_directive_string_(ctx->input, "%import", &s, STRING_FLAG__NOTEMPTY)) {
+            if (parse_directive_string_(ctx->input, "%import", &s, STRING_FLAG_NOTEMPTY)) {
                 if (s) {
                     if (is_absolute_path(s)) {
                         FILE *const file = fopen(s, "rb");
@@ -3773,9 +3773,9 @@ static void parse_file_(context_t *ctx) {
                 parse_directive_block_(ctx->input, "%source", &(ctx->source), NULL) ||
                 parse_directive_block_(ctx->input, "%header", &(ctx->header), NULL) ||
                 parse_directive_block_(ctx->input, "%common", &(ctx->source), &(ctx->header)) ||
-                parse_directive_string_(ctx->input, "%value", imp ? NULL : &(ctx->vtype), STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
-                parse_directive_string_(ctx->input, "%auxil", imp ? NULL : &(ctx->atype), STRING_FLAG__NOTEMPTY | STRING_FLAG__NOTVOID) ||
-                parse_directive_string_(ctx->input, "%prefix", imp ? NULL : &(ctx->prefix), STRING_FLAG__NOTEMPTY | STRING_FLAG__IDENTIFIER) ||
+                parse_directive_string_(ctx->input, "%value", imp ? NULL : &(ctx->vtype), STRING_FLAG_NOTEMPTY | STRING_FLAG_NOTVOID) ||
+                parse_directive_string_(ctx->input, "%auxil", imp ? NULL : &(ctx->atype), STRING_FLAG_NOTEMPTY | STRING_FLAG_NOTVOID) ||
+                parse_directive_string_(ctx->input, "%prefix", imp ? NULL : &(ctx->prefix), STRING_FLAG_NOTEMPTY | STRING_FLAG_IDENTIFIER) ||
                 parse_directive_marker_(ctx->input, "%marker", &(ctx->mvars))
             ) {
                 b = TRUE;
@@ -3887,7 +3887,7 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char_ar
             stream__printf(gen->stream, ") goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "ctx->cur += " FMT_LU ";\n", (ulong_t)(value->n));
-            return CODE_REACH__BOTH;
+            return CODE_REACH_BOTH;
         }
         else {
             stream__write_characters(gen->stream, ' ', indent);
@@ -3900,12 +3900,12 @@ static code_reach_t generate_matching_string_code(generate_t *gen, const char_ar
             stream__printf(gen->stream, ") goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur++;\n");
-            return CODE_REACH__BOTH;
+            return CODE_REACH_BOTH;
         }
     }
     else {
         /* no code to generate */
-        return CODE_REACH__ALWAYS_SUCCEED;
+        return CODE_REACH_ALWAYS_SUCCEED;
     }
 }
 
@@ -3927,7 +3927,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                 stream__printf(gen->stream, ") goto L%04d;\n", onfail);
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "ctx->cur++;\n");
-                return CODE_REACH__BOTH;
+                return CODE_REACH_BOTH;
             }
             else {
                 if (!bare) {
@@ -3980,7 +3980,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__puts(gen->stream, "}\n");
                 }
-                return CODE_REACH__BOTH;
+                return CODE_REACH_BOTH;
             }
         }
         else {
@@ -3994,7 +3994,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
             stream__printf(gen->stream, ") goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur++;\n");
-            return CODE_REACH__BOTH;
+            return CODE_REACH_BOTH;
         }
     }
     else {
@@ -4002,7 +4002,7 @@ static code_reach_t generate_matching_charclass_code(generate_t *gen, const char
         stream__printf(gen->stream, "if (pcc_refill_buffer(ctx, 1) < 1) goto L%04d;\n", onfail);
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "ctx->cur++;\n");
-        return CODE_REACH__BOTH;
+        return CODE_REACH_BOTH;
     }
 }
 
@@ -4061,13 +4061,13 @@ static code_reach_t generate_matching_utf8_charclass_code(generate_t *gen, const
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "}\n");
     }
-    return CODE_REACH__BOTH;
+    return CODE_REACH_BOTH;
 }
 
 static code_reach_t generate_position_code(generate_t *gen, size_t value, int onfail, size_t indent, bool_t bare) {
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (ctx->pos + ctx->cur != " FMT_LU ") goto L%04d;\n", value, onfail);
-    return CODE_REACH__BOTH;
+    return CODE_REACH_BOTH;
 }
 
 static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfail, size_t indent, bool_t bare);
@@ -4113,7 +4113,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             r = generate_code(gen, expr, l, indent + INDENT_UNIT, FALSE);
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__puts(gen->stream, "if (ctx->cur == p) break;\n");
-            if (r != CODE_REACH__ALWAYS_SUCCEED) {
+            if (r != CODE_REACH_ALWAYS_SUCCEED) {
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "continue;\n");
                 stream__write_characters(gen->stream, ' ', indent);
@@ -4153,7 +4153,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "}\n");
         }
-        return (min > 0) ? ((r == CODE_REACH__ALWAYS_FAIL) ? CODE_REACH__ALWAYS_FAIL : CODE_REACH__BOTH) : CODE_REACH__ALWAYS_SUCCEED;
+        return (min > 0) ? ((r == CODE_REACH_ALWAYS_FAIL) ? CODE_REACH_ALWAYS_FAIL : CODE_REACH_BOTH) : CODE_REACH_ALWAYS_SUCCEED;
     }
     else if (max == 1) {
         if (min > 0) {
@@ -4175,7 +4175,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "const size_t n = chunk->thunks.n;\n");
             {
                 const int l = ++gen->label;
-                if (generate_code(gen, expr, l, indent, FALSE) != CODE_REACH__ALWAYS_SUCCEED) {
+                if (generate_code(gen, expr, l, indent, FALSE) != CODE_REACH_ALWAYS_SUCCEED) {
                     const int m = ++gen->label;
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__printf(gen->stream, "goto L%04d;\n", m);
@@ -4198,12 +4198,12 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "}\n");
             }
-            return CODE_REACH__ALWAYS_SUCCEED;
+            return CODE_REACH_ALWAYS_SUCCEED;
         }
     }
     else {
         /* no code to generate */
-        return CODE_REACH__ALWAYS_SUCCEED;
+        return CODE_REACH_ALWAYS_SUCCEED;
     }
 }
 
@@ -4219,37 +4219,37 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
     if (neg) {
         const int l = ++gen->label;
         r = generate_code(gen, expr, l, indent, FALSE);
-        if (r != CODE_REACH__ALWAYS_FAIL) {
+        if (r != CODE_REACH_ALWAYS_FAIL) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
         }
-        if (r != CODE_REACH__ALWAYS_SUCCEED) {
+        if (r != CODE_REACH_ALWAYS_SUCCEED) {
             if (indent > INDENT_UNIT) stream__write_characters(gen->stream, ' ', indent - INDENT_UNIT);
             stream__printf(gen->stream, "L%04d:;\n", l);
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
         }
         switch (r) {
-        case CODE_REACH__ALWAYS_SUCCEED: r = CODE_REACH__ALWAYS_FAIL; break;
-        case CODE_REACH__ALWAYS_FAIL: r = CODE_REACH__ALWAYS_SUCCEED; break;
-        case CODE_REACH__BOTH: break;
+        case CODE_REACH_ALWAYS_SUCCEED: r = CODE_REACH_ALWAYS_FAIL; break;
+        case CODE_REACH_ALWAYS_FAIL: r = CODE_REACH_ALWAYS_SUCCEED; break;
+        case CODE_REACH_BOTH: break;
         }
     }
     else {
         const int l = ++gen->label;
         const int m = ++gen->label;
         r = generate_code(gen, expr, l, indent, FALSE);
-        if (r != CODE_REACH__ALWAYS_FAIL) {
+        if (r != CODE_REACH_ALWAYS_FAIL) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
         }
-        if (r == CODE_REACH__BOTH) {
+        if (r == CODE_REACH_BOTH) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", m);
         }
-        if (r != CODE_REACH__ALWAYS_SUCCEED) {
+        if (r != CODE_REACH_ALWAYS_SUCCEED) {
             if (indent > INDENT_UNIT) stream__write_characters(gen->stream, ' ', indent - INDENT_UNIT);
             stream__printf(gen->stream, "L%04d:;\n", l);
             stream__write_characters(gen->stream, ' ', indent);
@@ -4257,7 +4257,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
         }
-        if (r == CODE_REACH__BOTH) {
+        if (r == CODE_REACH_BOTH) {
             if (indent > INDENT_UNIT) stream__write_characters(gen->stream, ' ', indent - INDENT_UNIT);
             stream__printf(gen->stream, "L%04d:;\n", m);
         }
@@ -4304,7 +4304,7 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "}\n");
     }
-    return CODE_REACH__BOTH;
+    return CODE_REACH_BOTH;
 }
 
 static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t *nodes, int onfail, size_t indent, bool_t bare) {
@@ -4312,19 +4312,19 @@ static code_reach_t generate_sequential_code(generate_t *gen, const node_array_t
     size_t i;
     for (i = 0; i < nodes->n; i++) {
         switch (generate_code(gen, nodes->p[i], onfail, indent, FALSE)) {
-        case CODE_REACH__ALWAYS_FAIL:
+        case CODE_REACH_ALWAYS_FAIL:
             if (i + 1 < nodes->n) {
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "/* unreachable codes omitted */\n");
             }
-            return CODE_REACH__ALWAYS_FAIL;
-        case CODE_REACH__ALWAYS_SUCCEED:
+            return CODE_REACH_ALWAYS_FAIL;
+        case CODE_REACH_ALWAYS_SUCCEED:
             break;
         default:
             b = TRUE;
         }
     }
-    return b ? CODE_REACH__BOTH : CODE_REACH__ALWAYS_SUCCEED;
+    return b ? CODE_REACH_BOTH : CODE_REACH_ALWAYS_SUCCEED;
 }
 
 static code_reach_t generate_alternative_code(generate_t *gen, const node_array_t *nodes, int onfail, size_t indent, bool_t bare) {
@@ -4348,7 +4348,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         const bool_t c = (i + 1 < nodes->n) ? TRUE : FALSE;
         const int l = ++gen->label;
         switch (generate_code(gen, nodes->p[i], l, indent, FALSE)) {
-        case CODE_REACH__ALWAYS_SUCCEED:
+        case CODE_REACH_ALWAYS_SUCCEED:
             if (c) {
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "/* unreachable codes omitted */\n");
@@ -4362,8 +4362,8 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
                 stream__write_characters(gen->stream, ' ', indent);
                 stream__puts(gen->stream, "}\n");
             }
-            return CODE_REACH__ALWAYS_SUCCEED;
-        case CODE_REACH__ALWAYS_FAIL:
+            return CODE_REACH_ALWAYS_SUCCEED;
+        case CODE_REACH_ALWAYS_FAIL:
             break;
         default:
             b = TRUE;
@@ -4394,7 +4394,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "}\n");
     }
-    return b ? CODE_REACH__BOTH : CODE_REACH__ALWAYS_FAIL;
+    return b ? CODE_REACH_BOTH : CODE_REACH_ALWAYS_FAIL;
 }
 
 static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr, size_t index, int onfail, size_t indent, bool_t bare) {
@@ -4461,7 +4461,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "}\n");
     }
-    return CODE_REACH__BOTH;
+    return CODE_REACH_BOTH;
 }
 
 static code_reach_t generate_thunking_action_code(
@@ -4530,7 +4530,7 @@ static code_reach_t generate_thunking_action_code(
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "}\n");
     }
-    return CODE_REACH__ALWAYS_SUCCEED;
+    return CODE_REACH_ALWAYS_SUCCEED;
 }
 
 static code_reach_t generate_thunking_error_code(
@@ -4587,7 +4587,7 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
                 node->data.reference.name, onfail
             );
         }
-        return CODE_REACH__BOTH;
+        return CODE_REACH_BOTH;
     case NODE_STRING:
         return generate_matching_string_code(gen, &(node->data.string.value), onfail, indent, bare);
     case NODE_CHARCLASS:
@@ -4645,7 +4645,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->eheader.n; i++) {
                 stream__write_code_block(
                     &hstream, ctx->eheader.p[i].text, ctx->eheader.p[i].len, 0,
-                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
+                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4662,7 +4662,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->header.n; i++) {
                 stream__write_code_block(
                     &hstream, ctx->header.p[i].text, ctx->header.p[i].len, 0,
-                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
+                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4674,7 +4674,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->esource.n; i++) {
                 stream__write_code_block(
                     &sstream, ctx->esource.p[i].text, ctx->esource.p[i].len, 0,
-                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
+                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -4722,7 +4722,7 @@ static bool_t generate(context_t *ctx) {
             for (i = 0; i < ctx->source.n; i++) {
                 stream__write_code_block(
                     &sstream, ctx->source.p[i].text, ctx->source.p[i].len, 0,
-                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, CODE_BLOCK_KIND__NORMAL, NULL, NULL, &(ctx->subst)
+                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -6552,7 +6552,7 @@ static bool_t generate(context_t *ctx) {
                     }
                     stream__write_code_block(
                         &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
-                        CODE_BLOCK_KIND__PROGPRED, c, &(ctx->mvars), &(ctx->subst)
+                        CODE_BLOCK_KIND_PROGPRED, c, &(ctx->mvars), &(ctx->subst)
                     );
                     k = c->n;
                     while (k > 0) {
@@ -6666,7 +6666,7 @@ static bool_t generate(context_t *ctx) {
                     }
                     stream__write_code_block(
                         &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
-                        CODE_BLOCK_KIND__ACTION, c, &(ctx->mvars), &(ctx->subst)
+                        CODE_BLOCK_KIND_ACTION, c, &(ctx->mvars), &(ctx->subst)
                     );
                     k = c->n;
                     while (k > 0) {
@@ -6779,7 +6779,7 @@ static bool_t generate(context_t *ctx) {
                     "    return chunk;\n",
                     rule->name
                 );
-                if (r != CODE_REACH__ALWAYS_SUCCEED) {
+                if (r != CODE_REACH_ALWAYS_SUCCEED) {
                     stream__printf(
                         &sstream,
                         "L0000:;\n"
