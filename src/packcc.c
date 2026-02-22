@@ -4309,6 +4309,10 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
         gen->stream, "pcc_predicate_%s_" FMT_LU "(ctx, chunk, &r);\n",
         gen->rule->data.rule.name, (ulong_t)index
     );
+    if (gen->mvars) {
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "pcc_marker_variable_set_entry__copy(ctx->auxil, &(chunk->mvars), &(ctx->mvars.curr));\n");
+    }
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (%sr) goto L%04d;\n", neg ? "" : "!", onfail);
     if (!bare) {
@@ -5003,6 +5007,15 @@ static bool_t generate(context_t *ctx) {
             "typedef struct pcc_thunk_chunk_tag {\n"
             "    pcc_value_table_t values;\n"
             "    pcc_capture_table_t capts;\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_entry_t mvars;\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_thunk_array_t thunks;\n"
             "    size_t pos; /* the starting position in the character buffer */\n"
             "} pcc_thunk_chunk_t;\n"
@@ -5822,6 +5835,15 @@ static bool_t generate(context_t *ctx) {
             "    pcc_thunk_chunk_t *const obj = (pcc_thunk_chunk_t *)pcc_memory_recycler__supply(ctx->auxil, &(ctx->thunk_chunk_recycler));\n"
             "    pcc_value_table__initialize(ctx->auxil, &(obj->values));\n"
             "    pcc_capture_table__initialize(ctx->auxil, &(obj->capts));\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_entry__initialize(ctx->auxil, &(obj->mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_thunk_array__initialize(ctx, &(obj->thunks));\n"
             "    obj->pos = 0;\n"
             "    return obj;\n"
@@ -5831,6 +5853,15 @@ static bool_t generate(context_t *ctx) {
             "    if (obj == NULL) return;\n"
             "    pcc_value_table__finalize(ctx->auxil, &(obj->values));\n"
             "    pcc_capture_table__finalize(ctx->auxil, &(obj->capts));\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "    pcc_marker_variable_set_entry__finalize(ctx->auxil, &(obj->mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "    pcc_thunk_array__finalize(ctx, &(obj->thunks));\n"
             "    pcc_memory_recycler__recycle(ctx->auxil, &(ctx->thunk_chunk_recycler), obj);\n"
             "}\n"
@@ -6368,6 +6399,15 @@ static bool_t generate(context_t *ctx) {
             "            default: /* unknown */\n"
             "                break;\n"
             "            }\n"
+        );
+        if (ctx->mvars.n > 0) {
+            stream__puts(
+                &sstream,
+                "            if (c) pcc_marker_variable_set_entry__copy(ctx->auxil, &(ctx->mvars.curr), &(c->mvars));\n"
+            );
+        }
+        stream__puts(
+            &sstream,
             "        }\n"
             "        else {\n"
             "            pcc_lr_entry_t *const e = pcc_lr_entry__create(ctx, rule);\n"
