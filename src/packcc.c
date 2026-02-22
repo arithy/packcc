@@ -4120,12 +4120,12 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 stream__printf(gen->stream, "L%04d:;\n", l);
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "ctx->cur = p;\n");
-                stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
                 if (gen->mvars) {
-                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                     stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
                 }
+                stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+                stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "break;\n");
             }
@@ -4137,12 +4137,12 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__printf(gen->stream, "if (i < %d) {\n", min);
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__puts(gen->stream, "ctx->cur = p0;\n");
-            stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-            stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n0);\n");
             if (gen->mvars) {
-                stream__write_characters(gen->stream, ' ', indent);
+                stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
             }
+            stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+            stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n0);\n");
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
             stream__write_characters(gen->stream, ' ', indent);
@@ -4183,12 +4183,12 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                     stream__printf(gen->stream, "L%04d:;\n", l);
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__puts(gen->stream, "ctx->cur = p;\n");
-                    stream__write_characters(gen->stream, ' ', indent);
-                    stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
                     if (gen->mvars) {
                         stream__write_characters(gen->stream, ' ', indent);
                         stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
                     }
+                    stream__write_characters(gen->stream, ' ', indent);
+                    stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
                     if (indent > INDENT_UNIT) stream__write_characters(gen->stream, ' ', indent - INDENT_UNIT);
                     stream__printf(gen->stream, "L%04d:;\n", m);
                 }
@@ -4222,6 +4222,10 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         if (r != CODE_REACH_ALWAYS_FAIL) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
+            if (gen->mvars) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
         }
@@ -4230,6 +4234,10 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__printf(gen->stream, "L%04d:;\n", l);
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
+            if (gen->mvars) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            }
         }
         switch (r) {
         case CODE_REACH_ALWAYS_SUCCEED: r = CODE_REACH_ALWAYS_FAIL; break;
@@ -4244,6 +4252,10 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
         if (r != CODE_REACH_ALWAYS_FAIL) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
+            if (gen->mvars) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            }
         }
         if (r == CODE_REACH_BOTH) {
             stream__write_characters(gen->stream, ' ', indent);
@@ -4254,6 +4266,10 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__printf(gen->stream, "L%04d:;\n", l);
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "ctx->cur = p;\n");
+            if (gen->mvars) {
+                stream__write_characters(gen->stream, ' ', indent);
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
         }
@@ -4277,8 +4293,6 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
         indent += INDENT_UNIT;
     }
     stream__write_characters(gen->stream, ' ', indent);
-    stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
-    stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "int r = %s;\n", neg ? "0" : "1");
     if (gen->mvars) {
         stream__write_characters(gen->stream, ' ', indent);
@@ -4295,8 +4309,6 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
         gen->stream, "pcc_predicate_%s_" FMT_LU "(ctx, chunk, &r);\n",
         gen->rule->data.rule.name, (ulong_t)index
     );
-    stream__write_characters(gen->stream, ' ', indent);
-    stream__puts(gen->stream, "ctx->cur = p;\n");
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (%sr) goto L%04d;\n", neg ? "" : "!", onfail);
     if (!bare) {
@@ -4374,12 +4386,12 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         stream__printf(gen->stream, "L%04d:;\n", l);
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "ctx->cur = p;\n");
-        stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
         if (gen->mvars) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
         }
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
         if (!c) {
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -4508,10 +4520,8 @@ static code_reach_t generate_thunking_action_code(
         stream__puts(gen->stream, "pcc_char_array__resize(ctx->auxil, &(thunk->data.leaf.capt0.string), 0);\n");
     }
     if (gen->mvars) {
-        stream__puts(
-            gen->stream,
-            "    pcc_marker_value_set__copy_from(ctx->auxil, &(thunk->data.leaf.mvars), &(ctx->mvars.curr.set));\n"
-        );
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "pcc_marker_value_set__copy_from(ctx->auxil, &(thunk->data.leaf.mvars), &(ctx->mvars.curr.set));\n");
     }
     if (error) {
         stream__write_characters(gen->stream, ' ', indent);
@@ -5746,7 +5756,7 @@ static bool_t generate(context_t *ctx) {
         if (ctx->mvars.n > 0) {
             stream__puts(
                 &sstream,
-                "    pcc_marker_value_set__finalize(ctx->auxil, &(obj->data.leaf.mvars));\n"
+                "        pcc_marker_value_set__finalize(ctx->auxil, &(obj->data.leaf.mvars));\n"
             );
         }
         stream__puts(
