@@ -219,6 +219,7 @@ typedef enum node_type_tag {
     NODE_ALTERNATE,
     NODE_CAPTURE,
     NODE_EXPAND,
+    NODE_MARKER,
     NODE_ACTION,
     NODE_ERROR
 } node_type_t;
@@ -309,6 +310,11 @@ typedef struct node_expand_tag {
     file_pos_t fpos;
 } node_expand_t;
 
+typedef struct node_marker_tag {
+    char *name;
+    file_pos_t fpos;
+} node_marker_t;
+
 typedef struct node_action_tag {
     code_block_t code;
     size_t index;
@@ -337,6 +343,7 @@ typedef union node_data_tag {
     node_alternate_t alternate;
     node_capture_t   capture;
     node_expand_t    expand;
+    node_marker_t    marker;
     node_action_t    action;
     node_error_t     error;
 } node_data_t;
@@ -2440,6 +2447,10 @@ static node_t *create_node(node_type_t type) {
         node->data.expand.index = VOID_VALUE;
         file_pos__initialize(&(node->data.expand.fpos));
         break;
+    case NODE_MARKER:
+        node->data.marker.name = NULL;
+        file_pos__initialize(&(node->data.marker.fpos));
+        break;
     case NODE_ACTION:
         code_block__initialize(&(node->data.action.code));
         node->data.action.index = VOID_VALUE;
@@ -2506,6 +2517,10 @@ static void destroy_node(node_t *node) {
         break;
     case NODE_EXPAND:
         file_pos__finalize(&(node->data.expand.fpos));
+        break;
+    case NODE_MARKER:
+        free(node->data.marker.name);
+        file_pos__finalize(&(node->data.marker.fpos));
         break;
     case NODE_ACTION:
         code_block__finalize(&(node->data.action.code));
@@ -2618,6 +2633,8 @@ static void link_references(context_t *ctx, node_t *node) {
         break;
     case NODE_EXPAND:
         break;
+    case NODE_MARKER:
+        break;
     case NODE_ACTION:
         break;
     case NODE_ERROR:
@@ -2676,6 +2693,8 @@ static void mark_rules_if_used(context_t *ctx, node_t *node) {
         break;
     case NODE_EXPAND:
         break;
+    case NODE_MARKER:
+        break;
     case NODE_ACTION:
         break;
     case NODE_ERROR:
@@ -2731,6 +2750,8 @@ static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
         unreference_rules_from_unused_rule(ctx, node->data.capture.expr);
         break;
     case NODE_EXPAND:
+        break;
+    case NODE_MARKER:
         break;
     case NODE_ACTION:
         break;
@@ -2810,6 +2831,8 @@ static void verify_rule_variables(context_t *ctx, node_t *node, node_const_array
         verify_rule_variables(ctx, node->data.capture.expr, rvars);
         break;
     case NODE_EXPAND:
+        break;
+    case NODE_MARKER:
         break;
     case NODE_ACTION:
         node_const_array__copy(&(node->data.action.rvars), rvars);
@@ -2902,6 +2925,8 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
             }
         }
         break;
+    case NODE_MARKER:
+        break;
     case NODE_ACTION:
         node_const_array__copy(&(node->data.action.capts), capts);
         break;
@@ -2915,6 +2940,77 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
     if (b) {
         node_const_array__finalize(&a);
+    }
+}
+
+static void verify_marker_variables(context_t *ctx, node_t *node) {
+    if (node == NULL) return;
+    switch (node->type) {
+    case NODE_RULE:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
+    case NODE_REFERENCE:
+        break;
+    case NODE_STRING:
+        break;
+    case NODE_CHARCLASS:
+        break;
+    case NODE_POSITION:
+        break;
+    case NODE_QUANTITY:
+        verify_marker_variables(ctx, node->data.quantity.expr);
+        break;
+    case NODE_PREDICATE:
+        verify_marker_variables(ctx, node->data.predicate.expr);
+        break;
+    case NODE_PROGPRED:
+        break;
+    case NODE_SEQUENCE:
+        {
+            size_t i;
+            for (i = 0; i < node->data.sequence.nodes.n; i++) {
+                verify_marker_variables(ctx, node->data.sequence.nodes.p[i]);
+            }
+        }
+        break;
+    case NODE_ALTERNATE:
+        {
+            size_t i;
+            for (i = 0; i < node->data.alternate.nodes.n; i++) {
+                verify_marker_variables(ctx, node->data.alternate.nodes.p[i]);
+            }
+        }
+        break;
+    case NODE_CAPTURE:
+        verify_marker_variables(ctx, node->data.capture.expr);
+        break;
+    case NODE_EXPAND:
+        break;
+    case NODE_MARKER:
+        {
+            size_t i;
+            for (i = 0; i < ctx->mvars.n; i++) {
+                if (strcmp(node->data.marker.name, ctx->mvars.p[i]) == 0) break;
+            }
+            if (i >= ctx->mvars.n && node->data.marker.name != NULL) {
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Marker variable not defined: '@%s'\n",
+                    node->data.marker.fpos.path,
+                    (ulong_t)(node->data.marker.fpos.line + 1), (ulong_t)(node->data.marker.fpos.col + 1),
+                    node->data.marker.name
+                );
+                ctx->errnum++;
+            }
+        }
+        break;
+    case NODE_ACTION:
+        break;
+    case NODE_ERROR:
+        verify_marker_variables(ctx, node->data.error.expr);
+        break;
+    default:
+        print_error("Internal error [%d]\n", __LINE__);
+        exit(-1);
     }
 }
 
@@ -3038,6 +3134,9 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         fprintf(stdout, "%*sExpand(index:", indent, "");
         dump_integer_value(node->data.expand.index);
         fprintf(stdout, ")\n");
+        break;
+    case NODE_MARKER:
+        fprintf(stdout, "%*sMaker(name:'%s')\n", indent, "", node->data.marker.name);
         break;
     case NODE_ACTION:
         fprintf(stdout, "%*sAction(index:", indent, "");
@@ -3201,6 +3300,22 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
                 n_p->data.expand.index--;
                 file_pos__set(&(n_p->data.expand.fpos), input->path, l, m);
             }
+        }
+        else {
+            goto EXCEPTION;
+        }
+    }
+    else if (input_state__match_character(input, '@')) {
+        size_t p;
+        input_state__match_spaces(input);
+        p = input->bufcur;
+        if (input_state__match_identifier(input)) {
+            const size_t q = input->bufcur;
+            input_state__match_spaces(input);
+            n_p = create_node(NODE_MARKER);
+            assert(q >= p);
+            n_p->data.marker.name = strndup_e(input->buffer.p + p, q - p);
+            file_pos__set(&(n_p->data.marker.fpos), input->path, l, m);
         }
         else {
             goto EXCEPTION;
@@ -3856,6 +3971,7 @@ static bool_t parse(context_t *ctx) {
             const node_rule_t *const rule = &(ctx->rules.p[i]->data.rule);
             verify_rule_variables(ctx, rule->expr, NULL);
             verify_captures(ctx, rule->expr, NULL);
+            verify_marker_variables(ctx, rule->expr);
         }
     }
     if (ctx->opts.debug) {
@@ -4480,6 +4596,44 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
     return CODE_REACH_BOTH;
 }
 
+static code_reach_t generate_matching_marker_code(generate_t *gen, const char *name, int onfail, size_t indent, bool_t bare) {
+    if (!bare) {
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "{\n");
+        indent += INDENT_UNIT;
+    }
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__printf(gen->stream, "const size_t n0 = ctx->mvars.curr.set.%s.curr.string.n;\n", name);
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "if (n0 > 1) {\n");
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+    stream__puts(gen->stream, "const size_t n = n0 - 1;\n");
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+    stream__printf(gen->stream, "const char *const q = ctx->mvars.curr.set.%s.curr.string.p;\n", name);
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+    stream__puts(gen->stream, "size_t i;\n");
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+    stream__puts(gen->stream, "for (i = 0; i < n; i++) {\n");
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT * 2);
+    stream__printf(
+        gen->stream,
+        "if (pcc_refill_buffer(ctx, i + 1) < i + 1 || (ctx->buffer.p + ctx->cur)[i] != q[i]) goto L%04d;\n",
+        onfail
+    );
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+    stream__puts(gen->stream, "}\n");
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+    stream__puts(gen->stream, "ctx->cur += n;\n");
+    stream__write_characters(gen->stream, ' ', indent);
+    stream__puts(gen->stream, "}\n");
+    if (!bare) {
+        indent -= INDENT_UNIT;
+        stream__write_characters(gen->stream, ' ', indent);
+        stream__puts(gen->stream, "}\n");
+    }
+    return CODE_REACH_BOTH;
+}
+
 static code_reach_t generate_thunking_action_code(
     generate_t *gen, size_t index, const node_const_array_t *rvars, const node_const_array_t *capts, bool_t error, int onfail, size_t indent, bool_t bare
 ) {
@@ -4624,6 +4778,8 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_capturing_code(gen, node->data.capture.expr, node->data.capture.index, onfail, indent, bare);
     case NODE_EXPAND:
         return generate_expanding_code(gen, node->data.expand.index, onfail, indent, bare);
+    case NODE_MARKER:
+        return generate_matching_marker_code(gen, node->data.marker.name, onfail, indent, bare);
     case NODE_ACTION:
         return generate_thunking_action_code(
             gen, node->data.action.index, &(node->data.action.rvars), &(node->data.action.capts), FALSE, onfail, indent, bare
