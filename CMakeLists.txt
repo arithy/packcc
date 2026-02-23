@@ -69,7 +69,7 @@ add_common_link_options(packcc)
 
 add_custom_target(
     check
-    COMMAND ${CMAKE_COMMAND} -E env "PACKCC=${PROJECT_BINARY_DIR}/packcc" "${PROJECT_SOURCE_DIR}/tests/test.sh"
+    COMMAND ${CMAKE_COMMAND} -E env "PACKCC=$<TARGET_FILE:packcc>" "bash" "${PROJECT_SOURCE_DIR}/tests/test.sh"
     DEPENDS packcc
     VERBATIM
 )

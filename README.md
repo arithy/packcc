@@ -300,6 +300,20 @@ This matches `0foo0`, `123foo123`, etc.
 
 This matches `[[`...`]]`, `[=[`...`]=]`, `[==[`...`]==]`, etc.
 
+**`@`_variable_**
+
+A marker variable represents the string retained by the variable (version 3.0.0 or later).
+The example is shown below.
+
+```
+string <- start body end
+start <- < "'''" / '"""' / "'" / '"' > &{ @quote.set_string($1); }
+body <- ( !@quote . )*
+end <- @quote
+```
+
+This matches `'foo'`, `"bar"`, `'''baz'''`, `"""qux"""`, `""""""`, etc.
+
 **`{` _c source code_ `}`**
 
 Curly braces surround an action.

@@ -1,0 +1,7 @@
+%marker @quote
+
+rule <- start body end EOL
+start <- < "'''" / '"""' / "'" / '"' > &{ @quote.set_string($1); }
+body <- < ( !@quote . )* > { printf("body: '%s'\n", $1); }
+end <- @quote
+EOL <- '\n' / '\r\n' / '\r'

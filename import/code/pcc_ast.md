@@ -1,4 +1,4 @@
-### `code/pcc_ast.peg` (version 2.3.0)
+### `code/pcc_ast.peg` - deprecated (version 2.3.1)
 
 #### Synopsis
 

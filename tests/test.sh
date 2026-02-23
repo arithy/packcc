@@ -39,13 +39,17 @@ EOF
 
 build() {
     if [ -z "$PACKCC" ]; then
-        export PACKCC="$TESTDIR/packcc"
-        ${CC:-cc} --coverage -O0 -o "$PACKCC" $ROOTDIR/src/packcc.c
+        export PACKCC="$TESTDIR/packcc$EXE"
+        if [ -v WINDIR ]; then
+            ${CC:-cl} $CFLAGS -o "$PACKCC" "$ROOTDIR/src/packcc.c"
+        else
+            ${CC:-gcc} $CFLAGS --coverage -O0 -o "$PACKCC" "$ROOTDIR/src/packcc.c"
+        fi
     fi
 }
 
 clean() {
-    rm -f packcc{,.gcda,.gcno,.c.gcov} *.d/test.bats *.d/parser{,.c,.h}
+    rm -f packcc{$EXE,.gcda,.gcno,.c.gcov} *.d/test.bats *.d/parser{$EXE,.c,.h}
 }
 
 main() {
@@ -53,6 +57,16 @@ main() {
 
     export TESTDIR="$(cd "$(dirname "$0")" && pwd)"
     export ROOTDIR="$TESTDIR/.."
+
+    if [ -v WINDIR ]; then
+        export CC=cl
+        export CFLAGS="-W4 -WX -wd4100 -wd4456"
+        export EXE=.exe
+    else
+        export CC=gcc
+        export CFLAGS="-fsigned-char -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -Werror -fsanitize=undefined,address -fno-sanitize-recover=all -fno-omit-frame-pointer"
+        export EXE=
+    fi
 
     cd "$TESTDIR"
     clean
