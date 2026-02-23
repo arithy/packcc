@@ -4453,19 +4453,19 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
         (ulong_t)index, (ulong_t)index
     );
     stream__write_characters(gen->stream, ' ', indent);
-    stream__printf(gen->stream, "if (pcc_refill_buffer(ctx, n) < n) goto L%04d;\n", onfail);
-    stream__write_characters(gen->stream, ' ', indent);
     stream__puts(gen->stream, "if (n > 0) {\n");
     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-    stream__puts(gen->stream, "const char *const p = ctx->buffer.p + ctx->cur;\n");
-    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-    stream__printf(gen->stream, "const char *const q = ctx->buffer.p + chunk->capts.p[" FMT_LU "].range.start;\n", (ulong_t)index);
+    stream__printf(gen->stream, "const size_t k = chunk->capts.p[" FMT_LU "].range.start;\n", (ulong_t)index);
     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
     stream__puts(gen->stream, "size_t i;\n");
     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
     stream__puts(gen->stream, "for (i = 0; i < n; i++) {\n");
-    stream__write_characters(gen->stream, ' ', indent + 8);
-    stream__printf(gen->stream, "if (p[i] != q[i]) goto L%04d;\n", onfail);
+    stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT * 2);
+    stream__printf(
+        gen->stream,
+        "if (pcc_refill_buffer(ctx, i + 1) < i + 1 || (ctx->buffer.p + ctx->cur)[i] != (ctx->buffer.p + k)[i]) goto L%04d;\n",
+        onfail
+    );
     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
     stream__puts(gen->stream, "}\n");
     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
