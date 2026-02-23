@@ -31,8 +31,7 @@ jobs:
 
       - name: Build release version
         run: |
-          if [[ "${{ matrix.os }}"x =~ '^windows' ]]; then
-          else
+          if [[ ! "${{ matrix.os }}"x =~ '^windows' ]]; then
             export CC=gcc
           fi
           mkdir packcc-${{ github.ref_name }} &&
