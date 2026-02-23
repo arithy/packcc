@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  dist:
+    name: Build distribution packages
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-15
+          - macos-15-intel
+          - windows-2025
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build release version
+        run: |
+          mkdir packcc-${{ github.ref_name }} &&
+          (
+          mkdir build-release &&
+          cd build-release &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release &&
+          cmake --install . --config Release --prefix $PWD/../packcc-${{ github.ref_name }}
+          ) &&
+          tar cvzf packcc-${{ github.ref_name }}-${{ matrix.os }}.tar.gz packcc-${{ github.ref_name }}
+
+      - name: Store built distribution
+        uses: actions/upload-artifact@v6
+        with:
+          name: packcc-for-${{ matrix.os }}
+          path: |
+            packcc-*.tar.gz
+          retention-days: 1
+
+  release:
+    name: Release distribution packages
+
+    needs:
+      - dist
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # IMPORTANT: mandatory for making GitHub Releases
+      id-token: write  # IMPORTANT: mandatory for sigstore
+
+    steps:
+      - name: Download distribution
+        uses: actions/download-artifact@v7
+        with:
+          pattern: packcc-for-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Sign distribution with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: |
+            ./dist/packcc-*.tar.gz
+
+      - name: Upload artifact signatures to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Upload to GitHub Release using the `gh` CLI.
+        # `dist/` contains the built packages, and the
+        # sigstore-produced signatures and certificates.
+        run: |
+          gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}' --clobber
