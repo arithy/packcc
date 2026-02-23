@@ -19,8 +19,8 @@
 # THE SOFTWARE.
 
 import sys
-import os
 import re
+from pathlib import Path
 
 
 def main() -> None:
@@ -52,7 +52,7 @@ def main() -> None:
         if int(m.group(1)) - 1 != i + 2:
             print('#line directive with inconsistent line number')
             sys.exit(2)
-        if m.group(2) != os.path.abspath(path):
+        if m.group(2) != Path(path).resolve().as_posix():
             print('#line directive with inconsistent file name')
             sys.exit(2)
     else:

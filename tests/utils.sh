@@ -1,9 +1,9 @@
 test_generate () {
-    (cd "$BATS_TEST_DIRNAME" && "$PACKCC" -I "$ROOTDIR/import" "${PACKCC_OPTS[@]}" -o "parser" "${1:-input.peg}")
+    (cd "$BATS_TEST_DIRNAME" && "$PACKCC" -I "$ROOTDIR/import" "${PACKCC_OPTS[@]}" -o parser "${1:-input.peg}")
 }
 
 test_compile() {
-    ${CC:-cc} -I "$BATS_TEST_DIRNAME" "main.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
+    $CC $CFLAGS -I "$BATS_TEST_DIRNAME" main.c -o "$BATS_TEST_DIRNAME/parser" "$@"
 }
 
 check_output() {
