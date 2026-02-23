@@ -1,0 +1,217 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test-on-linux:
+    name: Test code on Linux
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+        compiler:
+          - gcc
+          - clang
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      CC: ${{ matrix.compiler }}
+
+    steps:
+      - name: Install bats
+        run: |
+          (
+          curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz &&
+          tar zxvf bats-core-1.2.1.tar.gz &&
+          cd bats-core-1.2.1 &&
+          sudo ./install.sh /usr/local
+          )
+
+      - name: Install uncrustify for x64 architecture
+        if: ${{ runner.arch }} == "X64"
+        run: |
+          (
+          curl -LO http://launchpadlibrarian.net/516341795/uncrustify_0.72.0+dfsg1-2_amd64.deb &&
+          sudo dpkg -i uncrustify_0.72.0+dfsg1-2_amd64.deb || true
+          )
+
+      - name: Install uncrustify for Arm64 architecture
+        if: ${{ runner.arch }} == "ARM64"
+        run: |
+          (
+          curl -LO http://launchpadlibrarian.net/516341795/uncrustify_0.72.0+dfsg1-2_arm64.deb &&
+          sudo dpkg -i uncrustify_0.72.0+dfsg1-2_arm64.deb || true
+          )
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build and test debug version
+        run: |
+          (
+          mkdir build-debug &&
+          cd build-debug &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Debug .. &&
+          cmake --build . --config Debug --target check
+          )
+
+      - name: Build and test release version
+        run: |
+          (
+          mkdir build-release &&
+          cd build-release &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release --target check
+          )
+
+  test-on-macos:
+    name: Test code on macOS
+
+    strategy:
+      matrix:
+        os:
+          - macos-15
+          - macos-15-intel
+        compiler:
+          - gcc
+          - clang
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      CC: ${{ matrix.compiler }}
+
+    steps:
+      - name: Install latest bash and gtimeout
+        run: |
+          brew install bash
+          brew install coreutils
+
+      - name: Install bats
+        run: |
+          (
+          curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz &&
+          tar zxvf bats-core-1.2.1.tar.gz &&
+          cd bats-core-1.2.1 &&
+          sudo ./install.sh /usr/local
+          )
+
+      - name: Set up Python
+        # required for build of uncrustify
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uncrustify
+        run: |
+          (
+          git clone https://github.com/uncrustify/uncrustify.git &&
+          cd uncrustify &&
+          git checkout uncrustify-0.72.0 &&
+          mkdir build &&
+          cd build &&
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release &&
+          sudo cmake --install . --config Release
+          )
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build and test debug version
+        run: |
+          (
+          alias timeout='gtimeout'
+          mkdir build-debug &&
+          cd build-debug &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Debug .. &&
+          cmake --build . --config Debug --target check
+          )
+
+      - name: Build and test release version
+        run: |
+          (
+          alias timeout='gtimeout'
+          mkdir build-release &&
+          cd build-release &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release --target check
+          )
+
+  test-on-windows:
+    name: Test code on Windows
+
+    strategy:
+      matrix:
+        os:
+          - windows-2025
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Install bats
+        run: |
+          (
+          curl -L -o bats-core-1.2.1.tar.gz https://github.com/bats-core/bats-core/archive/v1.2.1.tar.gz &&
+          tar zxvf bats-core-1.2.1.tar.gz &&
+          cd bats-core-1.2.1 &&
+          ./install.sh "$HOME/.local/bats-core" &&
+          echo "$HOME/.local/bats-core/bin" >> $GITHUB_PATH
+          )
+
+      - name: Set up Python
+        # required for build of uncrustify
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uncrustify
+        run: |
+          (
+          git clone https://github.com/uncrustify/uncrustify.git &&
+          cd uncrustify &&
+          git checkout uncrustify-0.72.0 &&
+          mkdir build &&
+          cd build &&
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release &&
+          cmake --install . --config Release --prefix "$HOME/.local/uncrustify" &&
+          echo "$HOME/.local/uncrustify" >> $GITHUB_PATH
+          )
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build and test debug version
+        run: |
+          (
+          mkdir build-debug &&
+          cd build-debug &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Debug .. &&
+          cmake --build . --config Debug --target check
+          )
+
+      - name: Build and test release version
+        run: |
+          (
+          mkdir build-release &&
+          cd build-release &&
+          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release --target check
+          )
