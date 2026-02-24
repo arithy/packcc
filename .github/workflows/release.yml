@@ -31,14 +31,11 @@ jobs:
 
       - name: Build release version
         run: |
-          if [[ "${{ matrix.os }}"x =~ '^ubuntu' ]]; then
-            export CC=gcc
-          fi
           mkdir packcc-${{ github.ref_name }} &&
           (
           mkdir build-release &&
           cd build-release &&
-          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake -DCMAKE_BUILD_TYPE=Release .. &&
           cmake --build . --config Release &&
           cmake --install . --config Release --prefix $PWD/../packcc-${{ github.ref_name }}
           ) &&

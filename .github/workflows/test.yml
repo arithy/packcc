@@ -203,7 +203,7 @@ jobs:
           (
           mkdir build-debug &&
           cd build-debug &&
-          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Debug .. &&
+          cmake -DCMAKE_BUILD_TYPE=Debug .. &&
           cmake --build . --config Debug --target check
           )
 
@@ -212,6 +212,6 @@ jobs:
           (
           mkdir build-release &&
           cd build-release &&
-          cmake -DCMAKE_C_COMPILER=$CC -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake -DCMAKE_BUILD_TYPE=Release .. &&
           cmake --build . --config Release --target check
           )
