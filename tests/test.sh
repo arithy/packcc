@@ -64,7 +64,7 @@ main() {
         export EXE=.exe
     else
         export CC=gcc
-        export CFLAGS="-fsigned-char -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -Werror -fsanitize=undefined,address -fno-sanitize-recover=all -fno-omit-frame-pointer"
+        export CFLAGS="-std=c90 -fsigned-char -Wall -Wextra -Wno-unused-parameter -Wno-overlength-strings -pedantic -Werror -fsanitize=undefined,address -fno-sanitize-recover=all -fno-omit-frame-pointer"
         export EXE=
     fi
 
