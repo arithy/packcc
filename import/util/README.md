@@ -8,4 +8,5 @@ In this directory, import files that provide useful rules are stored.
 
 | File Name | Description | Version | Details |
 | --- | --- | --- | --- |
-| [`util/tab.peg`](tab.peg) | Provides a rule to match a space or a tab. | 1.0.0 | [link](tab.md) |
+| [`util/eol.peg`](eol.peg) | Provides rules to match an end-of-line and the end-of-file respectively. | 1.0.0 | [link](eol.md) |
+| [`util/tab.peg`](tab.peg) | Provides a rule to match a space or a tab.                               | 1.0.0 | [link](tab.md) |

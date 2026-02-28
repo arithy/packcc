@@ -1,0 +1,23 @@
+%marker @lineno @col_offset @end_lineno @end_col_offset
+
+rule
+    <- _ ( ( word / ["';:,./()]+ ) _ )* EOF
+word
+   <- &{
+        @lineno = @eol_lineno;
+        @col_offset = $0s - @eol_col_base;
+    } < [a-zA-Z0-9_]+ > &{
+        @end_lineno = @eol_lineno;
+        @end_col_offset = $0e - @eol_col_base;
+    }
+    {
+        printf(
+            "(line, column): (%d, %d) - (%d, %d), word: '%s'\n",
+            (int)@lineno + 1, (int)@col_offset + 1,
+            (int)@end_lineno + 1, (int)@end_col_offset + 1,
+            $1
+        );
+    }
+_ <- ( [ \t] / EOL )*
+
+%import "util/eol.peg"
