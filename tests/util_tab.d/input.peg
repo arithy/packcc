@@ -1,0 +1,7 @@
+%source {
+#define PCC_TAB_SIZE 6
+}
+
+rule <- &{ @tab_col = 0; } TAB* { printf("column: %d\n", (int)@tab_col); } '\n'
+
+%import "util/tab.peg"
