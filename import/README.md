@@ -9,5 +9,5 @@ In this directory, import files are stored.
 | Category Name | Description |
 | --- | --- |
 | [`char`](char) | Import files that define character matching rules. |
-| [`code`](code) | Import files that provide utility codes. |
+| [`code`](code) | Import files that provide useful codes. |
 | [`lang`](lang) | Import files that build ASTs of specific languages. |

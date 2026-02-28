@@ -1,8 +1,8 @@
-# Import Files of Utility Codes
+# Import Files of Useful Codes
 
 ## Overview
 
-In this directory, import files that provide utility codes are stored.
+In this directory, import files that provide useful codes are stored.
 
 ## Import Files
 
