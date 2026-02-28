@@ -19,7 +19,7 @@ The usage procedure is shown below.
    %auxil "pcc_ast_manager_t *"
    ```
 
-   If the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix as below.
+   If the prefix is set to `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix as below.
    ```c
    %prefix "my"
 
@@ -48,7 +48,7 @@ The usage procedure is shown below.
      + Adds a child node specified by the argument `node` to the variadic node `obj`.
      + Can be used for `obj` as a variadic node only.
 
-   As written above, if the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix.
+   As written above, if the prefix is set to `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix.
 
    There are the variants of the node creation functions that enable setting a label as an `int` value.
    The label can be used for specifying node kinds in order to make it easier to analyze the AST in the later parsing steps.
@@ -89,7 +89,7 @@ The usage procedure is shown below.
 To build a meaningful AST, customization of the node is needed.
 By defining the macro <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> in a `%header` section before `%import "code/pcc_ast.peg"`,
 the node member variable `custom` whose data type is <code><b><i>pcc</i></b>\_ast_node_custom_data_t</code> is enabled for storing node custom data.
-If the prefix is set with `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
+If the prefix is set to `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
 ```c
 %prefix "my"
 
@@ -151,7 +151,7 @@ Some macros are prepared to customize the behavior of memory allocation for AST 
 The macro definition should be **in `%source` section** in the PEG source.
 
 The following macros are available.
-Note that, unlike other symbols, the prefix of these macro names is never changed even when a different prefix is set with `%prefix`.
+Note that, unlike other symbols, the prefix of these macro names is never changed even when a different prefix is set to `%prefix`.
 
 **`PCC_AST_MALLOC(`**_mgr_**`,`**_size_**`)`**
 
