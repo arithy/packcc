@@ -2943,7 +2943,7 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
     }
 }
 
-static void verify_marker_variables(context_t *ctx, node_t *node) {
+static void verify_marker_variables(context_t *ctx, const node_t *node) {
     if (node == NULL) return;
     switch (node->type) {
     case NODE_RULE:
