@@ -19,7 +19,7 @@ The usage procedure is shown below.
    %auxil "pcc_ast_manager_t *"
    ```
 
-   If the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix as below.
+   If the prefix is set to `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix as below.
    ```c
    %prefix "my"
 
@@ -53,7 +53,7 @@ The usage procedure is shown below.
      + Adds the child node specified by the argument `node` right after the last child node in the variadic node `obj`.
      + Can be used for `obj` as a variadic node only.
 
-   As written above, if the prefix is set with `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix.
+   As written above, if the prefix is set to `%prefix`, all symbols starting with <code><b><i>pcc</i></b>\_</code> are changed to those with the specified prefix.
 
    A usage example is shown below.
    ```c
@@ -73,7 +73,7 @@ The usage procedure is shown below.
 
    The maximum number of child nodes for a non-variadic node is limited by the macro <code><b><i>PCC</i></b>\_AST_NODE_MAX_CONSTANT_ARITY</code>. The default value is 3, and can be changed by defining the macro with a preferred value in a `%header` section before `%import "code/pcc_ast.v3.peg"`. Up to 9 child nodes are supported.
 
-   If the prefix is set with `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
+   If the prefix is set to `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
    ```c
    %prefix "my"
 
@@ -118,7 +118,7 @@ it is enabled to store custom data in every node.
 The data type of the node custom data is <code><b><i>pcc</i></b>\_ast_node_custom_data_t</code>, and it must be defined in a `%header` section before `%import "code/pcc_ast.v3.peg"` as well.
 The node custom data is retained in the member variable `custom` of every node, and can be accessed freely.
 
-If the prefix is set with `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
+If the prefix is set to `%prefix`, the macro name <code><b><i>PCC</i></b>\_AST_NODE_CUSTOM_DATA_DEFINED</code> is changed to those with the uppercased prefix as below.
 ```c
 %prefix "my"
 
@@ -180,7 +180,7 @@ Some macros are prepared to customize the behavior of memory allocation for AST 
 The macro definition should be **in `%source` section** in the PEG source.
 
 The following macros are available.
-Note that, unlike other symbols, the prefix of these macro names is never changed even when a different prefix is set with `%prefix`.
+Note that, unlike other symbols, the prefix of these macro names is never changed even when a different prefix is set to `%prefix`.
 
 **`PCC_AST_MALLOC(`**_mgr_**`,`**_size_**`)`**
 
