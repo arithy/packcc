@@ -19,7 +19,7 @@
 # THE SOFTWARE.
 
 %common {
-/* Using AST utility import file version 3.1.0 */
+/* Using AST utility import file version 3.1.1 */
 }
 
 %header {
@@ -127,29 +127,29 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${pr
 }
 #endif
 
-#define ${prefix}_ast_node__is_variadic(obj) (obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY)
-#define ${prefix}_ast_node__get_child_count(obj) ((const size_t)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.n : obj->arity))
-#define ${prefix}_ast_node__get_child_array(obj) ((${prefix}_ast_node_t *const *const)((obj->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? obj->data.variadic.p : obj->data.constant.p))
-#define ${prefix}_ast_node__get_range(obj) ((const ${prefix}_ast_range_t)obj->range)
+#define ${prefix}_ast_node__is_variadic(obj) ((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY)
+#define ${prefix}_ast_node__get_child_count(obj) ((const size_t)(((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? (obj)->data.variadic.n : (obj)->arity))
+#define ${prefix}_ast_node__get_child_array(obj) ((${prefix}_ast_node_t *const *const)(((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? (obj)->data.variadic.p : (obj)->data.constant.p))
+#define ${prefix}_ast_node__get_range(obj) ((const ${prefix}_ast_range_t)(obj)->range)
 
 #ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
-#define ${prefix}_ast_node__get_int(obj) ((const ptrdiff_t)(obj->integer))
+#define ${prefix}_ast_node__get_int(obj) ((const ptrdiff_t)((obj)->integer))
 #else
 #define ${prefix}_ast_node__get_int(obj) 0
 #endif
 
 #ifndef ${PREFIX}_AST_NODE_NO_STRING_DATA
-#define ${prefix}_ast_node__get_str(obj) ((const char *const)(obj->string))
+#define ${prefix}_ast_node__get_str(obj) ((const char *const)((obj)->string))
 #else
 #define ${prefix}_ast_node__get_str(obj) ((const char *const)NULL)
 #endif
 
 #ifdef ${PREFIX}_AST_MANAGER_CUSTOM_DATA_DEFINED
-#define ${prefix}_ast_manager__get_custom_data(obj) (&(obj->custom))
+#define ${prefix}_ast_manager__get_custom_data(obj) (&((obj)->custom))
 #endif
 
 #ifdef ${PREFIX}_AST_NODE_CUSTOM_DATA_DEFINED
-#define ${prefix}_ast_node__get_custom_data(obj) (&(obj->custom))
+#define ${prefix}_ast_node__get_custom_data(obj) (&((obj)->custom))
 #endif
 }
 
@@ -355,7 +355,7 @@ static ${prefix}_ast_node_t *${prefix}_ast_node__create_(${prefix}_ast_manager_t
 ${prefix}_ast_node_t *${prefix}_ast_node__create_constant(
     ${prefix}_ast_manager_t *mgr, size_t arity, ${prefix}_ast_range_t range, int label, ptrdiff_t integer, const char *string, ...
 ) {
-    if (arity >= 0 && arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) {
+    if (arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) {
         ${prefix}_ast_node_t *const obj = ${prefix}_ast_node__create_(mgr, range, label);
         obj->arity = arity;
         {
@@ -450,7 +450,7 @@ void ${prefix}_ast_node__destroy(${prefix}_ast_manager_t *mgr, ${prefix}_ast_nod
             }
             ${prefix}_ast_node_array__finalize(obj->manager, &(obj->data.variadic));
         }
-        else if (obj->arity >= 0 && obj->arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) {
+        else if (obj->arity <= ${PREFIX}_AST_NODE_MAX_CONSTANT_ARITY) {
             const size_t n = obj->arity;
             size_t i;
             for (i = 0; i < n; i++) {
