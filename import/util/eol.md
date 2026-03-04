@@ -41,6 +41,8 @@ The usage procedure is shown below.
    ```
    In the example above, the line number and the column byte offset where each `word` starts are output.
 
+**Notice:** Whenever parsing starts, the values of all marker variables are set to 0.
+
 #### Example
 
 An example which shows the line number and the column byte offset where each `word` starts is shown here.

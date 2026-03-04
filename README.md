@@ -303,6 +303,8 @@ This matches `[[`...`]]`, `[=[`...`]=]`, `[==[`...`]==]`, etc.
 **`@`_variable_**
 
 A marker variable represents the string retained by the variable (version 3.0.0 or later).
+For the details, see the explanation of `%marker`.
+
 The example is shown below.
 
 ```
@@ -637,7 +639,7 @@ so that the parser can confine the text range where a specific pattern matches.
 The values of marker variables are associated with each text position.
 
 A marker variable can be dealt as if it were an integer variable. The data type is `ptrdiff_t`, which is a signed integer type with the same bit length as pointer types. Usually, the bit length is 32 bits in 32-bit programs, and 64 bits in 64-bit programs.
-The initial integer value is 0.
+Whenever parsing starts, the values of all marker variables are set to 0.
 An example is shown below.
 
 ```
@@ -666,7 +668,7 @@ However, it fails to match following text for instance.
 ```
 
 A marker variable can also have a string value, without affecting the existing integer value.
-The initial string value is `NULL`.
+Whenever parsing starts, the strings of all marker variables are set to `NULL`.
 
 ```
 %marker @var_0 @var_1
