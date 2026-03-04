@@ -1,4 +1,4 @@
-### `code/pcc_ast.v3.peg` (version 3.1.0)
+### `code/pcc_ast.v3.peg` (version 3.2.0)
 
 #### Synopsis
 
@@ -90,6 +90,8 @@ The usage procedure is shown below.
      + Returns the number of the child nodes of the specified node.
    - <code><b><i>pcc</i></b>\_ast_node_t *const *<b><i>pcc</i></b>\_ast_node__get_child_array(<b><i>pcc</i></b>\_ast_node_t *obj);</code>
      + Returns the pointer to the child node array of the specified node.
+   - <code>const <b><i>pcc</i></b>\_ast_node_t *const *<b><i>pcc</i></b>\_ast_node__get_child_const_array(<b><i>pcc</i></b>\_ast_node_t *obj);</code>
+     + Returns the const pointer to the child node array of the specified node.
 
    Every node retains the rule pattern matching range, which can be accessed using <code><b><i>pcc</i></b>\_ast_range_t <b><i>pcc</i></b>\_ast_node__get_range(const <b><i>pcc</i></b>\_ast_node_t *obj)</code>.
    Namely, the member variables `start` and `end` of the range value memorize `$0s` and `$0e` respectively at the time when the node `obj` was created in a rule action. The range value is immutable.
@@ -282,7 +284,7 @@ void calc_ast_node_custom_data__finalize(calc_ast_manager_t *mgr, calc_ast_node_
 static void dump_ast(const calc_ast_node_t *obj, int depth) {
     if (obj) {
         const size_t n = calc_ast_node__get_child_count(obj);
-        const calc_ast_node_t *const *const p = calc_ast_node__get_child_array(obj);
+        const calc_ast_node_t *const *const p = calc_ast_node__get_child_const_array(obj);
         const calc_ast_node_custom_data_t *const d = &(obj->custom);
         const int b = calc_ast_node__is_variadic(obj);
         if (b || n <= 3) {

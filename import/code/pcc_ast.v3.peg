@@ -19,7 +19,7 @@
 # THE SOFTWARE.
 
 %common {
-/* Using AST utility import file version 3.1.1 */
+/* Using AST utility import file version 3.2.0 */
 }
 
 %header {
@@ -129,7 +129,8 @@ void ${prefix}_ast_node_custom_data__finalize(${prefix}_ast_manager_t *mgr, ${pr
 
 #define ${prefix}_ast_node__is_variadic(obj) ((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY)
 #define ${prefix}_ast_node__get_child_count(obj) ((const size_t)(((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? (obj)->data.variadic.n : (obj)->arity))
-#define ${prefix}_ast_node__get_child_array(obj) ((${prefix}_ast_node_t *const *const)(((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? (obj)->data.variadic.p : (obj)->data.constant.p))
+#define ${prefix}_ast_node__get_child_array(obj) (((obj)->arity == ${PREFIX}_AST_NODE_VARIADIC_ARITY) ? (obj)->data.variadic.p : (obj)->data.constant.p)
+#define ${prefix}_ast_node__get_child_const_array(obj) ((const ${prefix}_ast_node_t *const *const)${prefix}_ast_node__get_child_array(obj))
 #define ${prefix}_ast_node__get_range(obj) ((const ${prefix}_ast_range_t)(obj)->range)
 
 #ifndef ${PREFIX}_AST_NODE_NO_INTEGER_DATA
