@@ -18,6 +18,10 @@
 
 %auxil "calc_ast_manager_t *" # <-- must be set
 
+%earlysource {
+#define _POSIX_C_SOURCE 200809L /* for strdup() */
+}
+
 %header {
 #define CALC_AST_NODE_CUSTOM_DATA_DEFINED /* <-- enables node custom data */
 
