@@ -4314,6 +4314,8 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
         stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
         stream__puts(gen->stream, "const size_t p = ctx->cur;\n");
         stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
+        stream__puts(gen->stream, "MARK_VAR_AS_USED\n");
+        stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
         stream__puts(gen->stream, "const size_t n = chunk->thunks.n;\n");
         {
             const int l = ++gen->label;
