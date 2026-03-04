@@ -149,6 +149,9 @@ A rule definition can be split into multiple lines.
 **_rulename_ `<-` _pattern_**
 
 The _rulename_ is the name of the rule to define.
+The name must consist of alphabets (both uppercase and lowercase letters), digits, and underscores.
+It must start with an alphabet or an underscore.
+
 The _pattern_ is a text pattern that contains one or more of the following elements.
 
 **_rulename_**
