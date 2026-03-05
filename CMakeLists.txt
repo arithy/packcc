@@ -83,7 +83,7 @@ set_property(
 install(TARGETS packcc)
 install(
     DIRECTORY "${PROJECT_SOURCE_DIR}/import"
-    DESTINATION "."
+    DESTINATION "share/packcc"
     PATTERN ".*" EXCLUDE
     PATTERN "*.txt" EXCLUDE
     PATTERN "*.md" EXCLUDE

@@ -2,10 +2,10 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing empty_peg.d - generation" {
+@test "Testing issue_99.d - generation" {
     test_generate
 }
 
-@test "Testing empty_peg.d - compilation" {
+@test "Testing issue_99.d - compilation" {
     test_compile
 }

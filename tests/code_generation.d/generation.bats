@@ -7,7 +7,7 @@ load "$TESTDIR/utils.sh"
 }
 
 @test "Testing code_generation.d - compilation" {
-    ${CC:-cc} -I "$BATS_TEST_DIRNAME" "$BATS_TEST_DIRNAME/parser.c" "$BATS_TEST_DIRNAME/main.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
+    $CC $CFLAGS -I "$BATS_TEST_DIRNAME" "$BATS_TEST_DIRNAME/parser.c" "$BATS_TEST_DIRNAME/main.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
 }
 
 @test "Testing code_generation.d - earlyheader" {

@@ -7,7 +7,7 @@ load "$TESTDIR/utils.sh"
 }
 
 @test "Testing ast-calc.d - compilation" {
-    ${CC:-cc} ast-calc.d/parser.c -o ast-calc.d/parser
+    $CC $CFLAGS -I "$BATS_TEST_DIRNAME" "$BATS_TEST_DIRNAME/parser.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
 }
 
 @test "Testing ast-calc.d - run" {
