@@ -107,7 +107,7 @@ packcc example.peg
 
 By running this, the parser source `example.h` and `example.c` are generated.
 
-If no PEG file name is specified, the PEG source is read from the standard input, and `-.h` and `-.c` will be generated.
+If no PEG source file name is specified, the PEG source is read from the standard input, and `-.h` and `-.c` will be generated.
 
 The base name of the parser source files can be changed by `-o` option.
 
@@ -491,9 +491,9 @@ In the programmable predicate, the C source code can use the predefined variable
 
 Rule variables and `$$` are not accessible in programmable predicates.
 
-**Caution:** The result of the programmable predicate MUST always be the same in the situation
-where the combination of the values of the following variables is the same:
-all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables **`@`**_variable_.
+**Caution:** The result of the programmable predicate and the updated values of all marker variables **`@`**_variable_
+MUST always be the same in the situation where the combination of the values of the following variables is the same:
+all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables.
 Otherwise, the generated parser may work incorrectly.
 
 An example is shown below.
@@ -533,9 +533,9 @@ All values of marker variables are rolled back when subsequent matching fails.
 
 In the negative programmable predicate, the C source code can use the predefined variables shown in the explanation of the programmable predicate (`&` `{` _c source code_ `}`).
 
-**Caution:** The result of the programmable predicate MUST always be the same in the situation
-where the combination of the values of the following variables is the same:
-all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables **`@`**_variable_.
+**Caution:** The result of the programmable predicate and the updated values of all marker variables **`@`**_variable_
+MUST always be the same in the situation where the combination of the values of the following variables is the same:
+all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables.
 Otherwise, the generated parser may work incorrectly.
 
 **`%header` `{` _c source code_ `}`**
