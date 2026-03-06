@@ -29,7 +29,7 @@
  * The specification is determined by referring to peg/leg developed by Ian Piumarta.
  */
 
-#define PACKCC_VERSION "3.0.2"
+#define PACKCC_VERSION "3.1.0"
 #define PACKCC_YEARS "2014, 2019-2026"
 #define PACKCC_WEBSITE "https://github.com/arithy/packcc"
 
@@ -168,11 +168,6 @@ typedef BY_HANDLE_FILE_INFORMATION file_id_t;
 typedef struct stat file_id_t;
 #endif
 
-typedef struct file_id_array_tag {
-    size_t m, n;
-    file_id_t *p;
-} file_id_array_t;
-
 typedef struct file_pos_tag {
     char *path;  /* the file path name */
     size_t line; /* the line number (0-based); VOID_VALUE if not available */
@@ -194,6 +189,17 @@ typedef struct string_array_tag {
     size_t m, n;
     char **p;
 } string_array_t;
+
+typedef struct file_info_tag {
+    char *path;
+    char *version;
+    file_id_t id;
+} file_info_t;
+
+typedef struct file_info_map_tag {
+    size_t m, n;
+    file_info_t *p;
+} file_info_map_t;
 
 typedef struct code_block_tag {
     char *text;
@@ -420,7 +426,7 @@ typedef struct context_tag {
     code_flag_t flags;    /* the bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;        /* the current number of PEG parsing errors */
     input_state_t *input; /* the current input state */
-    file_id_array_t done; /* the unique identifiers of the PEG file already parsed or being parsed */
+    file_info_map_t finfo;      /* the map from a path to information of a PEG file already parsed or being parsed */
     subst_map_t subst;    /* the text substitution data */
     node_array_t rules;   /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
@@ -443,7 +449,8 @@ typedef enum string_flag_tag {
     STRING_FLAG_NONE = 0,
     STRING_FLAG_NOTEMPTY = 1,
     STRING_FLAG_NOTVOID = 2,
-    STRING_FLAG_IDENTIFIER = 4
+    STRING_FLAG_IDENTIFIER = 4,
+    STRING_FLAG_VERSION = 8
 } string_flag_t;
 
 typedef enum code_reach_tag {
@@ -694,6 +701,21 @@ static bool_t is_identifier_string(const char *str) {
         )) return FALSE;
     }
     return TRUE;
+}
+
+static bool_t is_version_string(const char *str) {
+    size_t i, j, k;
+    for (k = 0, j = 0, i = 0; str[i]; i++) {
+        if (str[i] >= ((i == j) ? '1' : '0') && str[i] <= '9') continue;
+        if (str[i] == '.') {
+            if (i == j) return FALSE;
+            j = i + 1; k++;
+        }
+        else {
+            return FALSE;
+        }
+    }
+    return (i == j || k != 2) ? FALSE : TRUE;
 }
 
 static bool_t is_pointer_type(const char *str) {
@@ -1763,34 +1785,6 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
-static void file_id_array__initialize(file_id_array_t *obj) {
-    obj->m = 0;
-    obj->n = 0;
-    obj->p = NULL;
-}
-
-static void file_id_array__finalize(file_id_array_t *obj) {
-    free(obj->p);
-}
-
-static bool_t file_id_array__add_if_not_yet(file_id_array_t *obj, const file_id_t *id) {
-    size_t i;
-    for (i = 0; i < obj->n; i++) {
-        if (file_id__equals(id, &(obj->p[i]))) return FALSE; /* already added */
-    }
-    if (obj->m <= obj->n) {
-        const size_t n = obj->n + 1;
-        size_t m = obj->m;
-        if (m == 0) m = ARRAY_MIN_SIZE;
-        while (m < n && m != 0) m <<= 1;
-        if (m == 0) m = n; /* in case of shift overflow */
-        obj->p = (file_id_t *)realloc_e(obj->p, sizeof(file_id_t) * m);
-        obj->m = m;
-    }
-    obj->p[obj->n++] = *id;
-    return TRUE; /* newly added */
-}
-
 static void char_array__initialize(char_array_t *obj) {
     obj->m = 0;
     obj->n = 0;
@@ -1855,6 +1849,60 @@ static void string_array__add(string_array_t *obj, const char *str, size_t len) 
         obj->m = m;
     }
     obj->p[obj->n++] = (len == VOID_VALUE) ? strdup_e(str) : strndup_e(str, len);
+}
+
+static void file_info__initialize(file_info_t *obj) {
+    obj->path = NULL;
+    obj->version = NULL;
+}
+
+static void file_info__finalize(file_info_t *obj) {
+    free(obj->path);
+    free(obj->version);
+}
+
+static void file_info_map__initialize(file_info_map_t *obj) {
+    obj->m = 0;
+    obj->n = 0;
+    obj->p = NULL;
+}
+
+static void file_info_map__finalize(file_info_map_t *obj) {
+    while (obj->n > 0) {
+        obj->n--;
+        file_info__finalize(&(obj->p[obj->n]));
+    }
+    free(obj->p);
+}
+
+static bool_t file_info_map__get(file_info_map_t *obj, FILE *file, const char *path, size_t *index) {
+    size_t i;
+    file_id_t id;
+    file_id__get(file, path, &id);
+    for (i = 0; i < obj->n; i++) {
+        if (file_id__equals(&id, &(obj->p[i].id))) break;
+    }
+    if (i < obj->n) { /* already exists */
+        if (index) *index = i;
+        return TRUE;
+    }
+    else {
+        if (obj->m <= obj->n) {
+            const size_t n = obj->n + 1;
+            size_t m = obj->m;
+            if (m == 0) m = ARRAY_MIN_SIZE;
+            while (m < n && m != 0) m <<= 1;
+            if (m == 0) m = n; /* in case of shift overflow */
+            obj->p = (file_info_t *)realloc_e(obj->p, sizeof(file_info_t) * m);
+            obj->m = m;
+        }
+        obj->n++;
+        file_info__initialize(&(obj->p[i]));
+        obj->p[i].id = id;
+        obj->p[i].path = strdup_e(path);
+        if (index) *index = i;
+        return FALSE;
+    }
 }
 
 static void code_block__initialize(code_block_t *obj) {
@@ -2368,7 +2416,7 @@ static context_t *create_context(const char *ipath, const char *opath, const str
     ctx->flags = CODE_FLAG_NONE;
     ctx->errnum = 0;
     ctx->input = input_state__create(ipath, NULL, NULL, opts);
-    file_id_array__initialize(&(ctx->done));
+    file_info_map__initialize(&(ctx->finfo));
     subst_map__initialize(&(ctx->subst));
     node_array__initialize(&(ctx->rules));
     ctx->rulehash.d = 0;
@@ -2392,7 +2440,7 @@ static void destroy_context(context_t *ctx) {
     free(ctx->prefix);
     string_array__finalize(&(ctx->mvars));
     while (ctx->input) ctx->input = input_state__destroy(ctx->input);
-    file_id_array__finalize(&(ctx->done));
+    file_info_map__finalize(&(ctx->finfo));
     subst_map__finalize(&(ctx->subst));
     node_array__finalize(&(ctx->rules));
     free((node_t **)ctx->rulehash.p);
@@ -3771,7 +3819,7 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
             bool_t b = TRUE;
             remove_leading_spaces(s);
             remove_trailing_spaces(s);
-            assert((mode & ~7) == 0);
+            assert((mode & ~0xf) == 0);
             if ((mode & STRING_FLAG_NOTEMPTY) && !is_filled_string(s)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 input->errnum++;
@@ -3788,6 +3836,13 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
                     input->errnum++;
                 }
                 f |= STRING_FLAG_IDENTIFIER;
+            }
+            if ((mode & STRING_FLAG_VERSION) && !is_version_string(s)) {
+                if (!(f & STRING_FLAG_NOTEMPTY)) {
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Version in invalid format\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
+                    input->errnum++;
+                }
+                f |= STRING_FLAG_VERSION;
             }
             if (output == NULL) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Definition of %s not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
@@ -3889,11 +3944,8 @@ static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
 
 static void parse_file_(context_t *ctx) {
     if (ctx->input == NULL) return;
-    {
-        file_id_t id;
-        file_id__get(ctx->input->file, ctx->input->path, &id);
-        if (!file_id_array__add_if_not_yet(&(ctx->done), &id)) return; /* already imported */
-    }
+    size_t ii;
+    if (file_info_map__get(&(ctx->finfo), ctx->input->file, ctx->input->path, &ii)) return; /* already imported */
     {
         const bool_t imp = input_state__is_in_imported(ctx->input);
         bool_t b = TRUE;
@@ -3972,6 +4024,7 @@ static void parse_file_(context_t *ctx) {
                 b = TRUE;
             }
             else if (
+                parse_directive_string_(ctx->input, "%version", &(ctx->finfo.p[ii].version), STRING_FLAG_NOTEMPTY | STRING_FLAG_VERSION) ||
                 parse_directive_block_(ctx->input, "%earlysource", &(ctx->esource), NULL) ||
                 parse_directive_block_(ctx->input, "%earlyheader", &(ctx->eheader), NULL) ||
                 parse_directive_block_(ctx->input, "%earlycommon", &(ctx->esource), &(ctx->eheader)) ||

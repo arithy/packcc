@@ -538,6 +538,12 @@ MUST always be the same in the situation where the combination of the values of 
 all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables.
 Otherwise, the generated parser may work incorrectly.
 
+**`%version` `"`_version number_`"`**
+
+The version number of the PEG source file is defined (version 3.1.0 or later).
+The version number must be in the form of _X_`.`_Y_`.`_Z_, where each of _X_, _Y_, and _Z_ is 0 or a positive decimal integer without leading zeros.
+If no `%version` directive is specified, the version number is regarded as `0.0.0`.
+
 **`%header` `{` _c source code_ `}`**
 
 The specified C source code is copied basically verbatim to the C header file before the generated parser API function declarations.
