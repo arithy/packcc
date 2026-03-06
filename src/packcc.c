@@ -29,7 +29,7 @@
  * The specification is determined by referring to peg/leg developed by Ian Piumarta.
  */
 
-#define PACKCC_VERSION "3.0.1"
+#define PACKCC_VERSION "3.0.2"
 #define PACKCC_YEARS "2014, 2019-2026"
 #define PACKCC_WEBSITE "https://github.com/arithy/packcc"
 
@@ -1781,7 +1781,7 @@ static bool_t file_id_array__add_if_not_yet(file_id_array_t *obj, const file_id_
     if (obj->m <= obj->n) {
         const size_t n = obj->n + 1;
         size_t m = obj->m;
-        if (m == 0) m = BUFFER_MIN_SIZE;
+        if (m == 0) m = ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         obj->p = (file_id_t *)realloc_e(obj->p, sizeof(file_id_t) * m);
@@ -1848,7 +1848,7 @@ static void string_array__add(string_array_t *obj, const char *str, size_t len) 
     if (obj->m <= obj->n) {
         const size_t n = obj->n + 1;
         size_t m = obj->m;
-        if (m == 0) m = BUFFER_MIN_SIZE;
+        if (m == 0) m = ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         obj->p = (char **)realloc_e(obj->p, sizeof(char *) * m);
