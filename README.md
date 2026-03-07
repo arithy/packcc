@@ -324,10 +324,6 @@ This matches `'foo'`, `"bar"`, `'''baz'''`, `"""qux"""`, `""""""`, etc.
 Curly braces surround an action.
 The action is arbitrary C source code to be executed at the end of matching.
 
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-For the details, see the explanation of `%prefix`.
-
 Any braces within the action must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
@@ -407,14 +403,22 @@ The variable `@@` to store a result of the _programmable predicate_ cannot be us
 The position values are 0-based; that is, the first position is 0.
 The data type is `size_t` (before version 1.4.0, it was `int`).
 
+The following intrinsic macros are available in the C source code including inside of quotations (`'`, `"`) and comments (`/*` `*/`, `//`).
+
+- **`${prefix}`** :
+    Replaced with the prefix specified by `%prefix` (version 2.1.0 or later).
+- **`${PREFIX}`** :
+    Replaced with the uppercased string of the prefix specified by `%prefix` (version 2.1.0 or later).
+- **`${version}`** :
+    Replaced with the version of the PEG source file where this macro is placed (version 3.1.0 or later).
+
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
+
 **_element_ `~` `{` _c source code_ `}`**
 
 Curly braces following tilde (`~`) surround an error action.
 The error action is arbitrary C source code to be executed at the end of matching only if the preceding _element_ matching fails.
-
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-For the details, see the explanation of `%prefix`.
 
 Any braces within the error action must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
@@ -432,6 +436,10 @@ rule1 <- e1 e2 e3 ~{ error("e[12] ok; e3 has failed"); }
 rule2 <- (e1 e2 e3) ~{ error("one of e[123] has failed"); }
 ```
 
+The available predefined variables and intrinsic macros are the same as those in actions.
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
+
 **`&` `{` _c source code_ `}`**
 
 Curly braces following ampersand (`&`) surround a programmable predicate (version 3.0.0 or later).
@@ -439,10 +447,6 @@ The programmable predicate is arbitrary C source code to be executed during matc
 The matching continues only if a nonzero value is assigned to the output variable `@@`.
 The initial value of `@@` is 1.
 The input text is not consumed from the input and remains available for subsequent matching.
-
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively.
-For the details, see the explanation of `%prefix`.
 
 Any braces within the programmable predicate must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
@@ -513,6 +517,18 @@ and to copy the necessary string data in its member variable.
 The position values are 0-based; that is, the first position is 0.
 The data type is `size_t`.
 
+The following intrinsic macros are available in the C source code including inside of quotations (`'`, `"`) and comments (`/*` `*/`, `//`).
+
+- **`${prefix}`** :
+    Replaced with the prefix specified by `%prefix`.
+- **`${PREFIX}`** :
+    Replaced with the uppercased string of the prefix specified by `%prefix`.
+- **`${version}`** :
+    Replaced with the version of the PEG source file where this macro is placed (version 3.1.0 or later).
+
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively.
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
+
 **`!` `{` _c source code_ `}`**
 
 Curly braces following exclamation (`!`) surround a negative programmable predicate (version 3.0.0 or later).
@@ -521,17 +537,15 @@ The matching continues only if 0 is assigned to the output variable `@@`.
 The initial value of `@@` is 0.
 The input text is not consumed from the input and remains available for subsequent matching.
 
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively.
-For the details, see the explanation of `%prefix`.
-
 Any braces within the negative programmable predicate must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
 One or more negative programmable predicates can be inserted in any places between elements, at the start, and at the end in the pattern.
 All values of marker variables are rolled back when subsequent matching fails.
 
-In the negative programmable predicate, the C source code can use the predefined variables shown in the explanation of the programmable predicate (`&` `{` _c source code_ `}`).
+The available predefined variables and intrinsic macros are the same as those in programmable predicates.
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively.
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
 
 **Caution:** The result of the programmable predicate and the updated values of all marker variables **`@`**_variable_
 MUST always be the same in the situation where the combination of the values of the following variables is the same:
@@ -548,9 +562,8 @@ If no `%version` directive is specified, the version number is regarded as `0.0.
 
 The specified C source code is copied basically verbatim to the C header file before the generated parser API function declarations.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
@@ -561,9 +574,8 @@ When `%header` is used multiple times, the respective C source codes are copied 
 
 The specified C source code is copied basically verbatim to the C source file before the generated parser implementation code.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
@@ -577,9 +589,8 @@ This has the same effect as `%header {` _c source code_ `} %source {` _c source 
 The specified C source code is copied basically verbatim to both of the C header file and the C source file
 before the generated parser API function declarations and the implementation code respectively.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
@@ -732,9 +743,8 @@ A comment can be inserted between `#` and the end of the line.
 A double percent `%%` terminates the section for rule definitions of the grammar.
 All text following `%%` is copied basically verbatim to the C source file after the generated parser implementation code.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 <small>(The specification is determined by referring to [peg/leg](http://piumarta.com/software/peg/) developed by Ian Piumarta.)</small>
 

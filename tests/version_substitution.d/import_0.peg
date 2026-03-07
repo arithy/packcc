@@ -1,0 +1,48 @@
+%header {
+TEST [0] HEADER ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] HEADER \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%source {
+TEST [0] SOURCE ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] SOURCE \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%common {
+TEST [0] COMMON ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] COMMON \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%earlyheader {
+TEST [0] EARLYHEADER ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] EARLYHEADER \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%earlysource {
+TEST [0] EARLYSOURCE ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] EARLYSOURCE \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%earlycommon {
+TEST [0] EARLYCOMMON ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] EARLYCOMMON \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+FILE_0
+   <- '_'
+    &{
+        TEST [0] PROGPRED0 ${version}  " ${version}  " /* ${version}  */ // ${version}
+        TEST [0] PROGPRED0 \${version} " \${version} " /* \${version} */ // \${version}
+    }
+    < "..." >
+    {
+        TEST [0] ACTION0 ${version}  " ${version}  " /* ${version}  */ // ${version}
+        TEST [0] ACTION0 \${version} " \${version} " /* \${version} */ // \${version}
+    }
+
+%import "import_1.peg"
+
+%%
+
+TEST [0] FOOTER ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [0] FOOTER \${version} " \${version} " /* \${version} */ // \${version}

@@ -1,0 +1,60 @@
+rule <- FILE
+
+%import "import_0.peg"
+
+%header {
+TEST [*] HEADER ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] HEADER \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%source {
+TEST [*] SOURCE ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] SOURCE \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%common {
+TEST [*] COMMON ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] COMMON \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%earlyheader {
+TEST [*] EARLYHEADER ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] EARLYHEADER \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%earlysource {
+TEST [*] EARLYSOURCE ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] EARLYSOURCE \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%earlycommon {
+TEST [*] EARLYCOMMON ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] EARLYCOMMON \${version} " \${version} " /* \${version} */ // \${version}
+}
+
+%value "double"
+
+%auxil "long"
+
+%prefix "foo1"
+
+FILE
+   <- '_'
+    &{
+        TEST [*] PROGPRED0 ${version}  " ${version}  " /* ${version}  */ // ${version}
+        TEST [*] PROGPRED0 \${version} " \${version} " /* \${version} */ // \${version}
+    }
+    < "..." >
+    {
+        TEST [*] ACTION0 ${version}  " ${version}  " /* ${version}  */ // ${version}
+        TEST [*] ACTION0 \${version} " \${version} " /* \${version} */ // \${version}
+    }
+    / FILE_0
+    / FILE_1
+
+%version "1.22.333"
+
+%%
+
+TEST [*] FOOTER ${version}  " ${version}  " /* ${version}  */ // ${version}
+TEST [*] FOOTER \${version} " \${version} " /* \${version} */ // \${version}
