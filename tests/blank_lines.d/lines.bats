@@ -45,11 +45,11 @@ check_if_not_enclosed_by_blank_lines() {
     fi
 }
 
-@test "Testing blank_lines.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     test_generate
 }
 
-@test "Testing blank_lines.d - header" {
+@test "Testing $TEST_NAME - header" {
     is_newline_terminated parser.h
     check_if_enclosed_by_blank_lines "HEADER 0" parser.h
     check_if_enclosed_by_blank_lines "HEADER 1" parser.h
@@ -61,7 +61,7 @@ check_if_not_enclosed_by_blank_lines() {
     check_if_enclosed_by_blank_lines "EARLY COMMON 1" parser.h
 }
 
-@test "Testing blank_lines.d - source" {
+@test "Testing $TEST_NAME - source" {
     is_newline_terminated parser.c
     check_if_enclosed_by_blank_lines "SOURCE 0" parser.c
     check_if_enclosed_by_blank_lines "SOURCE 1" parser.c

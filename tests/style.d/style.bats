@@ -21,16 +21,16 @@ test_style() {
     fi
 }
 
-@test "Testing style.d - sources" {
+@test "Testing $TEST_NAME - sources" {
     for file in "$ROOTDIR"/*/*.c; do
         test_style "$file"
     done
 }
 
-@test "Testing style.d - generated" {
+@test "Testing $TEST_NAME - generated" {
     for file in "$ROOTDIR"/examples/*.peg; do
         test_generate "$file"
-        test_style "style.d/parser.h"
-        test_style "style.d/parser.c"
+        test_style "$BATS_TEST_DIRNAME/parser.h"
+        test_style "$BATS_TEST_DIRNAME/parser.c"
     done
 }

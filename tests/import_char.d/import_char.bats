@@ -2,7 +2,7 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing import_char.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     run test_generate
     [ "$status" -eq 0 ]
 }

@@ -2,61 +2,61 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing code_generation.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     test_generate
 }
 
-@test "Testing code_generation.d - compilation" {
+@test "Testing $TEST_NAME - compilation" {
     $CC $CFLAGS -I "$BATS_TEST_DIRNAME" "$BATS_TEST_DIRNAME/parser.c" "$BATS_TEST_DIRNAME/main.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
 }
 
-@test "Testing code_generation.d - earlyheader" {
+@test "Testing $TEST_NAME - earlyheader" {
     in_header "EARLY HEADER ONLY"
     ! in_source "EARLY HEADER ONLY"
 }
 
-@test "Testing code_generation.d - earlycommon" {
+@test "Testing $TEST_NAME - earlycommon" {
     in_header "EARLY HEADER AND SOURCE"
     in_source "EARLY HEADER AND SOURCE"
 }
 
-@test "Testing code_generation.d - earlysource" {
+@test "Testing $TEST_NAME - earlysource" {
     ! in_header "EARLY SOURCE ONLY"
     in_source "EARLY SOURCE ONLY"
 }
 
-@test "Testing code_generation.d - header" {
+@test "Testing $TEST_NAME - header" {
     in_header "HEADER ONLY"
     ! in_source "HEADER ONLY"
 }
 
-@test "Testing code_generation.d - common" {
+@test "Testing $TEST_NAME - common" {
     in_header "HEADER AND SOURCE"
     in_source "HEADER AND SOURCE"
 }
 
-@test "Testing code_generation.d - source" {
+@test "Testing $TEST_NAME - source" {
     ! in_header "custom_function"
     in_source "custom_function"
 }
 
-@test "Testing code_generation.d - post-source" {
+@test "Testing $TEST_NAME - post-source" {
     ! in_header "SOURCE AFTER GENERATED CODE"
     in_source "SOURCE AFTER GENERATED CODE"
 }
 
-@test "Testing code_generation.d - value" {
+@test "Testing $TEST_NAME - value" {
     in_header "int my_parse(my_context_t *ctx, double *ret)"
     in_source "int my_parse(my_context_t *ctx, double *ret)"
 }
 
-@test "Testing code_generation.d - auxil" {
+@test "Testing $TEST_NAME - auxil" {
     in_header "my_context_t *my_create(long auxil)"
     in_source "my_context_t *my_create(long auxil)"
     in_source "typedef long pcc_auxil_t"
 }
 
-@test "Testing code_generation.d - prefix" {
+@test "Testing $TEST_NAME - prefix" {
     in_header "typedef struct my_context_tag my_context_t"
     in_header "my_context_t *my_create(long auxil)"
     in_header "int my_parse(my_context_t *ctx, double *ret)"
@@ -73,7 +73,7 @@ load "$TESTDIR/utils.sh"
     ! in_source "pcc_destroy"
 }
 
-@test "Testing code_generation.d - header ordering" {
+@test "Testing $TEST_NAME - header ordering" {
     EARLYHEADER=$(get_line "EARLY HEADER ONLY" parser.h)
     EARLYCOMMON=$(get_line "EARLY HEADER AND SOURCE" parser.h)
     IFNDEF=$(get_line "#ifndef PCC_INCLUDED_PARSER_H" parser.h)
@@ -87,7 +87,7 @@ load "$TESTDIR/utils.sh"
     [ "$COMMON" -lt "$API" ]
 }
 
-@test "Testing code_generation.d - source ordering" {
+@test "Testing $TEST_NAME - source ordering" {
     EARLYSOURCE=$(get_line "EARLY SOURCE ONLY" parser.c)
     EARLYCOMMON=$(get_line "EARLY HEADER AND SOURCE" parser.c)
     STDINCLUDE=$(get_line '#include <stdio.h>' parser.c)

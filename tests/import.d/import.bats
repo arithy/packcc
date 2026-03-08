@@ -24,7 +24,7 @@ make_all_inputs() {
     make_input t_dir_3/t_dir_3_0/t_imp_d.peg "" "" "" "t_imp_c.peg" ""
 }
 
-@test "Testing import.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     "$PACKCC" --debug -o "$BATS_TEST_DIRNAME/t_parser" "$BATS_TEST_DIRNAME/reference.peg" > "$BATS_TEST_DIRNAME/t_expected.txt" 2>&1
     make_all_inputs
     export PCC_IMPORT_PATH=$BATS_TEST_DIRNAME/t_dir_2:$BATS_TEST_DIRNAME/t_dir_3/t_dir_3_0
@@ -32,7 +32,7 @@ make_all_inputs() {
     check_output "$BATS_TEST_DIRNAME/t_expected.txt"
 }
 
-@test "Testing import.d - header ordering" {
+@test "Testing $TEST_NAME - header ordering" {
     ! in_header ":t_input_EARLYSOURCE:"
     ! in_header ":t_imp_0_EARLYSOURCE:"
     ! in_header ":t_imp_1_EARLYSOURCE:"
@@ -203,7 +203,7 @@ make_all_inputs() {
     [ "$L129" -lt "$L199" ]
 }
 
-@test "Testing import.d - source ordering" {
+@test "Testing $TEST_NAME - source ordering" {
     ! in_source ":t_input_EARLYHEADER:"
     ! in_source ":t_imp_0_EARLYHEADER:"
     ! in_source ":t_imp_1_EARLYHEADER:"
@@ -401,7 +401,7 @@ check_line_number_pre() {
     "${PYTHON:-python3}" "$BATS_TEST_DIRNAME/check_line_number.py" --only-pre "$1" "$BATS_TEST_DIRNAME/$2"
 }
 
-@test "Testing import.d - header line numbers" {
+@test "Testing $TEST_NAME - header line numbers" {
     check_line_number ":t_input_EARLYHEADER:" parser.h
     check_line_number ":t_input_EARLYCOMMON:" parser.h
     check_line_number ":t_imp_0_EARLYHEADER:" parser.h
@@ -464,7 +464,7 @@ check_line_number_pre() {
     check_line_number ":t_imp_d_COMMON:" parser.h
 }
 
-@test "Testing import.d - source line numbers" {
+@test "Testing $TEST_NAME - source line numbers" {
     check_line_number ":t_input_EARLYSOURCE:" parser.c
     check_line_number ":t_input_EARLYCOMMON:" parser.c
     check_line_number ":t_imp_0_EARLYSOURCE:" parser.c

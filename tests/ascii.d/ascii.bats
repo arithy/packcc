@@ -2,18 +2,18 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing ascii.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     PACKCC_OPTS=("--ascii")
     test_generate
 }
 
-@test "Testing ascii.d - check code" {
+@test "Testing $TEST_NAME - check code" {
     ! in_source "pcc_get_char_as_utf32"
 }
 
-@test "Testing ascii.d - compilation" {
+@test "Testing $TEST_NAME - compilation" {
     test_compile
 }
-@test "Testing ascii.d - run" {
-    run_for_input "ascii.d/input.txt"
+@test "Testing $TEST_NAME - run" {
+    run_for_input "$BATS_TEST_DIRNAME/input.txt"
 }

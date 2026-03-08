@@ -2,14 +2,14 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing calc.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     test_generate "$ROOTDIR/examples/calc.peg"
 }
 
-@test "Testing calc.d - compilation" {
+@test "Testing $TEST_NAME - compilation" {
     $CC $CFLAGS -I "$BATS_TEST_DIRNAME" "$BATS_TEST_DIRNAME/parser.c" -o "$BATS_TEST_DIRNAME/parser" "$@"
 }
 
-@test "Testing calc.d - run" {
-    run_for_input calc.d/input.txt
+@test "Testing $TEST_NAME - run" {
+    run_for_input "$BATS_TEST_DIRNAME/input.txt"
 }
