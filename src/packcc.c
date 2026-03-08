@@ -5007,6 +5007,9 @@ static bool_t generate(context_t *ctx) {
         subst_map__add(&(ctx->subst), "prefix", get_prefix(ctx));
         subst_map__add(&(ctx->subst), "PREFIX", get_prefix(ctx));
         to_uppercase(ctx->subst.p[ctx->subst.n - 1].ostr);
+        subst_map__add(&(ctx->subst), "packcc.version", PACKCC_VERSION);
+        subst_map__add(&(ctx->subst), "packcc.option.ascii", ctx->opts.ascii ? "1" : "0");
+        subst_map__add(&(ctx->subst), "packcc.option.lines", ctx->opts.lines ? "1" : "0");
     }
     {
         {
@@ -5070,6 +5073,12 @@ static bool_t generate(context_t *ctx) {
             "#include \"%s\"\n"
             "\n",
             extract_filename(ctx->hpath)
+        );
+        stream__printf(
+            &sstream,
+            "#define PCC_VERSION \"%s\"\n"
+            "\n",
+            PACKCC_VERSION
         );
         if (ctx->opts.ascii || ctx->opts.lines) {
             if (ctx->opts.ascii) {

@@ -411,6 +411,12 @@ The following intrinsic macros are available in the C source code including insi
     Replaced with the uppercased string of the prefix specified by `%prefix` (version 2.1.0 or later).
 - **`${version}`** :
     Replaced with the version specified by `%version` in the current PEG source file (version 3.1.0 or later).
+- **`${packcc.version}`** :
+    Replaced with the version of PackCC (version 3.1.0 or later).
+- **`${packcc.option.ascii}`** :
+    Replaced with 1 if the command line option `--ascii` is specified, 0 otherwise (version 3.1.0 or later).
+- **`${packcc.option.lines}`** :
+    Replaced with 1 if the command line option `--lines` is specified, 0 otherwise (version 3.1.0 or later).
 
 The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
@@ -525,6 +531,12 @@ The following intrinsic macros are available in the C source code including insi
     Replaced with the uppercased string of the prefix specified by `%prefix`.
 - **`${version}`** :
     Replaced with the version specified by `%version` in the current PEG source file (version 3.1.0 or later).
+- **`${packcc.version}`** :
+    Replaced with the version of PackCC (version 3.1.0 or later).
+- **`${packcc.option.ascii}`** :
+    Replaced with 1 if the command line option `--ascii` is specified, 0 otherwise (version 3.1.0 or later).
+- **`${packcc.option.lines}`** :
+    Replaced with 1 if the command line option `--lines` is specified, 0 otherwise (version 3.1.0 or later).
 
 The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively.
 Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
