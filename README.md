@@ -410,7 +410,7 @@ The following intrinsic macros are available in the C source code including insi
 - **`${PREFIX}`** :
     Replaced with the uppercased string of the prefix specified by `%prefix` (version 2.1.0 or later).
 - **`${version}`** :
-    Replaced with the version of the PEG source file where this macro is placed (version 3.1.0 or later).
+    Replaced with the version specified by `%version` in the current PEG source file (version 3.1.0 or later).
 
 The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
@@ -524,7 +524,7 @@ The following intrinsic macros are available in the C source code including insi
 - **`${PREFIX}`** :
     Replaced with the uppercased string of the prefix specified by `%prefix`.
 - **`${version}`** :
-    Replaced with the version of the PEG source file where this macro is placed (version 3.1.0 or later).
+    Replaced with the version specified by `%version` in the current PEG source file (version 3.1.0 or later).
 
 The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively.
 Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
@@ -552,7 +552,7 @@ MUST always be the same in the situation where the combination of the values of 
 all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables.
 Otherwise, the generated parser may work incorrectly.
 
-**`%version` `"`_version number_`"`**
+**`%version` _version number_**
 
 The version number of the PEG source file is defined (version 3.1.0 or later).
 The version number must be in the form of _X_`.`_Y_`.`_Z_, where each of _X_, _Y_, and _Z_ is 0 or a positive decimal integer without leading zeros.

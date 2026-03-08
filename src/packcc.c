@@ -451,8 +451,7 @@ typedef enum string_flag_tag {
     STRING_FLAG_NONE = 0,
     STRING_FLAG_NOTEMPTY = 1,
     STRING_FLAG_NOTVOID = 2,
-    STRING_FLAG_IDENTIFIER = 4,
-    STRING_FLAG_VERSION = 8
+    STRING_FLAG_IDENTIFIER = 4
 } string_flag_t;
 
 typedef enum code_reach_tag {
@@ -703,21 +702,6 @@ static bool_t is_identifier_string(const char *str) {
         )) return FALSE;
     }
     return TRUE;
-}
-
-static bool_t is_version_string(const char *str) {
-    size_t i, j, k;
-    for (k = 0, j = 0, i = 0; str[i]; i++) {
-        if (str[i] >= ((i == j) ? '1' : '0') && str[i] <= '9') continue;
-        if (str[i] == '.') {
-            if (i == j) return FALSE;
-            j = i + 1; k++;
-        }
-        else {
-            return FALSE;
-        }
-    }
-    return (i == j || k != 2) ? FALSE : TRUE;
 }
 
 static bool_t is_pointer_type(const char *str) {
@@ -1875,6 +1859,17 @@ static bool_t input_state__match_number(input_state_t *obj) {
         return TRUE;
     }
     return FALSE;
+}
+
+static bool_t input_state__match_version(input_state_t *obj) {
+    size_t i;
+    for (i = 0; i < 3; i++) {
+        if (i > 0 && !input_state__match_character(obj, '.')) return FALSE;
+        const size_t p = obj->bufcur;
+        if (!input_state__match_number(obj)) return FALSE;
+        if (obj->bufcur - p > 1 && obj->buffer.p[p] == '0') return FALSE;
+    }
+    return TRUE;
 }
 
 static bool_t input_state__match_identifier(input_state_t *obj) {
@@ -3845,7 +3840,7 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
             bool_t b = TRUE;
             remove_leading_spaces(s);
             remove_trailing_spaces(s);
-            assert((mode & ~0xf) == 0);
+            assert((mode & ~0x7) == 0);
             if ((mode & STRING_FLAG_NOTEMPTY) && !is_filled_string(s)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 input->errnum++;
@@ -3863,13 +3858,6 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
                 }
                 f |= STRING_FLAG_IDENTIFIER;
             }
-            if ((mode & STRING_FLAG_VERSION) && !is_version_string(s)) {
-                if (!(f & STRING_FLAG_NOTEMPTY)) {
-                    print_error("%s:" FMT_LU ":" FMT_LU ": Version in invalid format\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
-                    input->errnum++;
-                }
-                f |= STRING_FLAG_VERSION;
-            }
             if (output == NULL) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Definition of %s not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
                 input->errnum++;
@@ -3885,7 +3873,50 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
                 *output = s;
             }
             else {
-                free(s); s = NULL;
+                free(s);
+            }
+        }
+    }
+    return TRUE;
+}
+
+static bool_t parse_directive_version_(input_state_t *input, const char *name, char **output) {
+    const size_t l = input->linenum;
+    const size_t m = input_state__column_number(input);
+    if (!input_state__match_string(input, name)) return FALSE;
+    input_state__match_spaces(input);
+    {
+        char *s = NULL;
+        const size_t p = input->bufcur;
+        const size_t lv = input->linenum;
+        const size_t mv = input_state__column_number(input);
+        if (input_state__match_version(input)) {
+            const size_t q = input->bufcur;
+            input_state__match_spaces(input);
+            s = strndup_e(input->buffer.p + p, q - p);
+        }
+        else {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1), name);
+            input->errnum++;
+        }
+        if (s != NULL) {
+            bool_t b = TRUE;
+            if (output == NULL) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Definition of %s not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
+                b = FALSE;
+            }
+            else if (*output != NULL) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple definitions of %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
+                b = FALSE;
+            }
+            if (b) {
+                assert(output != NULL);
+                *output = s;
+            }
+            else {
+                free(s);
             }
         }
     }
@@ -4050,7 +4081,7 @@ static void parse_file_(context_t *ctx) {
                 b = TRUE;
             }
             else if (
-                parse_directive_string_(ctx->input, "%version", &(ctx->finfo.p[ii].version), STRING_FLAG_NOTEMPTY | STRING_FLAG_VERSION) ||
+                parse_directive_version_(ctx->input, "%version", &(ctx->finfo.p[ii].version)) ||
                 parse_directive_block_(ctx->input, "%earlysource", &(ctx->esource), NULL) ||
                 parse_directive_block_(ctx->input, "%earlyheader", &(ctx->eheader), NULL) ||
                 parse_directive_block_(ctx->input, "%earlycommon", &(ctx->esource), &(ctx->eheader)) ||

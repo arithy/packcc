@@ -40,7 +40,7 @@ FILE_1
         TEST [1] ACTION0 \${version} " \${version} " /* \${version} */ // \${version}
     }
 
-%version "987.65.4"
+%version 543.21.0
 
 %%
 
