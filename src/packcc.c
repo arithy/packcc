@@ -7933,6 +7933,7 @@ static void print_usage(FILE *output) {
 }
 
 int main(int argc, char **argv) {
+    int ret = 0;
 #ifdef _MSC_VER
 #ifdef _DEBUG
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -7968,22 +7969,26 @@ int main(int argc, char **argv) {
                     print_error("Invalid option: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case COMMAND_LINE_OPTION_ERROR_AMBIGUOUS_OPTION:
                     print_error("Ambiguous option: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case COMMAND_LINE_OPTION_ERROR_ARGUMENT_REQUIRED:
                     print_error("Option requires an argument: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case COMMAND_LINE_OPTION_ERROR_ARGUMENT_NOT_REQUIRED:
                     print_error("Option does not require an argument: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case 'I':
                     string_array__add(&dirs, a, VOID_VALUE);
                     break;
@@ -7992,7 +7997,8 @@ int main(int argc, char **argv) {
                         print_error("Extra output base name: '%s'\n", a);
                         fprintf(stderr, "\n");
                         print_usage(stderr);
-                        exit(1);
+                        ret = 1;
+                        goto EXIT;
                     }
                     opt_o = a;
                     break;
@@ -8015,7 +8021,8 @@ int main(int argc, char **argv) {
                     print_error("Unimplemented option: '%s'\n", argv[h]); /* kind of an internal error */
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 }
             }
             switch (argc - i) {
@@ -8028,13 +8035,14 @@ int main(int argc, char **argv) {
                 print_error("Extra input file: '%s'\n", argv[i + 1]);
                 fprintf(stderr, "\n");
                 print_usage(stderr);
-                exit(1);
+                ret = 1;
+                goto EXIT;
             }
             if (opt_h || opt_v) {
                 if (opt_v) print_version(stdout);
                 if (opt_v && opt_h) fprintf(stdout, "\n");
                 if (opt_h) print_usage(stdout);
-                exit(0);
+                goto EXIT;
             }
             ipath = (path && path[0]) ? path : NULL;
             opath = (opt_o && opt_o[0]) ? opt_o : NULL;
@@ -8085,9 +8093,10 @@ int main(int argc, char **argv) {
             context_t *const ctx = create_context(ipath, opath, &dirs, &opts);
             const int b = parse(ctx) && generate(ctx);
             destroy_context(ctx);
-            if (!b) exit(10);
+            if (!b) ret = 10;
         }
+    EXIT:;
         string_array__finalize(&dirs);
     }
-    return 0;
+    return ret;
 }
