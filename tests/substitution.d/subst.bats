@@ -6,6 +6,10 @@ check_output_parser() {
     diff --strip-trailing-cr -uN "${1/parser/expected}.txt" --label "${1/parser/expected}" <(grep '^ *TEST ' < "$1") --label "output"
 }
 
+check_output_error() {
+    diff --strip-trailing-cr -uN "$1" --label "$1" <(echo "$output" | sed -e 's/^packcc\.exe/packcc/') --label "output"
+}
+
 @test "Testing $TEST_NAME - generation" {
     test_generate
 }
@@ -16,4 +20,10 @@ check_output_parser() {
 
 @test "Testing $TEST_NAME - source" {
     check_output_parser "$BATS_TEST_DIRNAME/parser.c"
+}
+
+@test "Testing $TEST_NAME - generation [invalid case]" {
+    run test_generate error.peg
+    [ "$status" -ne 0 ]
+    check_output_error "$BATS_TEST_DIRNAME/error_expected.txt"
 }
