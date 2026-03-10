@@ -1,0 +1,23 @@
+rule <- FILE_0
+
+%import "./error_0.peg"
+%import "error_0.peg" != 0.0.0
+%import "error_0.peg" > 0.0.0
+%import "error_0.peg" < 0.0.0
+%import "error_0.peg" >=  0.0.1
+%import "error_0.peg" == 0.0.1
+%import "./error_0.peg" != 0.0.0
+%import "./error_0.peg" > 0.0.0
+%import "./error_0.peg" < 0.0.0
+%import "./error_0.peg" >=  0.0.1
+%import "./error_0.peg" == 0.0.1
+%import "error_0.peg" != 0.0.0 , <= 0.0.0
+%import "error_0.peg" == 0.0.0 , > 0.0.0 , >= 0.0.0
+%import "error_0.peg" == 0.0.0 , <= 0.0.0 , < 0.0.0, >= 0.0.1
+%import "error_0.peg"==0.0.0,<=0.0.0,>=0.0.0,< 0.0.1,== 0.0.1
+
+%value "double"
+
+%auxil "long"
+
+%prefix "foo1"

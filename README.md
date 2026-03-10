@@ -722,7 +722,7 @@ Note that the integer and string values are 0 and `NULL` respectively if `restor
 Marker variables are read-only in actions while they are writable in programmable predicates.
 In the C source codes at the other parts, all marker variables are inaccessible.
 
-**`%import` `"`_import file name_`"`**
+**`%import` `"`_import file name_`"`** [ **_version constraints_** ]
 
 The content of the specified import file is expanded at the text location of `%import` (version 2.0.0 or later).
 This can be used multiple times anywhere and can be used also in imported files.
@@ -745,6 +745,22 @@ If it is a relative path, the directories listed below are searched for the impo
      and is the subdirectory `packcc/import` in the common application data directory, "`C:\ProgramData`" for example.
 
 Note that the file imported once is silently ignored when it is attempted to be imported again.
+
+The version of the PEG source file to be imported can be restricted by specifying version constraints in the form shown below (version 3.1.0 or later).
+
+_op_ _version_ ( `,` _op_ _version_ )\*
+- _op_ is either of the following operators.
+    - `==`: equal to the version followed by this operator.
+    - `!=`: not equal to the version followed by this operator.
+    - `<=`: less than or equal to the version followed by this operator.
+    - `>=`: greater than or equal to the version followed by this operator.
+    - `<`: less than the version followed by this operator.
+    - `>`: greater than the version followed by this operator.
+- _version_ is the version number in the form of _X_`.`_Y_`.`_Z_, where each of _X_, _Y_, and _Z_ is 0 or a positive decimal integer without leading zeros.
+- `,` acts as a logical AND operator.
+- White spaces including newlines can be optionally inserted between _op_, _version_, and `,`.
+
+The version constraints can be omitted when no restriction is required.
 
 **`#`_comment_**
 

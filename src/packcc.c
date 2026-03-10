@@ -1271,6 +1271,39 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
+static int compare_digits(const char *v0, const char *v1, size_t *n0, size_t *n1) {
+    size_t i0, i1, i;
+    for (i0 = 0; v0[i0] >= '0' && v0[i0] <= '9'; i0++);
+    for (i1 = 0; v1[i1] >= '0' && v1[i1] <= '9'; i1++);
+    if (n0) *n0 = i0;
+    if (n1) *n1 = i1;
+    if (i0 < i1) return -1;
+    if (i0 > i1) return 1;
+    for (i = 0; i < i0; i++) {
+        if (v0[i] < v1[i]) return -1;
+        if (v0[i] > v1[i]) return 1;
+    }
+    return 0;
+}
+
+static int compare_versions(const char *v0, const char *v1) {
+    size_t i;
+    for (i = 0; i < 3; i++) {
+        size_t i0, i1;
+        int c;
+        if (i > 0) {
+            if (*v0 != '.' || *v1 != '.') return 0; /* illegal case */
+            v0++;
+            v1++;
+        }
+        c = compare_digits(v0, v1, &i0, &i1);
+        if (c != 0) return c;
+        v0 += i0;
+        v1 += i1;
+    }
+    return 0;
+}
+
 static void char_array__initialize(char_array_t *obj) {
     obj->m = 0;
     obj->n = 0;
@@ -3879,6 +3912,74 @@ static void dump_options(context_t *ctx) {
     fprintf(stdout, "prefix: '%s'\n", get_prefix(ctx));
 }
 
+static bool_t parse_and_check_version_(input_state_t *input, const char *version, bool_t *valid) {
+    bool_t v = TRUE;
+    bool_t f = TRUE;
+    for (;;) {
+        int o = -1;
+        {
+            const size_t l = input->linenum;
+            const size_t m = input_state__column_number(input);
+            if (input_state__match_string(input, "==")) {
+                o = 0;
+            }
+            else if (input_state__match_string(input, "!=")) {
+                o = 1;
+            }
+            else if (input_state__match_string(input, "<=")) {
+                o = 2;
+            }
+            else if (input_state__match_string(input, ">=")) {
+                o = 3;
+            }
+            else if (input_state__match_string(input, "<")) {
+                o = 4;
+            }
+            else if (input_state__match_string(input, ">")) {
+                o = 5;
+            }
+            else {
+                if (!f) {
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Illegal operator syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                    input->errnum++;
+                }
+                return FALSE;
+            }
+            input_state__match_spaces(input);
+        }
+        {
+            const size_t p = input->bufcur;
+            const size_t l = input->linenum;
+            const size_t m = input_state__column_number(input);
+            if (!input_state__match_version(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal version syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                input->errnum++;
+                return FALSE;
+            }
+            input_state__match_spaces(input);
+            const int c = compare_versions(version ? version : IMPLICIT_VERSION, input->buffer.p + p);
+            switch (o) {
+            case 0: if (c != 0) v = FALSE; break;
+            case 1: if (c == 0) v = FALSE; break;
+            case 2: if (c > 0) v = FALSE; break;
+            case 3: if (c < 0) v = FALSE; break;
+            case 4: if (c >= 0) v = FALSE; break;
+            case 5: if (c <= 0) v = FALSE; break;
+            default: v = FALSE; /* in case */
+            }
+        }
+        f = FALSE;
+        if (input_state__match_character(input, ',')) {
+            input_state__match_spaces(input);
+        }
+        else {
+            break;
+        }
+    }
+    if (valid) *valid = v;
+    return TRUE;
+}
+
 static bool_t parse_directive_block_(input_state_t *input, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
     if (!input_state__match_string(input, name)) return FALSE;
     input_state__match_spaces(input);
@@ -4098,10 +4199,10 @@ static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
     return TRUE;
 }
 
-static void parse_file_(context_t *ctx) {
-    if (ctx->input == NULL) return;
-    size_t ii;
-    if (file_info_map__get(&(ctx->finfo), ctx->input->file, ctx->input->path, &ii)) return; /* already imported */
+static size_t parse_file_(context_t *ctx) {
+    size_t iinfo;
+    if (ctx->input == NULL) return VOID_VALUE;
+    if (file_info_map__get(&(ctx->finfo), ctx->input->file, ctx->input->path, &iinfo)) return iinfo; /* already imported */
     {
         const bool_t imp = input_state__is_in_imported(ctx->input);
         bool_t b = TRUE;
@@ -4115,12 +4216,14 @@ static void parse_file_(context_t *ctx) {
             n = ctx->input->charnum;
             o = ctx->input->linepos;
             if (parse_directive_string_(ctx->input, "%import", &s, STRING_FLAG_NOTEMPTY)) {
+                size_t ii = VOID_VALUE;
+                bool_t v;
                 if (s) {
                     if (is_absolute_path(s)) {
                         FILE *const file = fopen(s, "rb");
                         if (file) {
                             ctx->input = input_state__create(s, file, ctx->input, &(ctx->opts));
-                            parse_file_(ctx);
+                            ii = parse_file_(ctx);
                             ctx->input = input_state__destroy(ctx->input);
                         }
                         else {
@@ -4170,17 +4273,25 @@ static void parse_file_(context_t *ctx) {
                         }
                         if (file) {
                             ctx->input = input_state__create(path, file, ctx->input, &(ctx->opts));
-                            parse_file_(ctx);
+                            ii = parse_file_(ctx);
                             ctx->input = input_state__destroy(ctx->input);
                         }
                         free(path);
                     }
-                    free(s);
                 }
+                if (parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
+                        ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                        s
+                    );
+                    ctx->input->errnum++;
+                }
+                free(s);
                 b = TRUE;
             }
             else if (
-                parse_directive_version_(ctx->input, "%version", &(ctx->finfo.p[ii].version)) ||
+                parse_directive_version_(ctx->input, "%version", &(ctx->finfo.p[iinfo].version)) ||
                 parse_directive_block_(ctx->input, "%earlysource", &(ctx->esource), NULL) ||
                 parse_directive_block_(ctx->input, "%earlyheader", &(ctx->eheader), NULL) ||
                 parse_directive_block_(ctx->input, "%earlycommon", &(ctx->esource), &(ctx->eheader)) ||
@@ -4224,6 +4335,7 @@ static void parse_file_(context_t *ctx) {
     }
     ctx->errnum += ctx->input->errnum;
     ctx->flags |= ctx->input->flags;
+    return iinfo;
 }
 
 static bool_t parse(context_t *ctx) {
