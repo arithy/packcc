@@ -4703,7 +4703,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 stream__puts(gen->stream, "ctx->cur = p;\n");
                 if (gen->mvars) {
                     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                    stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                    stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
                 }
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
@@ -4720,7 +4720,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p0;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n0);\n");
@@ -4766,7 +4766,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                     stream__puts(gen->stream, "ctx->cur = p;\n");
                     if (gen->mvars) {
                         stream__write_characters(gen->stream, ' ', indent);
-                        stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                        stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
                     }
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
@@ -4805,7 +4805,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -4817,7 +4817,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
         }
         switch (r) {
@@ -4835,7 +4835,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
         }
         if (r == CODE_REACH_BOTH) {
@@ -4849,7 +4849,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -4877,7 +4877,7 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
     stream__printf(gen->stream, "int r = %s;\n", neg ? "0" : "1");
     if (gen->mvars) {
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_marker_variable_set_record__save(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+        stream__puts(gen->stream, "pcc_marker_variable_set_record__save(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
     }
     stream__write_characters(gen->stream, ' ', indent);
     stream__puts(gen->stream, "ctx->capt0.range.start = chunk->pos;\n");
@@ -4969,7 +4969,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         stream__puts(gen->stream, "ctx->cur = p;\n");
         if (gen->mvars) {
             stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
         }
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
@@ -5541,8 +5541,7 @@ static bool_t generate(context_t *ctx) {
                 "    pcc_marker_value_stack_t prev;\n"
                 "} pcc_marker_value_record_t;\n"
                 "\n"
-                "typedef struct pcc_marker_variable_set_tag {\n"
-                "    size_t pos;\n"
+                "typedef struct pcc_marker_variable_set_tag {\n" /* must contain only members with the names of the marker variables */
             );
             for (i = 0; i < ctx->mvars.n; i++) {
                 stream__printf(
@@ -6344,7 +6343,7 @@ static bool_t generate(context_t *ctx) {
             if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
                 stream__puts(
                     &sstream,
-                    "static void pcc_marker_variable_set_record__save(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                    "static void pcc_marker_variable_set_record__save(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
                     "    if (obj->curr.pos < pos) {\n"
                     "        pcc_marker_variable_set_stack__push(auxil, &(obj->prev), &(obj->curr));\n"
                     "        obj->curr.pos = pos;\n"
@@ -6356,7 +6355,7 @@ static bool_t generate(context_t *ctx) {
             {
                 stream__puts(
                     &sstream,
-                    "static void pcc_marker_variable_set_record__restore(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                    "static void pcc_marker_variable_set_record__restore(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
                     "    if (obj->curr.pos > pos) {\n"
                     "        size_t n = obj->prev.n;\n"
                     "        while (n > 0 && obj->prev.p[n - 1].pos > pos) n--;\n"
@@ -6370,7 +6369,7 @@ static bool_t generate(context_t *ctx) {
             if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
-                    "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                    "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
                     "    size_t k = 0;\n"
                     "    while (k < obj->prev.n && obj->prev.p[k].pos < pos) k++;\n"
                     "    if (k > 0) {\n"
@@ -7159,7 +7158,7 @@ static bool_t generate(context_t *ctx) {
             if (ctx->mvars.n > 0) {
                 stream__puts(
                     &sstream,
-                    "    pcc_marker_variable_set_record__shift(ctx->auxil, ctx->pos, &(ctx->mvars));\n"
+                    "    pcc_marker_variable_set_record__shift(ctx->auxil, &(ctx->mvars), ctx->pos);\n"
                 );
             }
             stream__puts(
@@ -7761,7 +7760,7 @@ static bool_t generate(context_t *ctx) {
         if (ctx->mvars.n > 0) {
             stream__puts(
                 &sstream,
-                "    pcc_marker_variable_set_record__restore(ctx->auxil, 0, &(ctx->mvars));\n"
+                "    pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), 0);\n"
             );
         }
         stream__puts(
