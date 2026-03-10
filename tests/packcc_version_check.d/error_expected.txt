@@ -1,0 +1,6 @@
+packcc: ./error_0.peg:3:1: Version not matched: packcc
+packcc: ./error_0.peg:4:1: Version not matched: packcc
+packcc: ./error_0.peg:5:1: Invalid name: foo
+packcc: ./error_0.peg:5:14: Illegal rule syntax
+packcc: error.peg:11:1: Version not matched: packcc
+packcc: error.peg:12:1: Version constraints missing: packcc

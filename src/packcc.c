@@ -4011,6 +4011,26 @@ static bool_t parse_directive_block_(input_state_t *input, const char *name, cod
     return TRUE;
 }
 
+static bool_t parse_directive_identifier_(input_state_t *input, const char *name, char **output) {
+    if (!input_state__match_string(input, name)) return FALSE;
+    input_state__match_spaces(input);
+    {
+        const size_t p = input->bufcur;
+        const size_t l = input->linenum;
+        const size_t m = input_state__column_number(input);
+        if (input_state__match_identifier(input)) {
+            const size_t q = input->bufcur;
+            input_state__match_spaces(input);
+            if (output) *output = strndup_e(input->buffer.p + p, q - p);
+        }
+        else {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            input->errnum++;
+        }
+    }
+    return TRUE;
+}
+
 static bool_t parse_directive_string_(input_state_t *input, const char *name, char **output, string_flag_t mode) {
     const size_t l = input->linenum;
     const size_t m = input_state__column_number(input);
@@ -4282,6 +4302,37 @@ static size_t parse_file_(context_t *ctx) {
                 if (parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
                     print_error(
                         "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
+                        ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                        s
+                    );
+                    ctx->input->errnum++;
+                }
+                free(s);
+                b = TRUE;
+            }
+            else if (parse_directive_identifier_(ctx->input, "%requires", &s)) {
+                if (strcmp(s, "packcc") == 0) {
+                    bool_t v;
+                    if (!parse_and_check_version_(ctx->input, PACKCC_VERSION, &v)) {
+                        print_error(
+                            "%s:" FMT_LU ":" FMT_LU ": Version constraints missing: %s\n",
+                            ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                            s
+                        );
+                        ctx->input->errnum++;
+                    }
+                    else if (!v) {
+                        print_error(
+                            "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
+                            ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                            s
+                        );
+                        ctx->input->errnum++;
+                    }
+                }
+                else {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Invalid name: %s\n",
                         ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
                         s
                     );
