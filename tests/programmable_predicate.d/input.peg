@@ -5,7 +5,7 @@
 %marker @count @chars_l @chars_r @chars_l_sum @chars_r_sum
 
 rule
-   <- (
+   <- &{ @chars_l_sum = 0; @chars_r_sum = 0; } (
       rule_chars_0_p ' '+ &rule_chars_0_p rule_chars_0_p
     / rule_chars_0_p ' '+ !rule_chars_0_p rule_chars_0_n
     / rule_count_p / rule_count_n / rule_chars_0_p / rule_chars_0_n / rule_chars_1_p / rule_chars_1_n

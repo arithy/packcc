@@ -6272,6 +6272,11 @@ static bool_t generate(context_t *ctx) {
                     "    PCC_FREE(auxil, obj->p);\n"
                     "}\n"
                     "\n"
+                );
+            }
+            if (ctx->rules.n > 0) {
+                stream__puts(
+                    &sstream,
                     "static void pcc_marker_variable_set_stack__resize(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, size_t len) {\n"
                     "    size_t i;\n"
                     "    for (i = len; i < obj->n; i++) pcc_marker_variable_set_entry__finalize(auxil, &(obj->p[i]));\n"
@@ -6300,7 +6305,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            {
+            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_stack__pop(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, pcc_marker_variable_set_entry_t *mval) {\n"
@@ -6322,6 +6327,8 @@ static bool_t generate(context_t *ctx) {
                     "}\n"
                     "\n"
                 );
+            }
+            {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_record__initialize(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj) {\n"
@@ -6348,9 +6355,10 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            {
+            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
+                    "MARK_FUNC_AS_USED\n"
                     "static void pcc_marker_variable_set_record__restore(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
                     "    if (obj->curr.pos > pos) {\n"
                     "        size_t n = obj->prev.n;\n"
@@ -6361,8 +6369,6 @@ static bool_t generate(context_t *ctx) {
                     "}\n"
                     "\n"
                 );
-            }
-            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
@@ -7768,15 +7774,6 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "    pcc_thunk_array__revert(ctx, &(ctx->thunks), 0);\n"
-        );
-        if (ctx->mvars.n > 0) {
-            stream__puts(
-                &sstream,
-                "    pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), 0);\n"
-            );
-        }
-        stream__puts(
-            &sstream,
             "    return 1;\n"
             "}\n"
             "\n"

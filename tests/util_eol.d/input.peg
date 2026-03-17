@@ -1,7 +1,7 @@
 %marker @lineno @col_offset @end_lineno @end_col_offset
 
 rule
-    <- _ ( ( word / ["';:,./()]+ ) _ )* EOF
+    <- _ ( ( word / ["';:,./()]+ ) _? )* __
 word
    <- &{
         @lineno = @eol_lineno;
@@ -18,6 +18,7 @@ word
             $1
         );
     }
-_ <- ( [ \t] / EOL )*
+_ <- !__ ( [ \t] / EOL )*
+__ <- EOL EOL / EOF
 
 %import "util/eol.peg"
