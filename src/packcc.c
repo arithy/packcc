@@ -6370,13 +6370,20 @@ static bool_t generate(context_t *ctx) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
-                    "    size_t k = 0;\n"
-                    "    while (k < obj->prev.n && obj->prev.p[k].pos < pos) k++;\n"
+                    "    size_t k;\n"
+                    "    for (k = 0; k < obj->prev.n && obj->prev.p[k].pos <= pos; k++);\n"
+                    "    if (k > 0) k--;\n"
                     "    if (k > 0) {\n"
                     "        size_t i;\n"
-                    "        for (i = k; i < obj->prev.n; i++) obj->prev.p[i - k] = obj->prev.p[i];\n"
+                    "        for (i = k; i < obj->prev.n; i++) {\n"
+                    "            pcc_marker_variable_set_entry__finalize(auxil, &(obj->prev.p[i - k]));\n"
+                    "            obj->prev.p[i - k] = obj->prev.p[i];\n"
+                    "            pcc_marker_variable_set_entry__initialize(auxil, &(obj->prev.p[i]));\n"
+                    "        }\n"
                     "        pcc_marker_variable_set_stack__resize(auxil, &(obj->prev), obj->prev.n - k);\n"
                     "    }\n"
+                    "    /* obj->prev.p[0].pos <= pos when obj->prev.n > 0 */\n"
+                    "    /* obj->prev.p[1].pos >  pos when obj->prev.n > 1 */\n"
                     "}\n"
                     "\n"
                 );
