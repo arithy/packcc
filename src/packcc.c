@@ -29,7 +29,7 @@
  * The specification is determined by referring to peg/leg developed by Ian Piumarta.
  */
 
-#define PACKCC_VERSION "3.0.1"
+#define PACKCC_VERSION "3.1.0"
 #define PACKCC_YEARS "2014, 2019-2026"
 #define PACKCC_WEBSITE "https://github.com/arithy/packcc"
 
@@ -142,6 +142,8 @@ DECLSPEC_IMPORT HRESULT WINAPI SHGetFolderPathA(HWND hwnd, int csidl, HANDLE hTo
 #define VARNAME_PROGPRED_OUT "pcc_progpred_out"
 #define VARNAME_CAPTURE_PREFIX "pcc_capture__"
 
+#define IMPLICIT_VERSION "0.0.0"
+
 #define INDENT_UNIT 4
 
 #define VOID_VALUE (~(size_t)0)
@@ -168,11 +170,6 @@ typedef BY_HANDLE_FILE_INFORMATION file_id_t;
 typedef struct stat file_id_t;
 #endif
 
-typedef struct file_id_array_tag {
-    size_t m, n;
-    file_id_t *p;
-} file_id_array_t;
-
 typedef struct file_pos_tag {
     char *path;  /* the file path name */
     size_t line; /* the line number (0-based); VOID_VALUE if not available */
@@ -194,6 +191,17 @@ typedef struct string_array_tag {
     size_t m, n;
     char **p;
 } string_array_t;
+
+typedef struct file_info_tag {
+    char *path;
+    char *version;
+    file_id_t id;
+} file_info_t;
+
+typedef struct file_info_map_tag {
+    size_t m, n;
+    file_info_t *p;
+} file_info_map_t;
 
 typedef struct code_block_tag {
     char *text;
@@ -218,8 +226,8 @@ typedef enum node_type_tag {
     NODE_SEQUENCE,
     NODE_ALTERNATE,
     NODE_CAPTURE,
-    NODE_EXPAND,
-    NODE_MARKER,
+    NODE_MATCH_CAPT,
+    NODE_MATCH_MVAR,
     NODE_ACTION,
     NODE_ERROR
 } node_type_t;
@@ -305,15 +313,15 @@ typedef struct node_capture_tag {
     size_t index;
 } node_capture_t;
 
-typedef struct node_expand_tag {
+typedef struct node_match_capt_tag {
     size_t index;
     file_pos_t fpos;
-} node_expand_t;
+} node_match_capt_t;
 
-typedef struct node_marker_tag {
+typedef struct node_match_mvar_tag {
     char *name;
     file_pos_t fpos;
-} node_marker_t;
+} node_match_mvar_t;
 
 typedef struct node_action_tag {
     code_block_t code;
@@ -331,21 +339,21 @@ typedef struct node_error_tag {
 } node_error_t;
 
 typedef union node_data_tag {
-    node_rule_t      rule;
-    node_reference_t reference;
-    node_string_t    string;
-    node_charclass_t charclass;
-    node_position_t  position;
-    node_quantity_t  quantity;
-    node_predicate_t predicate;
-    node_progpred_t  progpred;
-    node_sequence_t  sequence;
-    node_alternate_t alternate;
-    node_capture_t   capture;
-    node_expand_t    expand;
-    node_marker_t    marker;
-    node_action_t    action;
-    node_error_t     error;
+    node_rule_t       rule;
+    node_reference_t  reference;
+    node_string_t     string;
+    node_charclass_t  charclass;
+    node_position_t   position;
+    node_quantity_t   quantity;
+    node_predicate_t  predicate;
+    node_progpred_t   progpred;
+    node_sequence_t   sequence;
+    node_alternate_t  alternate;
+    node_capture_t    capture;
+    node_match_capt_t match_capt;
+    node_match_mvar_t match_mvar;
+    node_action_t     action;
+    node_error_t      error;
 } node_data_t;
 
 struct node_tag {
@@ -361,23 +369,23 @@ typedef struct options_tag {
 
 typedef enum code_flag_tag {
     CODE_FLAG_NONE = 0,
-    CODE_FLAG_RULE_VARIABLE_USED  = 0x00000001,
-    CODE_FLAG_CAPTS_USED          = 0x00000002,
-    CODE_FLAG_REFERENCE_USED      = 0x00000010,
-    CODE_FLAG_STRING_USED         = 0x00000020,
-    CODE_FLAG_CHARCLASS_USED      = 0x00000040,
-    CODE_FLAG_UTF8_CHARCLASS_USED = 0x00000080,
-    CODE_FLAG_POSITION_USED       = 0x00000100,
-    CODE_FLAG_QUANTITY_USED       = 0x00000200,
-    CODE_FLAG_PREDICATE_USED      = 0x00000400,
-    CODE_FLAG_PROGPRED_USED       = 0x00000800,
-    CODE_FLAG_SEQUENCE_USED       = 0x00001000,
-    CODE_FLAG_ALTERNATE_USED      = 0x00002000,
-    CODE_FLAG_CAPTURE_USED        = 0x00004000,
-    CODE_FLAG_EXPAND_USED         = 0x00008000,
-    CODE_FLAG_MARKER_USED         = 0x00010000,
-    CODE_FLAG_ACTION_USED         = 0x00020000,
-    CODE_FLAG_ERROR_USED          = 0x00040000
+    CODE_FLAG_RULE_VARIABLE  = 0x00000001,
+    CODE_FLAG_CAPTS          = 0x00000002,
+    CODE_FLAG_REFERENCE      = 0x00000010,
+    CODE_FLAG_STRING         = 0x00000020,
+    CODE_FLAG_CHARCLASS      = 0x00000040,
+    CODE_FLAG_UTF8_CHARCLASS = 0x00000080,
+    CODE_FLAG_POSITION       = 0x00000100,
+    CODE_FLAG_QUANTITY       = 0x00000200,
+    CODE_FLAG_PREDICATE      = 0x00000400,
+    CODE_FLAG_PROGPRED       = 0x00000800,
+    CODE_FLAG_SEQUENCE       = 0x00001000,
+    CODE_FLAG_ALTERNATE      = 0x00002000,
+    CODE_FLAG_CAPTURE        = 0x00004000,
+    CODE_FLAG_MATCH_CAPT     = 0x00008000,
+    CODE_FLAG_MATCH_MVAR     = 0x00010000,
+    CODE_FLAG_ACTION         = 0x00020000,
+    CODE_FLAG_ERROR          = 0x00040000
 } code_flag_t;
 
 typedef struct subst_entry_tag {
@@ -420,7 +428,7 @@ typedef struct context_tag {
     code_flag_t flags;    /* the bitwise flags to control code generation; updated during PEG parsing */
     size_t errnum;        /* the current number of PEG parsing errors */
     input_state_t *input; /* the current input state */
-    file_id_array_t done; /* the unique identifiers of the PEG file already parsed or being parsed */
+    file_info_map_t finfo;      /* the map from a path to information of a PEG file already parsed or being parsed */
     subst_map_t subst;    /* the text substitution data */
     node_array_t rules;   /* the PEG rules */
     node_hash_table_t rulehash; /* the hash table to accelerate access of desired PEG rules */
@@ -1139,506 +1147,6 @@ static void make_header_identifier(char *str) {
     }
 }
 
-static void file_pos__initialize(file_pos_t *obj) {
-    obj->path = NULL;
-    obj->line = VOID_VALUE;
-    obj->col = VOID_VALUE;
-}
-
-static void file_pos__finalize(file_pos_t *obj) {
-    free(obj->path);
-}
-
-static void file_pos__set(file_pos_t *obj, const char *path, size_t line, size_t col) {
-    free(obj->path);
-    obj->path = path ? strdup_e(path) : NULL;
-    obj->line = line;
-    obj->col = col;
-}
-
-static void file_id__get(FILE *file, const char *path, file_id_t *id) {
-#ifdef _WIN32 /* Windows including MSVC and MinGW */
-    const int f = _fileno(file);
-    if (f <= 2) { /* standard input/output/error */
-        id->dwVolumeSerialNumber = ~(DWORD)0;
-        id->nFileIndexHigh = 0;
-        id->nFileIndexLow = f;
-        return;
-    }
-    if (GetFileInformationByHandle((HANDLE)_get_osfhandle(f), id) == 0) {
-        print_error("Cannot get file information: %s\n", path);
-        exit(2);
-    }
-#else
-    if (fstat(fileno(file), id) != 0) {
-        print_error("Cannot get file information: %s\n", path);
-        exit(2);
-    }
-#endif
-}
-
-static bool_t file_id__equals(const file_id_t *id0, const file_id_t *id1) {
-#ifdef _WIN32 /* Windows including MSVC and MinGW */
-    return (
-        id0->dwVolumeSerialNumber == id1->dwVolumeSerialNumber &&
-        id0->nFileIndexHigh == id1->nFileIndexHigh &&
-        id0->nFileIndexLow == id1->nFileIndexLow
-    ) ? TRUE : FALSE;
-#else
-    return (id0->st_dev == id1->st_dev && id0->st_ino == id1->st_ino) ? TRUE : FALSE;
-#endif
-}
-
-static stream_t stream__wrap(FILE *file, const char *path, size_t line) {
-    stream_t obj;
-    obj.file = file;
-    obj.path = path;
-    obj.line = line;
-    return obj;
-}
-
-static int stream__putc(stream_t *obj, int c) {
-    const int r = fputc(c, obj->file);
-    if (r == EOF) {
-        print_error("File write error: %s\n", obj->path);
-        exit(2);
-    }
-    if (obj->line != VOID_VALUE) {
-        if (c == '\n') obj->line++;
-    }
-    return r;
-}
-
-static int stream__puts(stream_t *obj, const char *s) {
-    const int r = fputs(s, obj->file);
-    if (r == EOF) {
-        print_error("File write error: %s\n", obj->path);
-        exit(2);
-    }
-    if (obj->line != VOID_VALUE) {
-        size_t i = 0;
-        for (i = 0; s[i]; i++) {
-            if (s[i] == '\n') obj->line++;
-        }
-    }
-    return r;
-}
-
-__attribute__((format(printf, 2, 3)))
-static int stream__printf(stream_t *obj, const char *format, ...) {
-    if (obj->line != VOID_VALUE) {
-#define M 1024
-        char s[M], *p = NULL;
-        int n = 0;
-        size_t l = 0;
-        {
-            va_list a;
-            va_start(a, format);
-            n = vsnprintf(NULL, 0, format, a);
-            va_end(a);
-            if (n < 0) {
-                print_error("Internal error [%d]\n", __LINE__);
-                exit(2);
-            }
-            l = (size_t)n + 1;
-        }
-        p = (l > M) ? (char *)malloc_e(l) : s;
-        {
-            va_list a;
-            va_start(a, format);
-            n = vsnprintf(p, l, format, a);
-            va_end(a);
-            if (n < 0 || (size_t)n >= l) {
-                print_error("Internal error [%d]\n", __LINE__);
-                exit(2);
-            }
-        }
-        stream__puts(obj, p);
-        if (p != s) free(p);
-        return n;
-#undef M
-    }
-    else {
-        int n;
-        va_list a;
-        va_start(a, format);
-        n = vfprintf(obj->file, format, a);
-        va_end(a);
-        if (n < 0) {
-            print_error("File write error: %s\n", obj->path);
-            exit(2);
-        }
-        return n;
-    }
-}
-
-static void stream__write_characters(stream_t *obj, char ch, size_t len) {
-    size_t i;
-    if (len == VOID_VALUE) return; /* for safety */
-    for (i = 0; i < len; i++) stream__putc(obj, ch);
-}
-
-static void stream__write_escaped_string(stream_t *obj, const char *str, size_t len) {
-    char s[5];
-    size_t i;
-    if (len == VOID_VALUE) return; /* for safety */
-    for (i = 0; i < len; i++) {
-        stream__puts(obj, escape_character(str[i], &s));
-    }
-}
-
-static void stream__write_line_directive(stream_t *obj, const char *path, size_t lineno) {
-    stream__printf(obj, "#line " FMT_LU " \"", (ulong_t)(lineno + 1));
-    stream__write_escaped_string(obj, path, strlen(path));
-    stream__puts(obj, "\"\n");
-}
-
-static bool_t can_character_follow_identifier_(char ch) {
-    return (
-        ch != '$' && ch != '@' &&
-        ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
-    ) ? TRUE : FALSE;
-}
-
-static bool_t stream__write_text(
-    stream_t *obj, const char *str, size_t len, bool_t lhead, size_t dedent, size_t indent,
-    code_block_kind_t kind, const node_const_array_t *capts, const string_array_t *mvars, const subst_map_t *subst
-) {
-    size_t i = 0;
-    size_t mc = 0;
-    if (len == VOID_VALUE) return lhead; /* for safety */
-    if (capts) {
-        size_t ic;
-        for (ic = 0; ic < capts->n; ic++) {
-            size_t kc;
-            assert(capts->p[ic]->type == NODE_CAPTURE);
-            kc = capts->p[ic]->data.capture.index + 1;
-            if (mc < kc) mc = kc;
-        }
-    }
-    while (i < len) {
-        if (str[i] == '\0') break;
-        if (match_eol(str, i, len, &i)) {
-            stream__putc(obj, '\n');
-            lhead = TRUE;
-            continue;
-        }
-        if (lhead) {
-            const size_t l = count_indent_spaces(str, i, len, &i);
-            if (i >= len || str[i] == '\0') break;
-            if (str[i] == '\n' || str[i] == '\r') continue;
-            stream__write_characters(obj, ' ', size__sub(l, dedent) + indent);
-            lhead = FALSE;
-        }
-        if (str[i] == '\\' && i + 1 < len && (str[i + 1] == '$' || str[i + 1] == '@')) {
-            stream__putc(obj, str[i + 1]);
-            i += 2;
-        }
-        else if (str[i] == '$') {
-            bool_t b = FALSE; /* to be TRUE if substitution succeeds */
-            size_t j = i + 1;
-            if (j < len) {
-                char c = str[j++];
-                if (c == '$' && kind == CODE_BLOCK_KIND_ACTION) { /* $$ */
-                    if (j >= len || can_character_follow_identifier_(str[j])) {
-                        stream__puts(obj, VARNAME_ACTION_OUT);
-                        i = j;
-                        b = TRUE;
-                    }
-                }
-                else if (c == '0' && (kind == CODE_BLOCK_KIND_ACTION || kind == CODE_BLOCK_KIND_PROGPRED)) { /* $0, $0s, $0e */
-                    if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
-                    if (j >= len || can_character_follow_identifier_(str[j])) {
-                        stream__puts(obj, VARNAME_CAPTURE_PREFIX);
-                        i++;
-                        while (i < j) stream__putc(obj, str[i++]);
-                        b = TRUE;
-                    }
-                }
-                else if (c >= '1' && c <= '9' && (kind == CODE_BLOCK_KIND_ACTION || kind == CODE_BLOCK_KIND_PROGPRED)) { /* $N, $Ns, $Ne (N >= 1) */
-                    size_t k = c - '0';
-                    while (j < len) {
-                        c = str[j];
-                        if (!(c >= '0' && c <= '9')) break;
-                        k = (c - '0') + 10 * k;
-                        if (k > mc) k = mc + 1; /* to avoid overflow */
-                        j++;
-                    }
-                    if (j < len && (str[j] == 's' || str[j] == 'e')) j++;
-                    if (j >= len || can_character_follow_identifier_(str[j])) {
-                        size_t ic;
-                        for (ic = 0; ic < capts->n; ic++) {
-                            if (k == capts->p[ic]->data.capture.index + 1) break;
-                        }
-                        if (ic < capts->n) {
-                            stream__puts(obj, VARNAME_CAPTURE_PREFIX);
-                            i++;
-                            while (i < j) stream__putc(obj, str[i++]);
-                            b = TRUE;
-                        }
-                    }
-                }
-                else if (c == '{') { /* ${...} */
-                    size_t is;
-                    for (is = 0; is < subst->n; is++) {
-                        const subst_entry_t *const p = &(subst->p[is]);
-                        size_t k;
-                        for (k = 0; p->istr[k] && j + k < len && p->istr[k] == str[j + k]; k++);
-                        if (!p->istr[k] && j + k < len && str[j + k] == '}') {
-                            stream__puts(obj, p->ostr);
-                            i = j + k + 1;
-                            b = TRUE;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (!b) {
-                stream__putc(obj, '$');
-                i++;
-            }
-        }
-        else if (str[i] == '@') {
-            bool_t b = FALSE; /* to be TRUE if substitution succeeds */
-            size_t j = i + 1;
-            if (j < len) {
-                char c = str[j++];
-                if (c == '@' && kind == CODE_BLOCK_KIND_PROGPRED) { /* @@ */
-                    if (j >= len || can_character_follow_identifier_(str[j])) {
-                        stream__puts(obj, VARNAME_PROGPRED_OUT);
-                        i = j;
-                        b = TRUE;
-                    }
-                }
-                else if (
-                    ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) &&
-                    (kind == CODE_BLOCK_KIND_ACTION || kind == CODE_BLOCK_KIND_PROGPRED)
-                ) { /* @VAR */
-                    while (j < len) {
-                        c = str[j];
-                        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) break;
-                        j++;
-                    }
-                    if (j >= len || can_character_follow_identifier_(str[j])) {
-                        size_t iv;
-                        for (iv = 0; iv < mvars->n; iv++) {
-                            if (strncmp(mvars->p[iv], str + (i + 1), j - (i + 1)) == 0) break;
-                        }
-                        if (iv < mvars->n) {
-                            if (j < len && str[j] == '.') {
-                                static const char s_get[] = "get_string";
-                                static const char s_set[] = "set_string";
-                                static const char s_append[] = "append_string";
-                                static const char s_save[] = "save";
-                                static const char s_restore[] = "restore";
-                                typedef struct func_entry_tag {
-                                    const char *str;
-                                    size_t len;
-                                    size_t arg;
-                                } func_entry_t;
-                                static const func_entry_t s_func_read[] = {
-                                    { s_get, sizeof(s_get), 0 },
-                                    { NULL, 0, 0 }
-                                };
-                                static const func_entry_t s_func_write[] = {
-                                    { s_set, sizeof(s_set), 1 },
-                                    { s_append, sizeof(s_append), 1 },
-                                    { s_save, sizeof(s_save), 0 },
-                                    { s_restore, sizeof(s_restore), 0 },
-                                    { NULL, 0, 0 }
-                                };
-                                size_t ie = 0;
-                                while (s_func_read[ie].str) {
-                                    if (
-                                        j + s_func_read[ie].len < len &&
-                                        strncmp(str + j + 1, s_func_read[ie].str, s_func_read[ie].len - 1) == 0 &&
-                                        str[j + s_func_read[ie].len] == '('
-                                    ) break;
-                                    ie++;
-                                }
-                                if (s_func_read[ie].str) {
-                                    stream__printf(
-                                        obj,
-                                        "pcc_marker_variable__%s%s(pcc_ctx, %s%s",
-                                        s_func_read[ie].str,
-                                        (kind == CODE_BLOCK_KIND_PROGPRED) ? "" : "_on_action",
-                                        mvars->p[iv],
-                                        (s_func_read[ie].arg > 0) ? ", " : ""
-                                    );
-                                    i = j + s_func_read[ie].len + 1;
-                                    b = TRUE;
-                                }
-                                else if (kind == CODE_BLOCK_KIND_PROGPRED) {
-                                    ie = 0;
-                                    while (s_func_write[ie].str) {
-                                        if (
-                                            j + s_func_write[ie].len < len &&
-                                            strncmp(str + j + 1, s_func_write[ie].str, s_func_write[ie].len - 1) == 0 &&
-                                            str[j + s_func_write[ie].len] == '('
-                                        ) break;
-                                        ie++;
-                                    }
-                                    if (s_func_write[ie].str) {
-                                        stream__printf(
-                                            obj,
-                                            "pcc_marker_variable__%s(pcc_ctx, %s%s",
-                                            s_func_write[ie].str,
-                                            mvars->p[iv],
-                                            (s_func_write[ie].arg > 0) ? ", " : ""
-                                        );
-                                        i = j + s_func_write[ie].len + 1;
-                                        b = TRUE;
-                                    }
-                                }
-                            }
-                            else {
-                                if (kind == CODE_BLOCK_KIND_PROGPRED)
-                                    stream__printf(obj, "pcc_marker_variable__integer(pcc_ctx, %s)", mvars->p[iv]);
-                                else
-                                    stream__printf(obj, "pcc_marker_variable__integer_on_action(pcc_ctx, %s)", mvars->p[iv]);
-                                i = j;
-                                b = TRUE;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!b) {
-                stream__putc(obj, '@');
-                i++;
-            }
-        }
-        else {
-            stream__putc(obj, str[i]);
-            i++;
-        }
-    }
-    return lhead;
-}
-
-static bool_t stream__write_code(
-    stream_t *obj, const char *str, size_t len, bool_t lhead, size_t dedent, size_t indent,
-    code_block_kind_t kind, const node_const_array_t *capts, const string_array_t *mvars, const subst_map_t *subst, bool_t dircpp
-) {
-    bool_t b = TRUE; /* TRUE if succeeding leading spaces in a line */
-    size_t h = 0;
-    size_t i = 0;
-    if (len == VOID_VALUE) return lhead; /* for safety */
-    while (i < len) {
-        size_t k = 0;
-        if (!dircpp && b && match_directive_c(str, i, len, &k)) {
-            {
-                const size_t j = find_back_preceding_spaces_in_line(str, i);
-                stream__write_text(obj, str + h, j - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            }
-            {
-                size_t md = VOID_VALUE; /* the minimum indent length of the successive lines */
-                size_t kd = i;
-                find_trailing_spaces_in_line(str, i, k, &kd);
-                while (kd < k) {
-                    const size_t kd0 = kd;
-                    const size_t id = find_first_nonspace_or_eol(str, kd, len);
-                    const size_t jd = find_trailing_spaces_in_line(str, id, len, &kd);
-                    if (id < jd) {
-                        const size_t ld = count_indent_spaces(str, kd0, id, NULL);
-                        if (md == VOID_VALUE || md > ld) md = ld;
-                    }
-                }
-                if (md == VOID_VALUE) md = 0;
-                lhead = stream__write_code(obj, str + i, k - i, FALSE, md, INDENT_UNIT, kind, capts, mvars, subst, TRUE);
-            }
-            h = i = k;
-            /* b == TRUE */
-        }
-        else if (match_comment_cxx(str, i, len, &k)) {
-            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND_NONE, capts, mvars, subst);
-            h = i = k;
-            b = TRUE;
-        }
-        else if (match_comment_c(str, i, len, &k)) {
-            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND_NONE, capts, mvars, subst);
-            h = i = k;
-            /* do not change `b` because a C-style comment is dealt as a white space */
-        }
-        else if (
-            match_quotation(str, i, len, '\'', &k) ||
-            match_quotation(str, i, len, '\"', &k)
-        ) {
-            lhead = stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-            lhead = stream__write_text(obj, str + i, k - i, lhead, dedent, indent, CODE_BLOCK_KIND_NONE, capts, mvars, subst);
-            h = i = k;
-            b = FALSE;
-        }
-        else if (match_eol(str, i, len, &i)) {
-            b = TRUE;
-        }
-        else {
-            if (!match_spaces_in_line(str, i, len, &i)) {
-                i++;
-                b = FALSE;
-            }
-        }
-    }
-    return stream__write_text(obj, str + h, i - h, lhead, dedent, indent, kind, capts, mvars, subst);
-}
-
-static void stream__write_code_block(
-    stream_t *obj, const char *str, size_t len, size_t indent, const char *path, size_t lineno,
-    code_block_kind_t kind, const node_const_array_t *capts, const string_array_t *mvars, const subst_map_t *subst
-) {
-    size_t m = VOID_VALUE; /* the minimum indent length except for the start line of the code block */
-    size_t b = TRUE; /* TRUE if the code starts at the first line */
-    size_t d = 0; /* the original indent length of the line where the code starts */
-    size_t h = 0; /* the position where the code starts */
-    size_t k = 0;
-    if (len == VOID_VALUE) return; /* for safety */
-    len = find_trailing_spaces_in_string(str, 0, len);
-    if (len <= 0) return; /* empty */
-    while (k < len) { /* to find the position where the code starts */
-        const size_t k0 = k;
-        const size_t i = find_first_nonspace_or_eol(str, k, len);
-        const size_t j = find_trailing_spaces_in_line(str, i, len, &k);
-        if (i < j) {
-            if (str[i] != '#') {
-                d = count_indent_spaces(str, k0, i, NULL);
-                if (!b) m = d;
-            }
-            h = i;
-            break;
-        }
-        lineno++;
-        b = FALSE;
-    }
-    if (obj->line != VOID_VALUE)
-        stream__write_line_directive(obj, path, lineno);
-    while (k < len) { /* to find the minimum indent length among lines except for blank and directive lines */
-        const size_t k0 = k;
-        const size_t i = find_first_nonspace_or_eol(str, k, len);
-        const size_t j = find_trailing_spaces_in_line(str, i, len, &k);
-        if (i < j && str[i] != '#') {
-            const size_t l = count_indent_spaces(str, k0, i, NULL);
-            if (m == VOID_VALUE || m > l) m = l;
-        }
-    }
-    if (m == VOID_VALUE) m = 0;
-    if (str[h] != '#') {
-        assert(b || d >= m);
-        stream__write_characters(obj, ' ', indent + (b ? 0 : d - m));
-    }
-    stream__write_code(obj, str + h, len - h, FALSE, m, indent, kind, capts, mvars, subst, FALSE);
-    stream__putc(obj, '\n');
-    if (obj->line != VOID_VALUE)
-        stream__write_line_directive(obj, obj->path, obj->line + 1);
-}
-
-static void stream__write_footer(
-    stream_t *obj, const char *str, size_t len, const char *path, size_t lineno, const subst_map_t *subst
-) {
-    stream__write_code_block(obj, str, len, 0, path, lineno, CODE_BLOCK_KIND_NORMAL, NULL, NULL, subst);
-}
-
 static char *get_home_directory(void) {
 #ifdef _MSC_VER
     char s[MAX_PATH];
@@ -1763,32 +1271,37 @@ static size_t populate_bits(size_t x) {
     return x;
 }
 
-static void file_id_array__initialize(file_id_array_t *obj) {
-    obj->m = 0;
-    obj->n = 0;
-    obj->p = NULL;
+static int compare_digits(const char *v0, const char *v1, size_t *n0, size_t *n1) {
+    size_t i0, i1, i;
+    for (i0 = 0; v0[i0] >= '0' && v0[i0] <= '9'; i0++);
+    for (i1 = 0; v1[i1] >= '0' && v1[i1] <= '9'; i1++);
+    if (n0) *n0 = i0;
+    if (n1) *n1 = i1;
+    if (i0 < i1) return -1;
+    if (i0 > i1) return 1;
+    for (i = 0; i < i0; i++) {
+        if (v0[i] < v1[i]) return -1;
+        if (v0[i] > v1[i]) return 1;
+    }
+    return 0;
 }
 
-static void file_id_array__finalize(file_id_array_t *obj) {
-    free(obj->p);
-}
-
-static bool_t file_id_array__add_if_not_yet(file_id_array_t *obj, const file_id_t *id) {
+static int compare_versions(const char *v0, const char *v1) {
     size_t i;
-    for (i = 0; i < obj->n; i++) {
-        if (file_id__equals(id, &(obj->p[i]))) return FALSE; /* already added */
+    for (i = 0; i < 3; i++) {
+        size_t i0, i1;
+        int c;
+        if (i > 0) {
+            if (*v0 != '.' || *v1 != '.') return 0; /* illegal case */
+            v0++;
+            v1++;
+        }
+        c = compare_digits(v0, v1, &i0, &i1);
+        if (c != 0) return c;
+        v0 += i0;
+        v1 += i1;
     }
-    if (obj->m <= obj->n) {
-        const size_t n = obj->n + 1;
-        size_t m = obj->m;
-        if (m == 0) m = BUFFER_MIN_SIZE;
-        while (m < n && m != 0) m <<= 1;
-        if (m == 0) m = n; /* in case of shift overflow */
-        obj->p = (file_id_t *)realloc_e(obj->p, sizeof(file_id_t) * m);
-        obj->m = m;
-    }
-    obj->p[obj->n++] = *id;
-    return TRUE; /* newly added */
+    return 0;
 }
 
 static void char_array__initialize(char_array_t *obj) {
@@ -1848,13 +1361,117 @@ static void string_array__add(string_array_t *obj, const char *str, size_t len) 
     if (obj->m <= obj->n) {
         const size_t n = obj->n + 1;
         size_t m = obj->m;
-        if (m == 0) m = BUFFER_MIN_SIZE;
+        if (m == 0) m = ARRAY_MIN_SIZE;
         while (m < n && m != 0) m <<= 1;
         if (m == 0) m = n; /* in case of shift overflow */
         obj->p = (char **)realloc_e(obj->p, sizeof(char *) * m);
         obj->m = m;
     }
     obj->p[obj->n++] = (len == VOID_VALUE) ? strdup_e(str) : strndup_e(str, len);
+}
+
+static void file_pos__initialize(file_pos_t *obj) {
+    obj->path = NULL;
+    obj->line = VOID_VALUE;
+    obj->col = VOID_VALUE;
+}
+
+static void file_pos__finalize(file_pos_t *obj) {
+    free(obj->path);
+}
+
+static void file_pos__set(file_pos_t *obj, const char *path, size_t line, size_t col) {
+    free(obj->path);
+    obj->path = path ? strdup_e(path) : NULL;
+    obj->line = line;
+    obj->col = col;
+}
+
+static void file_id__get(FILE *file, const char *path, file_id_t *id) {
+#ifdef _WIN32 /* Windows including MSVC and MinGW */
+    const int f = _fileno(file);
+    if (f <= 2) { /* standard input/output/error */
+        id->dwVolumeSerialNumber = ~(DWORD)0;
+        id->nFileIndexHigh = 0;
+        id->nFileIndexLow = f;
+        return;
+    }
+    if (GetFileInformationByHandle((HANDLE)_get_osfhandle(f), id) == 0) {
+        print_error("Cannot get file information: %s\n", path);
+        exit(2);
+    }
+#else
+    if (fstat(fileno(file), id) != 0) {
+        print_error("Cannot get file information: %s\n", path);
+        exit(2);
+    }
+#endif
+}
+
+static bool_t file_id__equals(const file_id_t *id0, const file_id_t *id1) {
+#ifdef _WIN32 /* Windows including MSVC and MinGW */
+    return (
+        id0->dwVolumeSerialNumber == id1->dwVolumeSerialNumber &&
+        id0->nFileIndexHigh == id1->nFileIndexHigh &&
+        id0->nFileIndexLow == id1->nFileIndexLow
+    ) ? TRUE : FALSE;
+#else
+    return (id0->st_dev == id1->st_dev && id0->st_ino == id1->st_ino) ? TRUE : FALSE;
+#endif
+}
+
+static void file_info__initialize(file_info_t *obj) {
+    obj->path = NULL;
+    obj->version = NULL;
+}
+
+static void file_info__finalize(file_info_t *obj) {
+    free(obj->path);
+    free(obj->version);
+}
+
+static void file_info_map__initialize(file_info_map_t *obj) {
+    obj->m = 0;
+    obj->n = 0;
+    obj->p = NULL;
+}
+
+static void file_info_map__finalize(file_info_map_t *obj) {
+    while (obj->n > 0) {
+        obj->n--;
+        file_info__finalize(&(obj->p[obj->n]));
+    }
+    free(obj->p);
+}
+
+static bool_t file_info_map__get(file_info_map_t *obj, FILE *file, const char *path, size_t *index) {
+    size_t i;
+    file_id_t id;
+    file_id__get(file, path, &id);
+    for (i = 0; i < obj->n; i++) {
+        if (file_id__equals(&id, &(obj->p[i].id))) break;
+    }
+    if (i < obj->n) { /* already exists */
+        if (index) *index = i;
+        return TRUE;
+    }
+    else {
+        if (obj->m <= obj->n) {
+            const size_t n = obj->n + 1;
+            size_t m = obj->m;
+            if (m == 0) m = ARRAY_MIN_SIZE;
+            while (m < n && m != 0) m <<= 1;
+            if (m == 0) m = n; /* in case of shift overflow */
+            obj->p = (file_info_t *)realloc_e(obj->p, sizeof(file_info_t) * m);
+            obj->m = m;
+        }
+        obj->n++;
+        file_info__initialize(&(obj->p[i]));
+        obj->p[i].id = id;
+        obj->p[i].path = strdup_e(path);
+        if (index) *index = i;
+        return FALSE;
+    }
 }
 
 static void code_block__initialize(code_block_t *obj) {
@@ -2277,6 +1894,17 @@ static bool_t input_state__match_number(input_state_t *obj) {
     return FALSE;
 }
 
+static bool_t input_state__match_version(input_state_t *obj) {
+    size_t i;
+    for (i = 0; i < 3; i++) {
+        if (i > 0 && !input_state__match_character(obj, '.')) return FALSE;
+        const size_t p = obj->bufcur;
+        if (!input_state__match_number(obj)) return FALSE;
+        if (obj->bufcur - p > 1 && obj->buffer.p[p] == '0') return FALSE;
+    }
+    return TRUE;
+}
+
 static bool_t input_state__match_identifier(input_state_t *obj) {
     if (
         input_state__match_character_range(obj, 'a', 'z') ||
@@ -2354,6 +1982,579 @@ static bool_t input_state__match_footer_start(input_state_t *obj) {
     return input_state__match_string(obj, "%%");
 }
 
+static stream_t stream__wrap(FILE *file, const char *path, size_t line) {
+    stream_t obj;
+    obj.file = file;
+    obj.path = path;
+    obj.line = line;
+    return obj;
+}
+
+static int stream__putc(stream_t *obj, int c) {
+    const int r = fputc(c, obj->file);
+    if (r == EOF) {
+        print_error("File write error: %s\n", obj->path);
+        exit(2);
+    }
+    if (obj->line != VOID_VALUE) {
+        if (c == '\n') obj->line++;
+    }
+    return r;
+}
+
+static int stream__puts(stream_t *obj, const char *s) {
+    const int r = fputs(s, obj->file);
+    if (r == EOF) {
+        print_error("File write error: %s\n", obj->path);
+        exit(2);
+    }
+    if (obj->line != VOID_VALUE) {
+        size_t i = 0;
+        for (i = 0; s[i]; i++) {
+            if (s[i] == '\n') obj->line++;
+        }
+    }
+    return r;
+}
+
+__attribute__((format(printf, 2, 3)))
+static int stream__printf(stream_t *obj, const char *format, ...) {
+    if (obj->line != VOID_VALUE) {
+#define M 1024
+        char s[M], *p = NULL;
+        int n = 0;
+        size_t l = 0;
+        {
+            va_list a;
+            va_start(a, format);
+            n = vsnprintf(NULL, 0, format, a);
+            va_end(a);
+            if (n < 0) {
+                print_error("Internal error [%d]\n", __LINE__);
+                exit(2);
+            }
+            l = (size_t)n + 1;
+        }
+        p = (l > M) ? (char *)malloc_e(l) : s;
+        {
+            va_list a;
+            va_start(a, format);
+            n = vsnprintf(p, l, format, a);
+            va_end(a);
+            if (n < 0 || (size_t)n >= l) {
+                print_error("Internal error [%d]\n", __LINE__);
+                exit(2);
+            }
+        }
+        stream__puts(obj, p);
+        if (p != s) free(p);
+        return n;
+#undef M
+    }
+    else {
+        int n;
+        va_list a;
+        va_start(a, format);
+        n = vfprintf(obj->file, format, a);
+        va_end(a);
+        if (n < 0) {
+            print_error("File write error: %s\n", obj->path);
+            exit(2);
+        }
+        return n;
+    }
+}
+
+static void stream__write_characters(stream_t *obj, char ch, size_t len) {
+    size_t i;
+    if (len == VOID_VALUE) return; /* for safety */
+    for (i = 0; i < len; i++) stream__putc(obj, ch);
+}
+
+static void stream__write_escaped_string(stream_t *obj, const char *str, size_t len) {
+    char s[5];
+    size_t i;
+    if (len == VOID_VALUE) return; /* for safety */
+    for (i = 0; i < len; i++) {
+        stream__puts(obj, escape_character(str[i], &s));
+    }
+}
+
+static void stream__write_line_directive(stream_t *obj, const char *path, size_t lineno) {
+    stream__printf(obj, "#line " FMT_LU " \"", (ulong_t)(lineno + 1));
+    stream__write_escaped_string(obj, path, strlen(path));
+    stream__puts(obj, "\"\n");
+}
+
+static bool_t can_character_follow_identifier_(char ch) {
+    return (
+        ch != '$' && ch != '@' &&
+        ch != '_' && !(ch >= 'A' && ch <= 'Z') && !(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch<= '9')
+    ) ? TRUE : FALSE;
+}
+
+static void calculate_position_(
+    const char *str, size_t start, size_t end, bool_t ascii, size_t lineno_s, size_t colno_s, size_t *lineno, size_t *colno
+) {
+    size_t i = start;
+    size_t h = VOID_VALUE;
+    size_t l = lineno_s;
+    while (i < end) {
+        if (str[i] == '\0') break;
+        if (match_eol(str, i, end, &i)) {
+            l++; h = i;
+        }
+        else {
+            i++;
+        }
+    }
+    if (lineno) *lineno = l;
+    if (colno) *colno = (h == VOID_VALUE) ? colno_s + (ascii ? i - start : count_characters(str, start, i)) : (ascii ? i - h : count_characters(str, h, i));
+}
+
+static bool_t stream__write_text(
+    stream_t *obj, const char *str, size_t start, size_t end, bool_t ascii, bool_t lhead, size_t dedent, size_t indent,
+    const char *path, size_t base, size_t lineno, size_t colno, code_block_kind_t kind,
+    const node_const_array_t *capts, const string_array_t *mvars, const file_info_map_t *finfo, const subst_map_t *subst, size_t *errnum
+) {
+    size_t i = start;
+    size_t mc = 0;
+    if (end == VOID_VALUE) return lhead; /* for safety */
+    if (capts) {
+        size_t ic;
+        for (ic = 0; ic < capts->n; ic++) {
+            size_t kc;
+            assert(capts->p[ic]->type == NODE_CAPTURE);
+            kc = capts->p[ic]->data.capture.index + 1;
+            if (mc < kc) mc = kc;
+        }
+    }
+    while (i < end) {
+        if (str[i] == '\0') break;
+        if (match_eol(str, i, end, &i)) {
+            stream__putc(obj, '\n');
+            lhead = TRUE;
+            continue;
+        }
+        if (lhead) {
+            const size_t l = count_indent_spaces(str, i, end, &i);
+            if (i >= end || str[i] == '\0') break;
+            if (str[i] == '\n' || str[i] == '\r') continue;
+            stream__write_characters(obj, ' ', size__sub(l, dedent) + indent);
+            lhead = FALSE;
+        }
+        if (str[i] == '\\' && i + 1 < end && (str[i + 1] == '$' || str[i + 1] == '@')) {
+            stream__putc(obj, str[i + 1]);
+            i += 2;
+        }
+        else if (str[i] == '$') {
+            bool_t e = FALSE; /* to be TRUE if invalid substitution is attempted */
+            bool_t b = FALSE; /* to be TRUE if substitution succeeds */
+            size_t j = i + 1;
+            if (j < end) {
+                char c = str[j++];
+                if (c == '$') { /* $$ */
+                    switch (kind) {
+                    case CODE_BLOCK_KIND_NONE:
+                        break;
+                    case CODE_BLOCK_KIND_ACTION:
+                        if (j >= end || can_character_follow_identifier_(str[j])) {
+                            stream__puts(obj, VARNAME_ACTION_OUT);
+                            i = j;
+                            b = TRUE;
+                        }
+                        if (!b) e = TRUE;
+                        break;
+                    default:
+                        e = TRUE;
+                    }
+                }
+                else if (c == '0') { /* $0, $0s, $0e */
+                    if (j < end && (str[j] == 's' || str[j] == 'e')) j++;
+                    switch (kind) {
+                    case CODE_BLOCK_KIND_NONE:
+                        break;
+                    case CODE_BLOCK_KIND_ACTION:
+                    case CODE_BLOCK_KIND_PROGPRED:
+                        if (j >= end || can_character_follow_identifier_(str[j])) {
+                            stream__puts(obj, VARNAME_CAPTURE_PREFIX);
+                            i++;
+                            while (i < j) stream__putc(obj, str[i++]);
+                            b = TRUE;
+                        }
+                        if (!b) e = TRUE;
+                        break;
+                    default:
+                        e = TRUE;
+                    }
+                }
+                else if (c >= '1' && c <= '9') { /* $N, $Ns, $Ne (N >= 1) */
+                    size_t k = c - '0';
+                    while (j < end) {
+                        c = str[j];
+                        if (!(c >= '0' && c <= '9')) break;
+                        k = (c - '0') + 10 * k;
+                        if (k > mc) k = mc + 1; /* to avoid overflow */
+                        j++;
+                    }
+                    if (j < end && (str[j] == 's' || str[j] == 'e')) j++;
+                    switch (kind) {
+                    case CODE_BLOCK_KIND_NONE:
+                        break;
+                    case CODE_BLOCK_KIND_ACTION:
+                    case CODE_BLOCK_KIND_PROGPRED:
+                        if (j >= end || can_character_follow_identifier_(str[j])) {
+                            size_t ic;
+                            for (ic = 0; ic < capts->n; ic++) {
+                                if (k == capts->p[ic]->data.capture.index + 1) break;
+                            }
+                            if (ic < capts->n) {
+                                stream__puts(obj, VARNAME_CAPTURE_PREFIX);
+                                i++;
+                                while (i < j) stream__putc(obj, str[i++]);
+                                b = TRUE;
+                            }
+                        }
+                        if (!b) e = TRUE;
+                        break;
+                    default:
+                        e = TRUE;
+                    }
+                }
+                else if (c == '{') { /* ${...} */
+                    static const char s_version[] = "version";
+                    static const size_t l_version = sizeof(s_version) - 1;
+                    if (
+                        strncmp(str + j, s_version, l_version) == 0 &&
+                        str[j + l_version] == '}'
+                    ) {
+                        size_t ii;
+                        i = j + l_version + 1;
+                        for (ii = 0; ii < finfo->n; ii++) {
+                            if (strcmp(finfo->p[ii].path, path) == 0) {
+                                const char *const p = finfo->p[ii].version;
+                                stream__puts(obj, p ? p : IMPLICIT_VERSION);
+                                b = TRUE;
+                                break;
+                            }
+                        }
+                        if (!b) e = TRUE;
+                    }
+                    else {
+                        size_t is;
+                        for (is = 0; is < subst->n; is++) {
+                            const subst_entry_t *const p = &(subst->p[is]);
+                            size_t k;
+                            for (k = 0; p->istr[k] && j + k < end && p->istr[k] == str[j + k]; k++);
+                            if (!p->istr[k] && j + k < end && str[j + k] == '}') {
+                                stream__puts(obj, p->ostr);
+                                i = j + k + 1;
+                                b = TRUE;
+                                break;
+                            }
+                        }
+                        if (!b) e = TRUE;
+                    }
+                }
+                else {
+                    if (kind != CODE_BLOCK_KIND_NONE) e = TRUE;
+                }
+            }
+            else {
+                if (kind != CODE_BLOCK_KIND_NONE) e = TRUE;
+            }
+            if (e) {
+                size_t l, m;
+                calculate_position_(str, base, i, ascii, lineno, colno, &l, &m);
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Code block containing invalid text after '$'\n",
+                    path, (ulong_t)(l + 1), (ulong_t)(m + 1)
+                );
+                (*errnum)++;
+            }
+            if (!b) {
+                stream__putc(obj, '$');
+                i++;
+            }
+        }
+        else if (str[i] == '@') {
+            bool_t e = FALSE; /* to be TRUE if invalid substitution is attempted */
+            bool_t b = FALSE; /* to be TRUE if substitution succeeds */
+            size_t j = i + 1;
+            if (j < end) {
+                char c = str[j++];
+                if (c == '@') { /* @@ */
+                    switch (kind) {
+                    case CODE_BLOCK_KIND_NONE:
+                        break;
+                    case CODE_BLOCK_KIND_PROGPRED:
+                        if (j >= end || can_character_follow_identifier_(str[j])) {
+                            stream__puts(obj, VARNAME_PROGPRED_OUT);
+                            i = j;
+                            b = TRUE;
+                        }
+                        if (!b) e = TRUE;
+                        break;
+                    default:
+                        e = TRUE;
+                    }
+                }
+                else if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) { /* @VAR */
+                    while (j < end) {
+                        c = str[j];
+                        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) break;
+                        j++;
+                    }
+                    switch (kind) {
+                    case CODE_BLOCK_KIND_NONE:
+                        break;
+                    case CODE_BLOCK_KIND_ACTION:
+                    case CODE_BLOCK_KIND_PROGPRED:
+                        if (j >= end || can_character_follow_identifier_(str[j])) {
+                            size_t iv;
+                            for (iv = 0; iv < mvars->n; iv++) {
+                                if (strncmp(mvars->p[iv], str + (i + 1), j - (i + 1)) == 0) break;
+                            }
+                            if (iv < mvars->n) {
+                                if (j < end && str[j] == '.') {
+                                    static const char s_get[] = "get_string";
+                                    static const char s_set[] = "set_string";
+                                    static const char s_append[] = "append_string";
+                                    static const char s_save[] = "save";
+                                    static const char s_restore[] = "restore";
+                                    typedef struct func_entry_tag {
+                                        const char *str;
+                                        size_t len;
+                                        size_t arg;
+                                    } func_entry_t;
+                                    static const func_entry_t s_func_read[] = {
+                                        { s_get, sizeof(s_get), 0 },
+                                        { NULL, 0, 0 }
+                                    };
+                                    static const func_entry_t s_func_write[] = {
+                                        { s_set, sizeof(s_set), 1 },
+                                        { s_append, sizeof(s_append), 1 },
+                                        { s_save, sizeof(s_save), 0 },
+                                        { s_restore, sizeof(s_restore), 0 },
+                                        { NULL, 0, 0 }
+                                    };
+                                    size_t ie = 0;
+                                    while (s_func_read[ie].str) {
+                                        if (
+                                            j + s_func_read[ie].len < end &&
+                                            strncmp(str + j + 1, s_func_read[ie].str, s_func_read[ie].len - 1) == 0 &&
+                                            str[j + s_func_read[ie].len] == '('
+                                        ) break;
+                                        ie++;
+                                    }
+                                    if (s_func_read[ie].str) {
+                                        stream__printf(
+                                            obj,
+                                            "pcc_marker_variable__%s%s(pcc_ctx, %s%s",
+                                            s_func_read[ie].str,
+                                            (kind == CODE_BLOCK_KIND_PROGPRED) ? "" : "_on_action",
+                                            mvars->p[iv],
+                                            (s_func_read[ie].arg > 0) ? ", " : ""
+                                        );
+                                        i = j + s_func_read[ie].len + 1;
+                                        b = TRUE;
+                                    }
+                                    else if (kind == CODE_BLOCK_KIND_PROGPRED) {
+                                        ie = 0;
+                                        while (s_func_write[ie].str) {
+                                            if (
+                                                j + s_func_write[ie].len < end &&
+                                                strncmp(str + j + 1, s_func_write[ie].str, s_func_write[ie].len - 1) == 0 &&
+                                                str[j + s_func_write[ie].len] == '('
+                                            ) break;
+                                            ie++;
+                                        }
+                                        if (s_func_write[ie].str) {
+                                            stream__printf(
+                                                obj,
+                                                "pcc_marker_variable__%s(pcc_ctx, %s%s",
+                                                s_func_write[ie].str,
+                                                mvars->p[iv],
+                                                (s_func_write[ie].arg > 0) ? ", " : ""
+                                            );
+                                            i = j + s_func_write[ie].len + 1;
+                                            b = TRUE;
+                                        }
+                                    }
+                                }
+                                else {
+                                    if (kind == CODE_BLOCK_KIND_PROGPRED)
+                                        stream__printf(obj, "pcc_marker_variable__integer(pcc_ctx, %s)", mvars->p[iv]);
+                                    else
+                                        stream__printf(obj, "pcc_marker_variable__integer_on_action(pcc_ctx, %s)", mvars->p[iv]);
+                                    i = j;
+                                    b = TRUE;
+                                }
+                            }
+                        }
+                        if (!b) e = TRUE;
+                        break;
+                    default:
+                        e = TRUE;
+                    }
+                }
+                else {
+                    if (kind != CODE_BLOCK_KIND_NONE) e = TRUE;
+                }
+            }
+            else {
+                if (kind != CODE_BLOCK_KIND_NONE) e = TRUE;
+            }
+            if (e) {
+                size_t l, m;
+                calculate_position_(str, base, i, ascii, lineno, colno, &l, &m);
+                print_error(
+                    "%s:" FMT_LU ":" FMT_LU ": Code block containing invalid text after '@'\n",
+                    path, (ulong_t)(l + 1), (ulong_t)(m + 1)
+                );
+                (*errnum)++;
+            }
+            if (!b) {
+                stream__putc(obj, '@');
+                i++;
+            }
+        }
+        else {
+            stream__putc(obj, str[i]);
+            i++;
+        }
+    }
+    return lhead;
+}
+
+static bool_t stream__write_code(
+    stream_t *obj, const char *str, size_t start, size_t end, bool_t ascii, bool_t lhead, size_t dedent, size_t indent, bool_t dircpp,
+    const char *path, size_t base, size_t lineno, size_t colno, code_block_kind_t kind,
+    const node_const_array_t *capts, const string_array_t *mvars, const file_info_map_t *finfo, const subst_map_t *subst, size_t *errnum
+) {
+    bool_t b = TRUE; /* TRUE if succeeding leading spaces in a line */
+    size_t h = start;
+    size_t i = start;
+    if (end == VOID_VALUE) return lhead; /* for safety */
+    while (i < end) {
+        size_t k = 0;
+        if (!dircpp && b && match_directive_c(str, i, end, &k)) {
+            {
+                const size_t j = find_back_preceding_spaces_in_line(str, i);
+                stream__write_text(obj, str, h, j, ascii, lhead, dedent, indent, path, base, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+            }
+            {
+                size_t md = VOID_VALUE; /* the minimum indent length of the successive lines */
+                size_t kd = i;
+                find_trailing_spaces_in_line(str, i, k, &kd);
+                while (kd < k) {
+                    const size_t kd0 = kd;
+                    const size_t id = find_first_nonspace_or_eol(str, kd, end);
+                    const size_t jd = find_trailing_spaces_in_line(str, id, end, &kd);
+                    if (id < jd) {
+                        const size_t ld = count_indent_spaces(str, kd0, id, NULL);
+                        if (md == VOID_VALUE || md > ld) md = ld;
+                    }
+                }
+                if (md == VOID_VALUE) md = 0;
+                lhead = stream__write_code(obj, str, i, k, ascii, FALSE, md, INDENT_UNIT, TRUE, path, base, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+            }
+            h = i = k;
+            /* b == TRUE */
+        }
+        else if (match_comment_cxx(str, i, end, &k)) {
+            lhead = stream__write_text(obj, str, h, i, ascii, lhead, dedent, indent, path, base, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+            lhead = stream__write_text(obj, str, i, k, ascii, lhead, dedent, indent, path, base, lineno, colno, CODE_BLOCK_KIND_NONE, capts, mvars, finfo, subst, errnum);
+            h = i = k;
+            b = TRUE;
+        }
+        else if (match_comment_c(str, i, end, &k)) {
+            lhead = stream__write_text(obj, str, h, i, ascii, lhead, dedent, indent, path, base, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+            lhead = stream__write_text(obj, str, i, k, ascii, lhead, dedent, indent, path, base, lineno, colno, CODE_BLOCK_KIND_NONE, capts, mvars, finfo, subst, errnum);
+            h = i = k;
+            /* do not change `b` because a C-style comment is dealt as a white space */
+        }
+        else if (
+            match_quotation(str, i, end, '\'', &k) ||
+            match_quotation(str, i, end, '\"', &k)
+        ) {
+            lhead = stream__write_text(obj, str, h, i, ascii, lhead, dedent, indent, path, base, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+            lhead = stream__write_text(obj, str, i, k, ascii, lhead, dedent, indent, path, base, lineno, colno, CODE_BLOCK_KIND_NONE, capts, mvars, finfo, subst, errnum);
+            h = i = k;
+            b = FALSE;
+        }
+        else if (match_eol(str, i, end, &i)) {
+            b = TRUE;
+        }
+        else {
+            if (!match_spaces_in_line(str, i, end, &i)) {
+                i++;
+                b = FALSE;
+            }
+        }
+    }
+    return stream__write_text(obj, str, h, i, ascii, lhead, dedent, indent, path, base, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+}
+
+static void stream__write_code_block(
+    stream_t *obj, const char *str, size_t len, bool_t ascii, size_t indent,
+    const char *path, size_t lineno, size_t colno, code_block_kind_t kind,
+    const node_const_array_t *capts, const string_array_t *mvars, const file_info_map_t *finfo, const subst_map_t *subst, size_t *errnum
+) {
+    size_t m = VOID_VALUE; /* the minimum indent length except for the start line of the code block */
+    bool_t b = TRUE; /* TRUE if the code starts at the first line */
+    size_t d = 0; /* the original indent length of the line where the code starts */
+    size_t h = 0; /* the position where the code starts */
+    size_t l = lineno; /* the line number where the code starts */
+    size_t k = 0;
+    if (len == VOID_VALUE) return; /* for safety */
+    len = find_trailing_spaces_in_string(str, 0, len);
+    if (len <= 0) return; /* empty */
+    while (k < len) { /* to find the position where the code starts */
+        const size_t k0 = k;
+        const size_t i = find_first_nonspace_or_eol(str, k, len);
+        const size_t j = find_trailing_spaces_in_line(str, i, len, &k);
+        if (i < j) {
+            if (str[i] != '#') {
+                d = count_indent_spaces(str, k0, i, NULL);
+                if (!b) m = d;
+            }
+            h = i;
+            break;
+        }
+        l++;
+        b = FALSE;
+    }
+    if (obj->line != VOID_VALUE)
+        stream__write_line_directive(obj, path, l);
+    while (k < len) { /* to find the minimum indent length among lines except for blank and directive lines */
+        const size_t k0 = k;
+        const size_t i = find_first_nonspace_or_eol(str, k, len);
+        const size_t j = find_trailing_spaces_in_line(str, i, len, &k);
+        if (i < j && str[i] != '#') {
+            const size_t l = count_indent_spaces(str, k0, i, NULL);
+            if (m == VOID_VALUE || m > l) m = l;
+        }
+    }
+    if (m == VOID_VALUE) m = 0;
+    if (str[h] != '#') {
+        assert(b || d >= m);
+        stream__write_characters(obj, ' ', indent + (b ? 0 : d - m));
+    }
+    stream__write_code(obj, str, h, len, ascii, FALSE, m, indent, FALSE, path, 0, lineno, colno, kind, capts, mvars, finfo, subst, errnum);
+    stream__putc(obj, '\n');
+    if (obj->line != VOID_VALUE)
+        stream__write_line_directive(obj, obj->path, obj->line + 1);
+}
+
+static void stream__write_footer(
+    stream_t *obj, const char *str, size_t len, bool_t ascii,
+    const char *path, size_t lineno, size_t colno,
+    const file_info_map_t *finfo, const subst_map_t *subst, size_t *errnum
+) {
+    stream__write_code_block(obj, str, len, ascii, 0, path, lineno, colno, CODE_BLOCK_KIND_NORMAL, NULL, NULL, finfo, subst, errnum);
+}
+
 static context_t *create_context(const char *ipath, const char *opath, const string_array_t *dirs, const options_t *opts) {
     context_t *const ctx = (context_t *)malloc_e(sizeof(context_t));
     ctx->spath = (opath && opath[0]) ? add_fileext(opath, "c") : replace_fileext((ipath && ipath[0]) ? ipath : "-", "c");
@@ -2368,7 +2569,7 @@ static context_t *create_context(const char *ipath, const char *opath, const str
     ctx->flags = CODE_FLAG_NONE;
     ctx->errnum = 0;
     ctx->input = input_state__create(ipath, NULL, NULL, opts);
-    file_id_array__initialize(&(ctx->done));
+    file_info_map__initialize(&(ctx->finfo));
     subst_map__initialize(&(ctx->subst));
     node_array__initialize(&(ctx->rules));
     ctx->rulehash.d = 0;
@@ -2392,7 +2593,7 @@ static void destroy_context(context_t *ctx) {
     free(ctx->prefix);
     string_array__finalize(&(ctx->mvars));
     while (ctx->input) ctx->input = input_state__destroy(ctx->input);
-    file_id_array__finalize(&(ctx->done));
+    file_info_map__finalize(&(ctx->finfo));
     subst_map__finalize(&(ctx->subst));
     node_array__finalize(&(ctx->rules));
     free((node_t **)ctx->rulehash.p);
@@ -2459,13 +2660,13 @@ static node_t *create_node(node_type_t type) {
         node->data.capture.expr = NULL;
         node->data.capture.index = VOID_VALUE;
         break;
-    case NODE_EXPAND:
-        node->data.expand.index = VOID_VALUE;
-        file_pos__initialize(&(node->data.expand.fpos));
+    case NODE_MATCH_CAPT:
+        node->data.match_capt.index = VOID_VALUE;
+        file_pos__initialize(&(node->data.match_capt.fpos));
         break;
-    case NODE_MARKER:
-        node->data.marker.name = NULL;
-        file_pos__initialize(&(node->data.marker.fpos));
+    case NODE_MATCH_MVAR:
+        node->data.match_mvar.name = NULL;
+        file_pos__initialize(&(node->data.match_mvar.fpos));
         break;
     case NODE_ACTION:
         code_block__initialize(&(node->data.action.code));
@@ -2531,12 +2732,12 @@ static void destroy_node(node_t *node) {
     case NODE_CAPTURE:
         destroy_node(node->data.capture.expr);
         break;
-    case NODE_EXPAND:
-        file_pos__finalize(&(node->data.expand.fpos));
+    case NODE_MATCH_CAPT:
+        file_pos__finalize(&(node->data.match_capt.fpos));
         break;
-    case NODE_MARKER:
-        free(node->data.marker.name);
-        file_pos__finalize(&(node->data.marker.fpos));
+    case NODE_MATCH_MVAR:
+        free(node->data.match_mvar.name);
+        file_pos__finalize(&(node->data.match_mvar.fpos));
         break;
     case NODE_ACTION:
         code_block__finalize(&(node->data.action.code));
@@ -2647,9 +2848,9 @@ static void link_references(context_t *ctx, node_t *node) {
     case NODE_CAPTURE:
         link_references(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         break;
@@ -2707,9 +2908,9 @@ static void mark_rules_if_used(context_t *ctx, node_t *node) {
     case NODE_CAPTURE:
         mark_rules_if_used(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         break;
@@ -2765,9 +2966,9 @@ static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
     case NODE_CAPTURE:
         unreference_rules_from_unused_rule(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         break;
@@ -2846,9 +3047,9 @@ static void verify_rule_variables(context_t *ctx, node_t *node, node_const_array
     case NODE_CAPTURE:
         verify_rule_variables(ctx, node->data.capture.expr, rvars);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         node_const_array__copy(&(node->data.action.rvars), rvars);
@@ -2923,25 +3124,25 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
         verify_captures(ctx, node->data.capture.expr, capts);
         node_const_array__add(capts, node);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         {
             size_t i;
             for (i = 0; i < capts->n; i++) {
                 assert(capts->p[i]->type == NODE_CAPTURE);
-                if (node->data.expand.index == capts->p[i]->data.capture.index) break;
+                if (node->data.match_capt.index == capts->p[i]->data.capture.index) break;
             }
-            if (i >= capts->n && node->data.expand.index != VOID_VALUE) {
+            if (i >= capts->n && node->data.match_capt.index != VOID_VALUE) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
-                    node->data.expand.fpos.path,
-                    (ulong_t)(node->data.expand.fpos.line + 1), (ulong_t)(node->data.expand.fpos.col + 1),
-                    (ulong_t)(node->data.expand.index + 1)
+                    node->data.match_capt.fpos.path,
+                    (ulong_t)(node->data.match_capt.fpos.line + 1), (ulong_t)(node->data.match_capt.fpos.col + 1),
+                    (ulong_t)(node->data.match_capt.index + 1)
                 );
                 ctx->errnum++;
             }
         }
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         node_const_array__copy(&(node->data.action.capts), capts);
@@ -3000,20 +3201,20 @@ static void verify_marker_variables(context_t *ctx, const node_t *node) {
     case NODE_CAPTURE:
         verify_marker_variables(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         {
             size_t i;
             for (i = 0; i < ctx->mvars.n; i++) {
-                if (strcmp(node->data.marker.name, ctx->mvars.p[i]) == 0) break;
+                if (strcmp(node->data.match_mvar.name, ctx->mvars.p[i]) == 0) break;
             }
-            if (i >= ctx->mvars.n && node->data.marker.name != NULL) {
+            if (i >= ctx->mvars.n && node->data.match_mvar.name != NULL) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Marker variable not defined: '@%s'\n",
-                    node->data.marker.fpos.path,
-                    (ulong_t)(node->data.marker.fpos.line + 1), (ulong_t)(node->data.marker.fpos.col + 1),
-                    node->data.marker.name
+                    node->data.match_mvar.fpos.path,
+                    (ulong_t)(node->data.match_mvar.fpos.line + 1), (ulong_t)(node->data.match_mvar.fpos.col + 1),
+                    node->data.match_mvar.name
                 );
                 ctx->errnum++;
             }
@@ -3037,32 +3238,32 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         print_error("Internal error [%d]\n", __LINE__);
         exit(-1);
     case NODE_REFERENCE:
-        ctx->flags |= CODE_FLAG_REFERENCE_USED;
+        ctx->flags |= CODE_FLAG_REFERENCE;
         break;
     case NODE_STRING:
-        ctx->flags |= CODE_FLAG_STRING_USED;
+        ctx->flags |= CODE_FLAG_STRING;
         break;
     case NODE_CHARCLASS:
-        ctx->flags |= CODE_FLAG_CHARCLASS_USED;
+        ctx->flags |= CODE_FLAG_CHARCLASS;
         if (!ctx->opts.ascii)
-            ctx->flags |= CODE_FLAG_UTF8_CHARCLASS_USED;
+            ctx->flags |= CODE_FLAG_UTF8_CHARCLASS;
         break;
     case NODE_POSITION:
-        ctx->flags |= CODE_FLAG_POSITION_USED;
+        ctx->flags |= CODE_FLAG_POSITION;
         break;
     case NODE_QUANTITY:
         set_code_flags(ctx, node->data.quantity.expr);
-        ctx->flags |= CODE_FLAG_QUANTITY_USED;
+        ctx->flags |= CODE_FLAG_QUANTITY;
         break;
     case NODE_PREDICATE:
-        ctx->flags |= CODE_FLAG_PREDICATE_USED;
+        ctx->flags |= CODE_FLAG_PREDICATE;
         set_code_flags(ctx, node->data.predicate.expr);
         break;
     case NODE_PROGPRED:
-        ctx->flags |= CODE_FLAG_PROGPRED_USED;
+        ctx->flags |= CODE_FLAG_PROGPRED;
         break;
     case NODE_SEQUENCE:
-        ctx->flags |= CODE_FLAG_SEQUENCE_USED;
+        ctx->flags |= CODE_FLAG_SEQUENCE;
         {
             size_t i;
             for (i = 0; i < node->data.sequence.nodes.n; i++) {
@@ -3071,7 +3272,7 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         }
         break;
     case NODE_ALTERNATE:
-        ctx->flags |= CODE_FLAG_ALTERNATE_USED;
+        ctx->flags |= CODE_FLAG_ALTERNATE;
         {
             size_t i;
             for (i = 0; i < node->data.alternate.nodes.n; i++) {
@@ -3080,20 +3281,20 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         }
         break;
     case NODE_CAPTURE:
-        ctx->flags |= CODE_FLAG_CAPTURE_USED;
+        ctx->flags |= CODE_FLAG_CAPTURE;
         set_code_flags(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
-        ctx->flags |= CODE_FLAG_EXPAND_USED;
+    case NODE_MATCH_CAPT:
+        ctx->flags |= CODE_FLAG_MATCH_CAPT;
         break;
-    case NODE_MARKER:
-        ctx->flags |= CODE_FLAG_MARKER_USED;
+    case NODE_MATCH_MVAR:
+        ctx->flags |= CODE_FLAG_MATCH_MVAR;
         break;
     case NODE_ACTION:
-        ctx->flags |= CODE_FLAG_ACTION_USED;
+        ctx->flags |= CODE_FLAG_ACTION;
         break;
     case NODE_ERROR:
-        ctx->flags |= CODE_FLAG_ERROR_USED;
+        ctx->flags |= CODE_FLAG_ERROR;
         set_code_flags(ctx, node->data.error.expr);
         break;
     default:
@@ -3104,9 +3305,9 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
 
 static void update_code_flags(context_t *ctx, const node_rule_t *rule) {
     if (rule->rvars.n > 0)
-        ctx->flags |= CODE_FLAG_RULE_VARIABLE_USED;
+        ctx->flags |= CODE_FLAG_RULE_VARIABLE;
     if (rule->capts.n > 0)
-        ctx->flags |= CODE_FLAG_CAPTS_USED;
+        ctx->flags |= CODE_FLAG_CAPTS;
     set_code_flags(ctx, rule->expr);
 }
 
@@ -3226,13 +3427,13 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         dump_node(ctx, node->data.capture.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
         break;
-    case NODE_EXPAND:
-        fprintf(stdout, "%*sExpand(index:", indent, "");
-        dump_integer_value(node->data.expand.index);
+    case NODE_MATCH_CAPT:
+        fprintf(stdout, "%*sMatch Captured(index:", indent, "");
+        dump_integer_value(node->data.match_capt.index);
         fprintf(stdout, ")\n");
         break;
-    case NODE_MARKER:
-        fprintf(stdout, "%*sMaker(name:'%s')\n", indent, "", node->data.marker.name);
+    case NODE_MATCH_MVAR:
+        fprintf(stdout, "%*sMatch Maker Variable(name:'%s')\n", indent, "", node->data.match_mvar.name);
         break;
     case NODE_ACTION:
         fprintf(stdout, "%*sAction(index:", indent, "");
@@ -3374,27 +3575,27 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
             const size_t q = input->bufcur;
             char *s;
             input_state__match_spaces(input);
-            n_p = create_node(NODE_EXPAND);
+            n_p = create_node(NODE_MATCH_CAPT);
             assert(q >= p);
             s = strndup_e(input->buffer.p + p, q - p);
-            n_p->data.expand.index = string_to_size_t(s);
-            if (n_p->data.expand.index == VOID_VALUE) {
+            n_p->data.match_capt.index = string_to_size_t(s);
+            if (n_p->data.match_capt.index == VOID_VALUE) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
                 input->errnum++;
             }
-            else if (n_p->data.expand.index == 0) {
+            else if (n_p->data.match_capt.index == 0) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 input->errnum++;
             }
             else if (s[0] == '0') {
                 print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 input->errnum++;
-                n_p->data.expand.index = 0;
+                n_p->data.match_capt.index = 0;
             }
             free(s);
-            if (n_p->data.expand.index > 0 && n_p->data.expand.index != VOID_VALUE) {
-                n_p->data.expand.index--;
-                file_pos__set(&(n_p->data.expand.fpos), input->path, l, m);
+            if (n_p->data.match_capt.index > 0 && n_p->data.match_capt.index != VOID_VALUE) {
+                n_p->data.match_capt.index--;
+                file_pos__set(&(n_p->data.match_capt.fpos), input->path, l, m);
             }
         }
         else {
@@ -3408,10 +3609,10 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         if (input_state__match_identifier(input)) {
             const size_t q = input->bufcur;
             input_state__match_spaces(input);
-            n_p = create_node(NODE_MARKER);
+            n_p = create_node(NODE_MATCH_MVAR);
             assert(q >= p);
-            n_p->data.marker.name = strndup_e(input->buffer.p + p, q - p);
-            file_pos__set(&(n_p->data.marker.fpos), input->path, l, m);
+            n_p->data.match_mvar.name = strndup_e(input->buffer.p + p, q - p);
+            file_pos__set(&(n_p->data.match_mvar.fpos), input->path, l, m);
         }
         else {
             goto EXCEPTION;
@@ -3465,7 +3666,7 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         n_p = create_node(NODE_ACTION);
         n_p->data.action.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
         n_p->data.action.code.len = find_trailing_spaces_in_string(n_p->data.action.code.text, 0, q - p - 2);
-        file_pos__set(&(n_p->data.action.code.fpos), input->path, l, m);
+        file_pos__set(&(n_p->data.action.code.fpos), input->path, l, m + 1); /* `+ 1`: to skip the heading '{' */
         n_p->data.action.index = rule->data.rule.codes.n;
         node_const_array__add(&(rule->data.rule.codes), n_p);
     }
@@ -3506,7 +3707,7 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
             n_p->data.progpred.neg = (t == '!') ? TRUE : FALSE;
             n_p->data.progpred.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
             n_p->data.progpred.code.len = find_trailing_spaces_in_string(n_p->data.progpred.code.text, 0, q - p - 2);
-            file_pos__set(&n_p->data.progpred.code.fpos, input->path, l, m);
+            file_pos__set(&n_p->data.progpred.code.fpos, input->path, l, m + 1); /* `+ 1`: to skip the heading '{' */
             n_p->data.progpred.index = rule->data.rule.preds.n;
             node_const_array__add(&(rule->data.rule.preds), n_p);
         }
@@ -3569,7 +3770,7 @@ static node_t *parse_term(input_state_t *input, node_t *rule) {
             n_t->data.error.expr = n_r;
             n_t->data.error.code.text = strndup_e(input->buffer.p + p + 1, q - p - 2);
             n_t->data.error.code.len = find_trailing_spaces_in_string(n_t->data.error.code.text, 0, q - p - 2);
-            file_pos__set(&(n_t->data.error.code.fpos), input->path, l, m);
+            file_pos__set(&(n_t->data.error.code.fpos), input->path, l, m + 1); /* `+ 1`: to skip the heading '{' */
             n_t->data.error.index = rule->data.rule.codes.n;
             node_const_array__add(&(rule->data.rule.codes), n_t);
         }
@@ -3711,6 +3912,74 @@ static void dump_options(context_t *ctx) {
     fprintf(stdout, "prefix: '%s'\n", get_prefix(ctx));
 }
 
+static bool_t parse_and_check_version_(input_state_t *input, const char *version, bool_t *valid) {
+    bool_t v = TRUE;
+    bool_t f = TRUE;
+    for (;;) {
+        int o = -1;
+        {
+            const size_t l = input->linenum;
+            const size_t m = input_state__column_number(input);
+            if (input_state__match_string(input, "==")) {
+                o = 0;
+            }
+            else if (input_state__match_string(input, "!=")) {
+                o = 1;
+            }
+            else if (input_state__match_string(input, "<=")) {
+                o = 2;
+            }
+            else if (input_state__match_string(input, ">=")) {
+                o = 3;
+            }
+            else if (input_state__match_string(input, "<")) {
+                o = 4;
+            }
+            else if (input_state__match_string(input, ">")) {
+                o = 5;
+            }
+            else {
+                if (!f) {
+                    print_error("%s:" FMT_LU ":" FMT_LU ": Illegal operator syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                    input->errnum++;
+                }
+                return FALSE;
+            }
+            input_state__match_spaces(input);
+        }
+        {
+            const size_t p = input->bufcur;
+            const size_t l = input->linenum;
+            const size_t m = input_state__column_number(input);
+            if (!input_state__match_version(input)) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Illegal version syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
+                input->errnum++;
+                return FALSE;
+            }
+            input_state__match_spaces(input);
+            const int c = compare_versions(version ? version : IMPLICIT_VERSION, input->buffer.p + p);
+            switch (o) {
+            case 0: if (c != 0) v = FALSE; break;
+            case 1: if (c == 0) v = FALSE; break;
+            case 2: if (c > 0) v = FALSE; break;
+            case 3: if (c < 0) v = FALSE; break;
+            case 4: if (c >= 0) v = FALSE; break;
+            case 5: if (c <= 0) v = FALSE; break;
+            default: v = FALSE; /* in case */
+            }
+        }
+        f = FALSE;
+        if (input_state__match_character(input, ',')) {
+            input_state__match_spaces(input);
+        }
+        else {
+            break;
+        }
+    }
+    if (valid) *valid = v;
+    return TRUE;
+}
+
 static bool_t parse_directive_block_(input_state_t *input, const char *name, code_block_array_t *output1, code_block_array_t *output2) {
     if (!input_state__match_string(input, name)) return FALSE;
     input_state__match_spaces(input);
@@ -3725,14 +3994,34 @@ static bool_t parse_directive_block_(input_state_t *input, const char *name, cod
                 code_block_t *const c = code_block_array__create_entry(output1);
                 c->text = strndup_e(input->buffer.p + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                file_pos__set(&(c->fpos), input->path, l, m);
+                file_pos__set(&(c->fpos), input->path, l, m + 1); /* `+ 1`: to skip the heading '{' */
             }
             if (output2 != NULL) {
                 code_block_t *const c = code_block_array__create_entry(output2);
                 c->text = strndup_e(input->buffer.p + p + 1, q - p - 2);
                 c->len = q - p - 2;
-                file_pos__set(&(c->fpos), input->path, l, m);
+                file_pos__set(&(c->fpos), input->path, l, m + 1); /* `+ 1`: to skip the heading '{' */
             }
+        }
+        else {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+            input->errnum++;
+        }
+    }
+    return TRUE;
+}
+
+static bool_t parse_directive_identifier_(input_state_t *input, const char *name, char **output) {
+    if (!input_state__match_string(input, name)) return FALSE;
+    input_state__match_spaces(input);
+    {
+        const size_t p = input->bufcur;
+        const size_t l = input->linenum;
+        const size_t m = input_state__column_number(input);
+        if (input_state__match_identifier(input)) {
+            const size_t q = input->bufcur;
+            input_state__match_spaces(input);
+            if (output) *output = strndup_e(input->buffer.p + p, q - p);
         }
         else {
             print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
@@ -3771,7 +4060,7 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
             bool_t b = TRUE;
             remove_leading_spaces(s);
             remove_trailing_spaces(s);
-            assert((mode & ~7) == 0);
+            assert((mode & ~0x7) == 0);
             if ((mode & STRING_FLAG_NOTEMPTY) && !is_filled_string(s)) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Empty string\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1));
                 input->errnum++;
@@ -3804,7 +4093,50 @@ static bool_t parse_directive_string_(input_state_t *input, const char *name, ch
                 *output = s;
             }
             else {
-                free(s); s = NULL;
+                free(s);
+            }
+        }
+    }
+    return TRUE;
+}
+
+static bool_t parse_directive_version_(input_state_t *input, const char *name, char **output) {
+    const size_t l = input->linenum;
+    const size_t m = input_state__column_number(input);
+    if (!input_state__match_string(input, name)) return FALSE;
+    input_state__match_spaces(input);
+    {
+        char *s = NULL;
+        const size_t p = input->bufcur;
+        const size_t lv = input->linenum;
+        const size_t mv = input_state__column_number(input);
+        if (input_state__match_version(input)) {
+            const size_t q = input->bufcur;
+            input_state__match_spaces(input);
+            s = strndup_e(input->buffer.p + p, q - p);
+        }
+        else {
+            print_error("%s:" FMT_LU ":" FMT_LU ": Illegal %s syntax\n", input->path, (ulong_t)(lv + 1), (ulong_t)(mv + 1), name);
+            input->errnum++;
+        }
+        if (s != NULL) {
+            bool_t b = TRUE;
+            if (output == NULL) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Definition of %s not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
+                b = FALSE;
+            }
+            else if (*output != NULL) {
+                print_error("%s:" FMT_LU ":" FMT_LU ": Multiple definitions of %s\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), name);
+                input->errnum++;
+                b = FALSE;
+            }
+            if (b) {
+                assert(output != NULL);
+                *output = s;
+            }
+            else {
+                free(s);
             }
         }
     }
@@ -3887,13 +4219,10 @@ static bool_t parse_footer_(input_state_t *input, code_block_array_t *output) {
     return TRUE;
 }
 
-static void parse_file_(context_t *ctx) {
-    if (ctx->input == NULL) return;
-    {
-        file_id_t id;
-        file_id__get(ctx->input->file, ctx->input->path, &id);
-        if (!file_id_array__add_if_not_yet(&(ctx->done), &id)) return; /* already imported */
-    }
+static size_t parse_file_(context_t *ctx) {
+    size_t iinfo;
+    if (ctx->input == NULL) return VOID_VALUE;
+    if (file_info_map__get(&(ctx->finfo), ctx->input->file, ctx->input->path, &iinfo)) return iinfo; /* already imported */
     {
         const bool_t imp = input_state__is_in_imported(ctx->input);
         bool_t b = TRUE;
@@ -3907,12 +4236,14 @@ static void parse_file_(context_t *ctx) {
             n = ctx->input->charnum;
             o = ctx->input->linepos;
             if (parse_directive_string_(ctx->input, "%import", &s, STRING_FLAG_NOTEMPTY)) {
+                size_t ii = VOID_VALUE;
+                bool_t v;
                 if (s) {
                     if (is_absolute_path(s)) {
                         FILE *const file = fopen(s, "rb");
                         if (file) {
                             ctx->input = input_state__create(s, file, ctx->input, &(ctx->opts));
-                            parse_file_(ctx);
+                            ii = parse_file_(ctx);
                             ctx->input = input_state__destroy(ctx->input);
                         }
                         else {
@@ -3962,16 +4293,56 @@ static void parse_file_(context_t *ctx) {
                         }
                         if (file) {
                             ctx->input = input_state__create(path, file, ctx->input, &(ctx->opts));
-                            parse_file_(ctx);
+                            ii = parse_file_(ctx);
                             ctx->input = input_state__destroy(ctx->input);
                         }
                         free(path);
                     }
-                    free(s);
                 }
+                if (parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
+                        ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                        s
+                    );
+                    ctx->input->errnum++;
+                }
+                free(s);
+                b = TRUE;
+            }
+            else if (parse_directive_identifier_(ctx->input, "%requires", &s)) {
+                if (strcmp(s, "packcc") == 0) {
+                    bool_t v;
+                    if (!parse_and_check_version_(ctx->input, PACKCC_VERSION, &v)) {
+                        print_error(
+                            "%s:" FMT_LU ":" FMT_LU ": Version constraints missing: %s\n",
+                            ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                            s
+                        );
+                        ctx->input->errnum++;
+                    }
+                    else if (!v) {
+                        print_error(
+                            "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
+                            ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                            s
+                        );
+                        ctx->input->errnum++;
+                    }
+                }
+                else {
+                    print_error(
+                        "%s:" FMT_LU ":" FMT_LU ": Invalid name: %s\n",
+                        ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
+                        s
+                    );
+                    ctx->input->errnum++;
+                }
+                free(s);
                 b = TRUE;
             }
             else if (
+                parse_directive_version_(ctx->input, "%version", &(ctx->finfo.p[iinfo].version)) ||
                 parse_directive_block_(ctx->input, "%earlysource", &(ctx->esource), NULL) ||
                 parse_directive_block_(ctx->input, "%earlyheader", &(ctx->eheader), NULL) ||
                 parse_directive_block_(ctx->input, "%earlycommon", &(ctx->esource), &(ctx->eheader)) ||
@@ -4015,6 +4386,7 @@ static void parse_file_(context_t *ctx) {
     }
     ctx->errnum += ctx->input->errnum;
     ctx->flags |= ctx->input->flags;
+    return iinfo;
 }
 
 static bool_t parse(context_t *ctx) {
@@ -4331,7 +4703,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                 stream__puts(gen->stream, "ctx->cur = p;\n");
                 if (gen->mvars) {
                     stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                    stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                    stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
                 }
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
                 stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
@@ -4348,7 +4720,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p0;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
             stream__write_characters(gen->stream, ' ', indent + INDENT_UNIT);
             stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n0);\n");
@@ -4394,7 +4766,7 @@ static code_reach_t generate_quantifying_code(generate_t *gen, const node_t *exp
                     stream__puts(gen->stream, "ctx->cur = p;\n");
                     if (gen->mvars) {
                         stream__write_characters(gen->stream, ' ', indent);
-                        stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                        stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
                     }
                     stream__write_characters(gen->stream, ' ', indent);
                     stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
@@ -4433,7 +4805,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -4445,7 +4817,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
         }
         switch (r) {
@@ -4463,7 +4835,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
         }
         if (r == CODE_REACH_BOTH) {
@@ -4477,7 +4849,7 @@ static code_reach_t generate_predicating_code(generate_t *gen, const node_t *exp
             stream__puts(gen->stream, "ctx->cur = p;\n");
             if (gen->mvars) {
                 stream__write_characters(gen->stream, ' ', indent);
-                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+                stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
             }
             stream__write_characters(gen->stream, ' ', indent);
             stream__printf(gen->stream, "goto L%04d;\n", onfail);
@@ -4505,7 +4877,7 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
     stream__printf(gen->stream, "int r = %s;\n", neg ? "0" : "1");
     if (gen->mvars) {
         stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_marker_variable_set_record__save(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+        stream__puts(gen->stream, "pcc_marker_variable_set_record__save(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
     }
     stream__write_characters(gen->stream, ' ', indent);
     stream__puts(gen->stream, "ctx->capt0.range.start = chunk->pos;\n");
@@ -4518,10 +4890,6 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
         gen->stream, "pcc_predicate_%s_" FMT_LU "(ctx, chunk, &r);\n",
         gen->rule->data.rule.name, (ulong_t)index
     );
-    if (gen->mvars) {
-        stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_marker_variable_set_entry__copy(ctx->auxil, &(chunk->mvars), &(ctx->mvars.curr));\n");
-    }
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (%sr) goto L%04d;\n", neg ? "" : "!", onfail);
     if (!bare) {
@@ -4597,7 +4965,7 @@ static code_reach_t generate_alternative_code(generate_t *gen, const node_array_
         stream__puts(gen->stream, "ctx->cur = p;\n");
         if (gen->mvars) {
             stream__write_characters(gen->stream, ' ', indent);
-            stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, ctx->pos + ctx->cur, &(ctx->mvars));\n");
+            stream__puts(gen->stream, "pcc_marker_variable_set_record__restore(ctx->auxil, &(ctx->mvars), ctx->pos + ctx->cur);\n");
         }
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "pcc_thunk_array__revert(ctx, &(chunk->thunks), n);\n");
@@ -4646,7 +5014,7 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     return r;
 }
 
-static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int onfail, size_t indent, bool_t bare) {
+static code_reach_t generate_matching_capt_code(generate_t *gen, size_t index, int onfail, size_t indent, bool_t bare) {
     if (!bare) {
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "{\n");
@@ -4685,7 +5053,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
     return CODE_REACH_BOTH;
 }
 
-static code_reach_t generate_matching_marker_code(generate_t *gen, const char *name, int onfail, size_t indent, bool_t bare) {
+static code_reach_t generate_matching_mvar_code(generate_t *gen, const char *name, int onfail, size_t indent, bool_t bare) {
     if (!bare) {
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "{\n");
@@ -4865,10 +5233,10 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_alternative_code(gen, &(node->data.alternate.nodes), onfail, indent, bare);
     case NODE_CAPTURE:
         return generate_capturing_code(gen, node->data.capture.expr, node->data.capture.index, onfail, indent, bare);
-    case NODE_EXPAND:
-        return generate_expanding_code(gen, node->data.expand.index, onfail, indent, bare);
-    case NODE_MARKER:
-        return generate_matching_marker_code(gen, node->data.marker.name, onfail, indent, bare);
+    case NODE_MATCH_CAPT:
+        return generate_matching_capt_code(gen, node->data.match_capt.index, onfail, indent, bare);
+    case NODE_MATCH_MVAR:
+        return generate_matching_mvar_code(gen, node->data.match_mvar.name, onfail, indent, bare);
     case NODE_ACTION:
         return generate_thunking_action_code(
             gen, node->data.action.index, &(node->data.action.rvars), &(node->data.action.capts), FALSE, onfail, indent, bare
@@ -4897,14 +5265,18 @@ static bool_t generate(context_t *ctx) {
         subst_map__add(&(ctx->subst), "prefix", get_prefix(ctx));
         subst_map__add(&(ctx->subst), "PREFIX", get_prefix(ctx));
         to_uppercase(ctx->subst.p[ctx->subst.n - 1].ostr);
+        subst_map__add(&(ctx->subst), "packcc.version", PACKCC_VERSION);
+        subst_map__add(&(ctx->subst), "packcc.option.ascii", ctx->opts.ascii ? "1" : "0");
+        subst_map__add(&(ctx->subst), "packcc.option.lines", ctx->opts.lines ? "1" : "0");
     }
     {
         {
             size_t i;
             for (i = 0; i < ctx->eheader.n; i++) {
                 stream__write_code_block(
-                    &hstream, ctx->eheader.p[i].text, ctx->eheader.p[i].len, 0,
-                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
+                    &hstream, ctx->eheader.p[i].text, ctx->eheader.p[i].len, ctx->opts.ascii, 0,
+                    ctx->eheader.p[i].fpos.path, ctx->eheader.p[i].fpos.line, ctx->eheader.p[i].fpos.col, CODE_BLOCK_KIND_NORMAL,
+                    NULL, NULL, &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4920,8 +5292,9 @@ static bool_t generate(context_t *ctx) {
             size_t i;
             for (i = 0; i < ctx->header.n; i++) {
                 stream__write_code_block(
-                    &hstream, ctx->header.p[i].text, ctx->header.p[i].len, 0,
-                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
+                    &hstream, ctx->header.p[i].text, ctx->header.p[i].len, ctx->opts.ascii, 0,
+                    ctx->header.p[i].fpos.path, ctx->header.p[i].fpos.line, ctx->header.p[i].fpos.col, CODE_BLOCK_KIND_NORMAL,
+                    NULL, NULL, &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
                 );
                 stream__puts(&hstream, "\n");
             }
@@ -4932,8 +5305,9 @@ static bool_t generate(context_t *ctx) {
             size_t i;
             for (i = 0; i < ctx->esource.n; i++) {
                 stream__write_code_block(
-                    &sstream, ctx->esource.p[i].text, ctx->esource.p[i].len, 0,
-                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
+                    &sstream, ctx->esource.p[i].text, ctx->esource.p[i].len, ctx->opts.ascii, 0,
+                    ctx->esource.p[i].fpos.path, ctx->esource.p[i].fpos.line, ctx->esource.p[i].fpos.col, CODE_BLOCK_KIND_NORMAL,
+                    NULL, NULL, &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -4958,6 +5332,12 @@ static bool_t generate(context_t *ctx) {
             "\n",
             extract_filename(ctx->hpath)
         );
+        stream__printf(
+            &sstream,
+            "#define PCC_VERSION \"%s\"\n"
+            "\n",
+            PACKCC_VERSION
+        );
         if (ctx->opts.ascii || ctx->opts.lines) {
             if (ctx->opts.ascii) {
                 stream__puts(
@@ -4980,8 +5360,9 @@ static bool_t generate(context_t *ctx) {
             size_t i;
             for (i = 0; i < ctx->source.n; i++) {
                 stream__write_code_block(
-                    &sstream, ctx->source.p[i].text, ctx->source.p[i].len, 0,
-                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, CODE_BLOCK_KIND_NORMAL, NULL, NULL, &(ctx->subst)
+                    &sstream, ctx->source.p[i].text, ctx->source.p[i].len, ctx->opts.ascii, 0,
+                    ctx->source.p[i].fpos.path, ctx->source.p[i].fpos.line, ctx->source.p[i].fpos.col, CODE_BLOCK_KIND_NORMAL,
+                    NULL, NULL, &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
                 );
                 stream__puts(&sstream, "\n");
             }
@@ -5156,8 +5537,7 @@ static bool_t generate(context_t *ctx) {
                 "    pcc_marker_value_stack_t prev;\n"
                 "} pcc_marker_value_record_t;\n"
                 "\n"
-                "typedef struct pcc_marker_variable_set_tag {\n"
-                "    size_t pos;\n"
+                "typedef struct pcc_marker_variable_set_tag {\n" /* must contain only members with the names of the marker variables */
             );
             for (i = 0; i < ctx->mvars.n; i++) {
                 stream__printf(
@@ -5513,7 +5893,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & CODE_FLAG_RULE_VARIABLE_USED) {
+        if (ctx->flags & CODE_FLAG_RULE_VARIABLE) {
             stream__puts(
                 &sstream,
                 "static void pcc_value_table__clear(pcc_auxil_t auxil, pcc_value_table_t *obj) {\n"
@@ -5534,7 +5914,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_value_refer_table__initialize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj) {\n"
@@ -5554,7 +5934,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_value_refer_table__resize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj, size_t len) {\n"
@@ -5612,7 +5992,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & CODE_FLAG_CAPTS_USED) {
+        if (ctx->flags & CODE_FLAG_CAPTS) {
             stream__puts(
                 &sstream,
                 "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *obj, size_t len) {\n"
@@ -5632,7 +6012,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_capture_const_table__initialize(pcc_auxil_t auxil, pcc_capture_const_table_t *obj) {\n"
@@ -5652,7 +6032,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_capture_const_table__resize(pcc_auxil_t auxil, pcc_capture_const_table_t *obj, size_t len) {\n"
@@ -5725,7 +6105,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_stack__copy(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj, const pcc_marker_value_stack_t *src) {\n"
@@ -5779,7 +6159,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_record__copy(pcc_auxil_t auxil, pcc_marker_value_record_t *obj, const pcc_marker_value_record_t *src) {\n"
@@ -5831,7 +6211,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set__copy(pcc_auxil_t auxil, pcc_marker_variable_set_t *obj, const pcc_marker_variable_set_t *src) {\n"
@@ -5864,7 +6244,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_entry__copy(pcc_auxil_t auxil, pcc_marker_variable_set_entry_t *obj, const pcc_marker_variable_set_entry_t *src) {\n"
@@ -5892,6 +6272,11 @@ static bool_t generate(context_t *ctx) {
                     "    PCC_FREE(auxil, obj->p);\n"
                     "}\n"
                     "\n"
+                );
+            }
+            if (ctx->rules.n > 0) {
+                stream__puts(
+                    &sstream,
                     "static void pcc_marker_variable_set_stack__resize(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, size_t len) {\n"
                     "    size_t i;\n"
                     "    for (i = len; i < obj->n; i++) pcc_marker_variable_set_entry__finalize(auxil, &(obj->p[i]));\n"
@@ -5909,7 +6294,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_stack__push(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, const pcc_marker_variable_set_entry_t *mval) {\n"
@@ -5920,7 +6305,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            {
+            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_stack__pop(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, pcc_marker_variable_set_entry_t *mval) {\n"
@@ -5942,6 +6327,8 @@ static bool_t generate(context_t *ctx) {
                     "}\n"
                     "\n"
                 );
+            }
+            {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_record__initialize(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj) {\n"
@@ -5956,10 +6343,10 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
-                    "static void pcc_marker_variable_set_record__save(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                    "static void pcc_marker_variable_set_record__save(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
                     "    if (obj->curr.pos < pos) {\n"
                     "        pcc_marker_variable_set_stack__push(auxil, &(obj->prev), &(obj->curr));\n"
                     "        obj->curr.pos = pos;\n"
@@ -5968,10 +6355,11 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            {
+            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
-                    "static void pcc_marker_variable_set_record__restore(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
+                    "MARK_FUNC_AS_USED\n"
+                    "static void pcc_marker_variable_set_record__restore(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
                     "    if (obj->curr.pos > pos) {\n"
                     "        size_t n = obj->prev.n;\n"
                     "        while (n > 0 && obj->prev.p[n - 1].pos > pos) n--;\n"
@@ -5981,23 +6369,28 @@ static bool_t generate(context_t *ctx) {
                     "}\n"
                     "\n"
                 );
-            }
-            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
-                    "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, size_t pos, pcc_marker_variable_set_record_t *obj) {\n"
-                    "    size_t k = 0;\n"
-                    "    while (k < obj->prev.n && obj->prev.p[k].pos < pos) k++;\n"
+                    "static void pcc_marker_variable_set_record__shift(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
+                    "    size_t k;\n"
+                    "    for (k = 0; k < obj->prev.n && obj->prev.p[k].pos <= pos; k++);\n"
+                    "    if (k > 0) k--;\n"
                     "    if (k > 0) {\n"
                     "        size_t i;\n"
-                    "        for (i = k; i < obj->prev.n; i++) obj->prev.p[i - k] = obj->prev.p[i];\n"
+                    "        for (i = k; i < obj->prev.n; i++) {\n"
+                    "            pcc_marker_variable_set_entry__finalize(auxil, &(obj->prev.p[i - k]));\n"
+                    "            obj->prev.p[i - k] = obj->prev.p[i];\n"
+                    "            pcc_marker_variable_set_entry__initialize(auxil, &(obj->prev.p[i]));\n"
+                    "        }\n"
                     "        pcc_marker_variable_set_stack__resize(auxil, &(obj->prev), obj->prev.n - k);\n"
                     "    }\n"
+                    "    /* obj->prev.p[0].pos <= pos when obj->prev.n > 0 */\n"
+                    "    /* obj->prev.p[1].pos >  pos when obj->prev.n > 1 */\n"
                     "}\n"
                     "\n"
                 );
             }
-            if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+            if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_set__initialize(pcc_auxil_t auxil, pcc_marker_value_set_t *obj) {\n"
@@ -6033,7 +6426,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+            if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_set__copy_from(pcc_auxil_t auxil, pcc_marker_value_set_t *obj, pcc_marker_variable_set_t *src) {\n"
@@ -6114,7 +6507,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_context_t *ctx, pcc_action_t action, size_t valuec, size_t captc) {\n"
@@ -6774,7 +7167,7 @@ static bool_t generate(context_t *ctx) {
             if (ctx->mvars.n > 0) {
                 stream__puts(
                     &sstream,
-                    "    pcc_marker_variable_set_record__shift(ctx->auxil, ctx->pos, &(ctx->mvars));\n"
+                    "    pcc_marker_variable_set_record__shift(ctx->auxil, &(ctx->mvars), ctx->pos);\n"
                 );
             }
             stream__puts(
@@ -6799,7 +7192,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & CODE_FLAG_UTF8_CHARCLASS_USED) {
+        if (ctx->flags & CODE_FLAG_UTF8_CHARCLASS) {
             stream__puts(
                 &sstream,
                 "static size_t pcc_get_char_as_utf32(pcc_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n"
@@ -7085,8 +7478,9 @@ static bool_t generate(context_t *ctx) {
                         k++;
                     }
                     stream__write_code_block(
-                        &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
-                        CODE_BLOCK_KIND_PROGPRED, c, &(ctx->mvars), &(ctx->subst)
+                        &sstream, b->text, b->len, ctx->opts.ascii, INDENT_UNIT,
+                        b->fpos.path, b->fpos.line, b->fpos.col, CODE_BLOCK_KIND_PROGPRED,
+                        c, &(ctx->mvars), &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
                     );
                     k = c->n;
                     while (k > 0) {
@@ -7199,8 +7593,9 @@ static bool_t generate(context_t *ctx) {
                         k++;
                     }
                     stream__write_code_block(
-                        &sstream, b->text, b->len, INDENT_UNIT, b->fpos.path, b->fpos.line,
-                        CODE_BLOCK_KIND_ACTION, c, &(ctx->mvars), &(ctx->subst)
+                        &sstream, b->text, b->len, ctx->opts.ascii, INDENT_UNIT,
+                        b->fpos.path, b->fpos.line, b->fpos.col, CODE_BLOCK_KIND_ACTION,
+                        c, &(ctx->mvars), &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
                     );
                     k = c->n;
                     while (k > 0) {
@@ -7283,7 +7678,7 @@ static bool_t generate(context_t *ctx) {
                     &sstream,
                     "    pcc_thunk_chunk_t *const chunk = pcc_thunk_chunk__create(ctx);\n"
                     "    chunk->pos = ctx->cur;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->buffer.n - chunk->pos));\n"
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_EVALUATE, \"%s\", ctx->level, chunk->pos, ctx->buffer.p + chunk->pos, ctx->buffer.n - chunk->pos);\n"
                     "    ctx->level++;\n",
                     rule->name
                 );
@@ -7309,16 +7704,25 @@ static bool_t generate(context_t *ctx) {
                 stream__printf(
                     &sstream,
                     "    ctx->level--;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
-                    "    return chunk;\n",
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, ctx->buffer.p + chunk->pos, ctx->cur - chunk->pos);\n",
                     rule->name
+                );
+                if (ctx->mvars.n > 0) {
+                    stream__puts(
+                        &sstream,
+                        "    pcc_marker_variable_set_entry__copy(ctx->auxil, &(chunk->mvars), &(ctx->mvars.curr));\n"
+                    );
+                }
+                stream__puts(
+                    &sstream,
+                    "    return chunk;\n"
                 );
                 if (r != CODE_REACH_ALWAYS_SUCCEED) {
                     stream__printf(
                         &sstream,
                         "L0000:;\n"
                         "    ctx->level--;\n"
-                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, (ctx->buffer.p + chunk->pos), (ctx->cur - chunk->pos));\n"
+                        "    PCC_DEBUG(ctx->auxil, PCC_DBG_NOMATCH, \"%s\", ctx->level, chunk->pos, ctx->buffer.p + chunk->pos, ctx->cur - chunk->pos);\n"
                         "    pcc_thunk_chunk__destroy(ctx, chunk);\n"
                         "    return NULL;\n",
                         rule->name
@@ -7370,15 +7774,6 @@ static bool_t generate(context_t *ctx) {
         stream__puts(
             &sstream,
             "    pcc_thunk_array__revert(ctx, &(ctx->thunks), 0);\n"
-        );
-        if (ctx->mvars.n > 0) {
-            stream__puts(
-                &sstream,
-                "    pcc_marker_variable_set_record__restore(ctx->auxil, 0, &(ctx->mvars));\n"
-            );
-        }
-        stream__puts(
-            &sstream,
             "    return 1;\n"
             "}\n"
             "\n"
@@ -7444,8 +7839,9 @@ static bool_t generate(context_t *ctx) {
         for (i = 0; i < ctx->fsource.n; i++) {
             stream__putc(&sstream, '\n');
             stream__write_footer(
-                &sstream, ctx->fsource.p[i].text, ctx->fsource.p[i].len,
-                ctx->fsource.p[i].fpos.path, ctx->fsource.p[i].fpos.line, &(ctx->subst)
+                &sstream, ctx->fsource.p[i].text, ctx->fsource.p[i].len, ctx->opts.ascii,
+                ctx->fsource.p[i].fpos.path, ctx->fsource.p[i].fpos.line, ctx->fsource.p[i].fpos.col,
+                &(ctx->finfo), &(ctx->subst), &(ctx->errnum)
             );
         }
     }
@@ -7708,6 +8104,7 @@ static void print_usage(FILE *output) {
 }
 
 int main(int argc, char **argv) {
+    int ret = 0;
 #ifdef _MSC_VER
 #ifdef _DEBUG
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -7743,22 +8140,26 @@ int main(int argc, char **argv) {
                     print_error("Invalid option: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case COMMAND_LINE_OPTION_ERROR_AMBIGUOUS_OPTION:
                     print_error("Ambiguous option: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case COMMAND_LINE_OPTION_ERROR_ARGUMENT_REQUIRED:
                     print_error("Option requires an argument: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case COMMAND_LINE_OPTION_ERROR_ARGUMENT_NOT_REQUIRED:
                     print_error("Option does not require an argument: '%s'\n", argv[h]);
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 case 'I':
                     string_array__add(&dirs, a, VOID_VALUE);
                     break;
@@ -7767,7 +8168,8 @@ int main(int argc, char **argv) {
                         print_error("Extra output base name: '%s'\n", a);
                         fprintf(stderr, "\n");
                         print_usage(stderr);
-                        exit(1);
+                        ret = 1;
+                        goto EXIT;
                     }
                     opt_o = a;
                     break;
@@ -7790,7 +8192,8 @@ int main(int argc, char **argv) {
                     print_error("Unimplemented option: '%s'\n", argv[h]); /* kind of an internal error */
                     fprintf(stderr, "\n");
                     print_usage(stderr);
-                    exit(1);
+                    ret = 1;
+                    goto EXIT;
                 }
             }
             switch (argc - i) {
@@ -7803,13 +8206,14 @@ int main(int argc, char **argv) {
                 print_error("Extra input file: '%s'\n", argv[i + 1]);
                 fprintf(stderr, "\n");
                 print_usage(stderr);
-                exit(1);
+                ret = 1;
+                goto EXIT;
             }
             if (opt_h || opt_v) {
                 if (opt_v) print_version(stdout);
                 if (opt_v && opt_h) fprintf(stdout, "\n");
                 if (opt_h) print_usage(stdout);
-                exit(0);
+                goto EXIT;
             }
             ipath = (path && path[0]) ? path : NULL;
             opath = (opt_o && opt_o[0]) ? opt_o : NULL;
@@ -7860,9 +8264,10 @@ int main(int argc, char **argv) {
             context_t *const ctx = create_context(ipath, opath, &dirs, &opts);
             const int b = parse(ctx) && generate(ctx);
             destroy_context(ctx);
-            if (!b) exit(10);
+            if (!b) ret = 10;
         }
+    EXIT:;
         string_array__finalize(&dirs);
     }
-    return 0;
+    return ret;
 }

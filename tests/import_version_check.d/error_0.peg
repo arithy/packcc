@@ -1,0 +1,29 @@
+%import "import_1.peg" != 10.21.32
+%import "import_1.peg" > 10.21.32
+%import "import_1.peg" > 101.0.1
+%import "import_1.peg" > 10.110.1
+%import "import_1.peg" > 10.21.210
+%import "import_1.peg" < 10.21.32
+%import "import_1.peg" < 2.21.32
+%import "import_1.peg" < 10.1.32
+%import "import_1.peg" < 10.21.2
+%import "import_1.peg" >= 101.0.1
+%import "import_1.peg" >= 10.110.1
+%import "import_1.peg" >= 10.21.210
+%import "import_1.peg" <= 2.21.32
+%import "import_1.peg" <= 10.1.32
+%import "import_1.peg" <= 10.21.2
+%import "import_1.peg" == 101.0.1
+%import "import_1.peg" == 10.110.1
+%import "import_1.peg" == 10.21.210
+%import "import_1.peg" == 2.21.32
+%import "import_1.peg" == 10.1.32
+%import "import_1.peg" == 10.21.2
+
+%import "import_1.peg"
+
+%import "./import_1.peg" !=10.21.32,<=101.0.1
+%import "./import_1.peg" <=10.110.1,<2.21.32,<=101.0.1
+%import "./import_1.peg" >=10.1.32,<10.110.1,>2.21.32,>10.1.32,==101.0.1
+
+FILE_0 <- FILE_1

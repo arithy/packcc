@@ -107,7 +107,7 @@ packcc example.peg
 
 By running this, the parser source `example.h` and `example.c` are generated.
 
-If no PEG file name is specified, the PEG source is read from the standard input, and `-.h` and `-.c` will be generated.
+If no PEG source file name is specified, the PEG source is read from the standard input, and `-.h` and `-.c` will be generated.
 
 The base name of the parser source files can be changed by `-o` option.
 
@@ -324,10 +324,6 @@ This matches `'foo'`, `"bar"`, `'''baz'''`, `"""qux"""`, `""""""`, etc.
 Curly braces surround an action.
 The action is arbitrary C source code to be executed at the end of matching.
 
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-For the details, see the explanation of `%prefix`.
-
 Any braces within the action must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
@@ -407,14 +403,28 @@ The variable `@@` to store a result of the _programmable predicate_ cannot be us
 The position values are 0-based; that is, the first position is 0.
 The data type is `size_t` (before version 1.4.0, it was `int`).
 
+The following intrinsic macros are available in the C source code including inside of quotations (`'`, `"`) and comments (`/*` `*/`, `//`).
+
+- **`${prefix}`** :
+    Replaced with the prefix specified by `%prefix` (version 2.1.0 or later).
+- **`${PREFIX}`** :
+    Replaced with the uppercased string of the prefix specified by `%prefix` (version 2.1.0 or later).
+- **`${version}`** :
+    Replaced with the version specified by `%version` in the current PEG source file (version 3.1.0 or later).
+- **`${packcc.version}`** :
+    Replaced with the version of PackCC (version 3.1.0 or later).
+- **`${packcc.option.ascii}`** :
+    Replaced with 1 if the command line option `--ascii` is specified, 0 otherwise (version 3.1.0 or later).
+- **`${packcc.option.lines}`** :
+    Replaced with 1 if the command line option `--lines` is specified, 0 otherwise (version 3.1.0 or later).
+
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
+
 **_element_ `~` `{` _c source code_ `}`**
 
 Curly braces following tilde (`~`) surround an error action.
 The error action is arbitrary C source code to be executed at the end of matching only if the preceding _element_ matching fails.
-
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-For the details, see the explanation of `%prefix`.
 
 Any braces within the error action must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
@@ -432,6 +442,10 @@ rule1 <- e1 e2 e3 ~{ error("e[12] ok; e3 has failed"); }
 rule2 <- (e1 e2 e3) ~{ error("one of e[123] has failed"); }
 ```
 
+The available predefined variables and intrinsic macros are the same as those in actions.
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
+
 **`&` `{` _c source code_ `}`**
 
 Curly braces following ampersand (`&`) surround a programmable predicate (version 3.0.0 or later).
@@ -439,10 +453,6 @@ The programmable predicate is arbitrary C source code to be executed during matc
 The matching continues only if a nonzero value is assigned to the output variable `@@`.
 The initial value of `@@` is 1.
 The input text is not consumed from the input and remains available for subsequent matching.
-
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively.
-For the details, see the explanation of `%prefix`.
 
 Any braces within the programmable predicate must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
@@ -491,9 +501,9 @@ In the programmable predicate, the C source code can use the predefined variable
 
 Rule variables and `$$` are not accessible in programmable predicates.
 
-**Caution:** The result of the programmable predicate MUST always be the same in the situation
-where the combination of the values of the following variables is the same:
-all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables **`@`**_variable_.
+**Caution:** The result of the programmable predicate and the updated values of all marker variables **`@`**_variable_
+MUST always be the same in the situation where the combination of the values of the following variables is the same:
+all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables.
 Otherwise, the generated parser may work incorrectly.
 
 An example is shown below.
@@ -513,6 +523,24 @@ and to copy the necessary string data in its member variable.
 The position values are 0-based; that is, the first position is 0.
 The data type is `size_t`.
 
+The following intrinsic macros are available in the C source code including inside of quotations (`'`, `"`) and comments (`/*` `*/`, `//`).
+
+- **`${prefix}`** :
+    Replaced with the prefix specified by `%prefix`.
+- **`${PREFIX}`** :
+    Replaced with the uppercased string of the prefix specified by `%prefix`.
+- **`${version}`** :
+    Replaced with the version specified by `%version` in the current PEG source file (version 3.1.0 or later).
+- **`${packcc.version}`** :
+    Replaced with the version of PackCC (version 3.1.0 or later).
+- **`${packcc.option.ascii}`** :
+    Replaced with 1 if the command line option `--ascii` is specified, 0 otherwise (version 3.1.0 or later).
+- **`${packcc.option.lines}`** :
+    Replaced with 1 if the command line option `--lines` is specified, 0 otherwise (version 3.1.0 or later).
+
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively.
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
+
 **`!` `{` _c source code_ `}`**
 
 Curly braces following exclamation (`!`) surround a negative programmable predicate (version 3.0.0 or later).
@@ -521,30 +549,33 @@ The matching continues only if 0 is assigned to the output variable `@@`.
 The initial value of `@@` is 0.
 The input text is not consumed from the input and remains available for subsequent matching.
 
-The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source code
-are replaced with the prefix and the uppercased one respectively.
-For the details, see the explanation of `%prefix`.
-
 Any braces within the negative programmable predicate must be properly nested.
 Note that braces in directive lines and in comments (`/*`...`*/` and `//`...) are appropriately ignored.
 
 One or more negative programmable predicates can be inserted in any places between elements, at the start, and at the end in the pattern.
 All values of marker variables are rolled back when subsequent matching fails.
 
-In the negative programmable predicate, the C source code can use the predefined variables shown in the explanation of the programmable predicate (`&` `{` _c source code_ `}`).
+The available predefined variables and intrinsic macros are the same as those in programmable predicates.
+The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively.
+Therefore, the macro replacement can be escaped by inserting `\` right before `$`.
 
-**Caution:** The result of the programmable predicate MUST always be the same in the situation
-where the combination of the values of the following variables is the same:
-all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables **`@`**_variable_.
+**Caution:** The result of the programmable predicate and the updated values of all marker variables **`@`**_variable_
+MUST always be the same in the situation where the combination of the values of the following variables is the same:
+all of `$`_n_, `$`_n_`s`, and `$`_n_`e` (_n_ is a non-negative integer), and all marker variables.
 Otherwise, the generated parser may work incorrectly.
+
+**`%version` _version number_**
+
+The version number of the PEG source file is defined (version 3.1.0 or later).
+The version number must be in the form of _X_`.`_Y_`.`_Z_, where each of _X_, _Y_, and _Z_ is 0 or a positive decimal integer without leading zeros.
+If no `%version` directive is specified, the version number is regarded as `0.0.0`.
 
 **`%header` `{` _c source code_ `}`**
 
 The specified C source code is copied basically verbatim to the C header file before the generated parser API function declarations.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
@@ -555,9 +586,8 @@ When `%header` is used multiple times, the respective C source codes are copied 
 
 The specified C source code is copied basically verbatim to the C source file before the generated parser implementation code.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
@@ -571,9 +601,8 @@ This has the same effect as `%header {` _c source code_ `} %source {` _c source 
 The specified C source code is copied basically verbatim to both of the C header file and the C source file
 before the generated parser API function declarations and the implementation code respectively.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 Any braces in the C source code must be properly nested.
 Note that braces in directive lines, comments (`/*`...`*/` and `//`...), character literals, and string literals are appropriately ignored.
@@ -641,8 +670,11 @@ Marker variables are intended to be used as _markers_ of the input text to be pa
 so that the parser can confine the text range where a specific pattern matches.
 The values of marker variables are associated with each text position.
 
-A marker variable can be dealt as if it were an integer variable. The data type is `ptrdiff_t`, which is a signed integer type with the same bit length as pointer types. Usually, the bit length is 32 bits in 32-bit programs, and 64 bits in 64-bit programs.
-Whenever parsing starts, the values of all marker variables are set to 0.
+A marker variable can be dealt as if it were an integer variable. The data type is `ptrdiff_t`, which is a signed integer type with the same bit length as pointer types.
+Usually, the bit length is 32 bits in 32-bit programs, and 64 bits in 64-bit programs.
+The integer value is initially 0.
+It is persistent across multiple calls of the parsing API function `pcc_parse()` with the same parser context (version 3.1.0 or later).
+
 An example is shown below.
 
 ```
@@ -670,8 +702,9 @@ However, it fails to match following text for instance.
 ### xxx ####
 ```
 
-A marker variable can also have a string value, without affecting the existing integer value.
-Whenever parsing starts, the strings of all marker variables are set to `NULL`.
+A marker variable can also have a string value (`const char *`), without affecting the existing integer value.
+The string value is initially `NULL`.
+It is persistent across multiple calls of the parsing API function `pcc_parse()` with the same parser context (version 3.1.0 or later).
 
 ```
 %marker @var_0 @var_1
@@ -693,7 +726,25 @@ Note that the integer and string values are 0 and `NULL` respectively if `restor
 Marker variables are read-only in actions while they are writable in programmable predicates.
 In the C source codes at the other parts, all marker variables are inaccessible.
 
-**`%import` `"`_import file name_`"`**
+**`%requires` `packcc` _version constraints_**
+
+The version of PackCC can be restricted by specifying version constraints in the form shown below (version 3.1.0 or later).
+
+_op_ _version_ ( `,` _op_ _version_ )\*
+- _op_ is either of the following operators.
+    - `==`: equal to the version followed by this operator.
+    - `!=`: not equal to the version followed by this operator.
+    - `<=`: less than or equal to the version followed by this operator.
+    - `>=`: greater than or equal to the version followed by this operator.
+    - `<`: less than the version followed by this operator.
+    - `>`: greater than the version followed by this operator.
+- _version_ is the version number in the form of _X_`.`_Y_`.`_Z_, where each of _X_, _Y_, and _Z_ is 0 or a positive decimal integer without leading zeros.
+- `,` acts as a logical AND operator.
+- White spaces including newlines can be optionally inserted between _op_, _version_, and `,`.
+
+This directive can be omitted when no restriction is required.
+
+**`%import` `"`_import file name_`"`** [ **_version constraints_** ]
 
 The content of the specified import file is expanded at the text location of `%import` (version 2.0.0 or later).
 This can be used multiple times anywhere and can be used also in imported files.
@@ -717,6 +768,22 @@ If it is a relative path, the directories listed below are searched for the impo
 
 Note that the file imported once is silently ignored when it is attempted to be imported again.
 
+The version of the PEG source file to be imported can be restricted by specifying version constraints in the form shown below (version 3.1.0 or later).
+
+_op_ _version_ ( `,` _op_ _version_ )\*
+- _op_ is either of the following operators.
+    - `==`: equal to the version followed by this operator.
+    - `!=`: not equal to the version followed by this operator.
+    - `<=`: less than or equal to the version followed by this operator.
+    - `>=`: greater than or equal to the version followed by this operator.
+    - `<`: less than the version followed by this operator.
+    - `>`: greater than the version followed by this operator.
+- _version_ is the version number in the form of _X_`.`_Y_`.`_Z_, where each of _X_, _Y_, and _Z_ is 0 or a positive decimal integer without leading zeros.
+- `,` acts as a logical AND operator.
+- White spaces including newlines can be optionally inserted between _op_, _version_, and `,`.
+
+The version constraints can be omitted when no restriction is required.
+
 **`#`_comment_**
 
 A comment can be inserted between `#` and the end of the line.
@@ -726,9 +793,8 @@ A comment can be inserted between `#` and the end of the line.
 A double percent `%%` terminates the section for rule definitions of the grammar.
 All text following `%%` is copied basically verbatim to the C source file after the generated parser implementation code.
 There are the following exceptions in verbatim copying.
-- The intrinsic macros `${prefix}` and `${PREFIX}` anywhere in C source codes are replaced with the prefix and the uppercased one respectively (version 2.1.0 or later).
-  For the details, see the explanation of `%prefix`.
-- The escape sequences `\$` and `\@` anywhere in C source codes are replaced with `$` and `@` respectively (version 3.0.0 or later).
+- The intrinsic macros are replaced with their respective strings. The available intrinsic macros are the same as those in actions.
+- The escape sequences `\$` and `\@` anywhere in the C source code are replaced with `$` and `@` respectively (version 3.0.0 or later).
 
 <small>(The specification is determined by referring to [peg/leg](http://piumarta.com/software/peg/) developed by Ian Piumarta.)</small>
 

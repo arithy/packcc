@@ -41,8 +41,6 @@ The usage procedure is shown below.
    ```
    In the example above, `@tab_col` is set to 0 in advance, and `@tab_col` will have the column number at the position after the part matched by `TAB*`.
 
-**Notice:** Whenever parsing starts, the values of all marker variables are set to 0.
-
 #### Example
 
 An example which shows column numbers of the respective input sequences of space and tab characters followed by `'\n'` is shown here.

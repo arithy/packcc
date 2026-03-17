@@ -2,7 +2,7 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing code_line_continuation.d - generation" {
-    run "$PACKCC" --debug -o "code_line_continuation.d/parser" "code_line_continuation.d/input.peg" 2>&1
-    check_output "code_line_continuation.d/expected.txt"
+@test "Testing $TEST_NAME - generation" {
+    run "$PACKCC" --debug -o "$BATS_TEST_DIRNAME/parser" "$BATS_TEST_DIRNAME/input.peg" 2>&1
+    check_output "$BATS_TEST_DIRNAME/expected.txt"
 }

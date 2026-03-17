@@ -1,0 +1,42 @@
+TEST EARLYSOURCE PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+TEST EARLYSOURCE 0  " 0  " /* 0  */ // 0
+TEST EARLYSOURCE 1  " 1  " /* 1  */ // 1
+TEST EARLYSOURCE ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+TEST EARLYSOURCE ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+TEST EARLYSOURCE ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}
+TEST EARLYCOMMON PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+TEST EARLYCOMMON 0  " 0  " /* 0  */ // 0
+TEST EARLYCOMMON 1  " 1  " /* 1  */ // 1
+TEST EARLYCOMMON ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+TEST EARLYCOMMON ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+TEST EARLYCOMMON ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}
+TEST SOURCE PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+TEST SOURCE 0  " 0  " /* 0  */ // 0
+TEST SOURCE 1  " 1  " /* 1  */ // 1
+TEST SOURCE ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+TEST SOURCE ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+TEST SOURCE ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}
+TEST COMMON PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+TEST COMMON 0  " 0  " /* 0  */ // 0
+TEST COMMON 1  " 1  " /* 1  */ // 1
+TEST COMMON ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+TEST COMMON ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+TEST COMMON ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}
+    TEST PROGPRED0 PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+    TEST PROGPRED0 0  " 0  " /* 0  */ // 0
+    TEST PROGPRED0 1  " 1  " /* 1  */ // 1
+    TEST PROGPRED0 ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+    TEST PROGPRED0 ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+    TEST PROGPRED0 ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}
+    TEST ACTION0 PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+    TEST ACTION0 0  " 0  " /* 0  */ // 0
+    TEST ACTION0 1  " 1  " /* 1  */ // 1
+    TEST ACTION0 ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+    TEST ACTION0 ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+    TEST ACTION0 ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}
+TEST FOOTER PACKCC_VER  " PACKCC_VER  " /* PACKCC_VER  */ // PACKCC_VER
+TEST FOOTER 0  " 0  " /* 0  */ // 0
+TEST FOOTER 1  " 1  " /* 1  */ // 1
+TEST FOOTER ${packcc.version} " ${packcc.version} " /* ${packcc.version} */ // ${packcc.version}
+TEST FOOTER ${packcc.option.ascii} " ${packcc.option.ascii} " /* ${packcc.option.ascii} */ // ${packcc.option.ascii}
+TEST FOOTER ${packcc.option.lines} " ${packcc.option.lines} " /* ${packcc.option.lines} */ // ${packcc.option.lines}

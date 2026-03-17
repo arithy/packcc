@@ -6,10 +6,10 @@ check_output_parser() {
     diff --strip-trailing-cr -uN "${1/parser/expected}.txt" --label "${1/parser/expected}" <(grep 'TEST:' < "$1") --label "output"
 }
 
-@test "Testing code_indentation.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     test_generate
 }
 
-@test "Testing code_indentation.d - indentation" {
-    check_output_parser "code_indentation.d/parser.c"
+@test "Testing $TEST_NAME - indentation" {
+    check_output_parser "$BATS_TEST_DIRNAME/parser.c"
 }

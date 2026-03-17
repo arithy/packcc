@@ -1,0 +1,7 @@
+%import "import_1.peg"
+
+%requires packcc == 3.0.0 , != 999.0.0
+%requires packcc<2.0.0
+%requires foo==1.0.0
+
+FILE_0 <- FILE_1

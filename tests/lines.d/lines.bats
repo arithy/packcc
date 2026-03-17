@@ -2,12 +2,12 @@
 
 load "$TESTDIR/utils.sh"
 
-@test "Testing lines.d - generation" {
+@test "Testing $TEST_NAME - generation" {
     PACKCC_OPTS=("--lines")
     test_generate
 }
 
-@test "Testing lines.d - header" {
+@test "Testing $TEST_NAME - header" {
     in_header ":EARLYHEADER:"
     in_header ":EARLYCOMMON:"
     in_header ":HEADER:"
@@ -49,7 +49,7 @@ load "$TESTDIR/utils.sh"
     [ "$COMMON_E" -eq $((COMMON_O + 1)) ]
 }
 
-@test "Testing lines.d - source" {
+@test "Testing $TEST_NAME - source" {
     in_source ":EARLYSOURCE:"
     in_source ":EARLYCOMMON:"
     in_source ":SOURCE:"

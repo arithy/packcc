@@ -1,0 +1,42 @@
+TEST [0] EARLYSOURCE 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+TEST [0] EARLYSOURCE ${version} " ${version} " /* ${version} */ // ${version}
+TEST [0] EARLYCOMMON 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+TEST [0] EARLYCOMMON ${version} " ${version} " /* ${version} */ // ${version}
+TEST [1] EARLYSOURCE 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+TEST [1] EARLYSOURCE ${version} " ${version} " /* ${version} */ // ${version}
+TEST [1] EARLYCOMMON 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+TEST [1] EARLYCOMMON ${version} " ${version} " /* ${version} */ // ${version}
+TEST [*] EARLYSOURCE 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+TEST [*] EARLYSOURCE ${version} " ${version} " /* ${version} */ // ${version}
+TEST [*] EARLYCOMMON 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+TEST [*] EARLYCOMMON ${version} " ${version} " /* ${version} */ // ${version}
+TEST [0] SOURCE 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+TEST [0] SOURCE ${version} " ${version} " /* ${version} */ // ${version}
+TEST [0] COMMON 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+TEST [0] COMMON ${version} " ${version} " /* ${version} */ // ${version}
+TEST [1] SOURCE 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+TEST [1] SOURCE ${version} " ${version} " /* ${version} */ // ${version}
+TEST [1] COMMON 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+TEST [1] COMMON ${version} " ${version} " /* ${version} */ // ${version}
+TEST [*] SOURCE 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+TEST [*] SOURCE ${version} " ${version} " /* ${version} */ // ${version}
+TEST [*] COMMON 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+TEST [*] COMMON ${version} " ${version} " /* ${version} */ // ${version}
+    TEST [0] PROGPRED0 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+    TEST [0] PROGPRED0 ${version} " ${version} " /* ${version} */ // ${version}
+    TEST [1] PROGPRED0 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+    TEST [1] PROGPRED0 ${version} " ${version} " /* ${version} */ // ${version}
+    TEST [*] PROGPRED0 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+    TEST [*] PROGPRED0 ${version} " ${version} " /* ${version} */ // ${version}
+    TEST [0] ACTION0 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+    TEST [0] ACTION0 ${version} " ${version} " /* ${version} */ // ${version}
+    TEST [1] ACTION0 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+    TEST [1] ACTION0 ${version} " ${version} " /* ${version} */ // ${version}
+    TEST [*] ACTION0 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+    TEST [*] ACTION0 ${version} " ${version} " /* ${version} */ // ${version}
+TEST [1] FOOTER 543.21.0  " 543.21.0  " /* 543.21.0  */ // 543.21.0
+TEST [1] FOOTER ${version} " ${version} " /* ${version} */ // ${version}
+TEST [0] FOOTER 0.0.0  " 0.0.0  " /* 0.0.0  */ // 0.0.0
+TEST [0] FOOTER ${version} " ${version} " /* ${version} */ // ${version}
+TEST [*] FOOTER 1.23.456  " 1.23.456  " /* 1.23.456  */ // 1.23.456
+TEST [*] FOOTER ${version} " ${version} " /* ${version} */ // ${version}

@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - trial
   pull_request:
     branches:
       - main
@@ -39,20 +40,23 @@ jobs:
           sudo ./install.sh /usr/local
           )
 
-      - name: Install uncrustify for x64 architecture
-        if: ${{ runner.arch }} == "X64"
-        run: |
-          (
-          curl -LO http://launchpadlibrarian.net/516341795/uncrustify_0.72.0+dfsg1-2_amd64.deb &&
-          sudo dpkg -i uncrustify_0.72.0+dfsg1-2_amd64.deb || true
-          )
+      - name: Set up Python
+        # required for build of uncrustify
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-      - name: Install uncrustify for Arm64 architecture
-        if: ${{ runner.arch }} == "ARM64"
+      - name: Install uncrustify
         run: |
           (
-          curl -LO http://launchpadlibrarian.net/516341795/uncrustify_0.72.0+dfsg1-2_arm64.deb &&
-          sudo dpkg -i uncrustify_0.72.0+dfsg1-2_arm64.deb || true
+          git clone https://github.com/uncrustify/uncrustify.git &&
+          cd uncrustify &&
+          git checkout uncrustify-0.72.0 &&
+          mkdir build &&
+          cd build &&
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release .. &&
+          cmake --build . --config Release &&
+          sudo cmake --install . --config Release
           )
 
       - name: Checkout code

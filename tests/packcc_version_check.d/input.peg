@@ -1,0 +1,11 @@
+rule <- FILE_0
+
+%import "import_0.peg"
+
+%value "double"
+
+%auxil "long"
+
+%prefix "foo1"
+
+%requires packcc>3.0.1

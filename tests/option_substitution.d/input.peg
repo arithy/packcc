@@ -1,0 +1,88 @@
+%header {
+TEST HEADER ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST HEADER ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST HEADER ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST HEADER \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST HEADER \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST HEADER \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+}
+
+%source {
+TEST SOURCE ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST SOURCE ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST SOURCE ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST SOURCE \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST SOURCE \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST SOURCE \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+}
+
+%common {
+TEST COMMON ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST COMMON ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST COMMON ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST COMMON \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST COMMON \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST COMMON \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+}
+
+%earlyheader {
+TEST EARLYHEADER ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST EARLYHEADER ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST EARLYHEADER ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST EARLYHEADER \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST EARLYHEADER \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST EARLYHEADER \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+}
+
+%earlysource {
+TEST EARLYSOURCE ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST EARLYSOURCE ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST EARLYSOURCE ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST EARLYSOURCE \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST EARLYSOURCE \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST EARLYSOURCE \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+}
+
+%earlycommon {
+TEST EARLYCOMMON ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST EARLYCOMMON ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST EARLYCOMMON ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST EARLYCOMMON \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST EARLYCOMMON \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST EARLYCOMMON \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+}
+
+%value "double"
+
+%auxil "long"
+
+%prefix "foo1"
+
+FILE
+   <- '_'
+    &{
+        TEST PROGPRED0 ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+        TEST PROGPRED0 ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+        TEST PROGPRED0 ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+        TEST PROGPRED0 \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+        TEST PROGPRED0 \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+        TEST PROGPRED0 \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+    }
+    < "..." >
+    {
+        TEST ACTION0 ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+        TEST ACTION0 ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+        TEST ACTION0 ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+        TEST ACTION0 \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+        TEST ACTION0 \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+        TEST ACTION0 \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
+    }
+
+%%
+
+TEST FOOTER ${packcc.version}  " ${packcc.version}  " /* ${packcc.version}  */ // ${packcc.version}
+TEST FOOTER ${packcc.option.ascii}  " ${packcc.option.ascii}  " /* ${packcc.option.ascii}  */ // ${packcc.option.ascii}
+TEST FOOTER ${packcc.option.lines}  " ${packcc.option.lines}  " /* ${packcc.option.lines}  */ // ${packcc.option.lines}
+TEST FOOTER \${packcc.version} " \${packcc.version} " /* \${packcc.version} */ // \${packcc.version}
+TEST FOOTER \${packcc.option.ascii} " \${packcc.option.ascii} " /* \${packcc.option.ascii} */ // \${packcc.option.ascii}
+TEST FOOTER \${packcc.option.lines} " \${packcc.option.lines} " /* \${packcc.option.lines} */ // \${packcc.option.lines}
