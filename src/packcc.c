@@ -4890,10 +4890,6 @@ static code_reach_t generate_progpred_code(generate_t *gen, size_t index, bool_t
         gen->stream, "pcc_predicate_%s_" FMT_LU "(ctx, chunk, &r);\n",
         gen->rule->data.rule.name, (ulong_t)index
     );
-    if (gen->mvars) {
-        stream__write_characters(gen->stream, ' ', indent);
-        stream__puts(gen->stream, "pcc_marker_variable_set_entry__copy(ctx->auxil, &(chunk->mvars), &(ctx->mvars.curr));\n");
-    }
     stream__write_characters(gen->stream, ' ', indent);
     stream__printf(gen->stream, "if (%sr) goto L%04d;\n", neg ? "" : "!", onfail);
     if (!bare) {
@@ -7702,9 +7698,18 @@ static bool_t generate(context_t *ctx) {
                 stream__printf(
                     &sstream,
                     "    ctx->level--;\n"
-                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, ctx->buffer.p + chunk->pos, ctx->cur - chunk->pos);\n"
-                    "    return chunk;\n",
+                    "    PCC_DEBUG(ctx->auxil, PCC_DBG_MATCH, \"%s\", ctx->level, chunk->pos, ctx->buffer.p + chunk->pos, ctx->cur - chunk->pos);\n",
                     rule->name
+                );
+                if (ctx->mvars.n > 0) {
+                    stream__puts(
+                        &sstream,
+                        "    pcc_marker_variable_set_entry__copy(ctx->auxil, &(chunk->mvars), &(ctx->mvars.curr));\n"
+                    );
+                }
+                stream__puts(
+                    &sstream,
+                    "    return chunk;\n"
                 );
                 if (r != CODE_REACH_ALWAYS_SUCCEED) {
                     stream__printf(
