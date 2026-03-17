@@ -369,23 +369,23 @@ typedef struct options_tag {
 
 typedef enum code_flag_tag {
     CODE_FLAG_NONE = 0,
-    CODE_FLAG_RULE_VARIABLE_USED  = 0x00000001,
-    CODE_FLAG_CAPTS_USED          = 0x00000002,
-    CODE_FLAG_REFERENCE_USED      = 0x00000010,
-    CODE_FLAG_STRING_USED         = 0x00000020,
-    CODE_FLAG_CHARCLASS_USED      = 0x00000040,
-    CODE_FLAG_UTF8_CHARCLASS_USED = 0x00000080,
-    CODE_FLAG_POSITION_USED       = 0x00000100,
-    CODE_FLAG_QUANTITY_USED       = 0x00000200,
-    CODE_FLAG_PREDICATE_USED      = 0x00000400,
-    CODE_FLAG_PROGPRED_USED       = 0x00000800,
-    CODE_FLAG_SEQUENCE_USED       = 0x00001000,
-    CODE_FLAG_ALTERNATE_USED      = 0x00002000,
-    CODE_FLAG_CAPTURE_USED        = 0x00004000,
-    CODE_FLAG_EXPAND_USED         = 0x00008000,
-    CODE_FLAG_MARKER_USED         = 0x00010000,
-    CODE_FLAG_ACTION_USED         = 0x00020000,
-    CODE_FLAG_ERROR_USED          = 0x00040000
+    CODE_FLAG_RULE_VARIABLE  = 0x00000001,
+    CODE_FLAG_CAPTS          = 0x00000002,
+    CODE_FLAG_REFERENCE      = 0x00000010,
+    CODE_FLAG_STRING         = 0x00000020,
+    CODE_FLAG_CHARCLASS      = 0x00000040,
+    CODE_FLAG_UTF8_CHARCLASS = 0x00000080,
+    CODE_FLAG_POSITION       = 0x00000100,
+    CODE_FLAG_QUANTITY       = 0x00000200,
+    CODE_FLAG_PREDICATE      = 0x00000400,
+    CODE_FLAG_PROGPRED       = 0x00000800,
+    CODE_FLAG_SEQUENCE       = 0x00001000,
+    CODE_FLAG_ALTERNATE      = 0x00002000,
+    CODE_FLAG_CAPTURE        = 0x00004000,
+    CODE_FLAG_EXPAND         = 0x00008000,
+    CODE_FLAG_MARKER         = 0x00010000,
+    CODE_FLAG_ACTION         = 0x00020000,
+    CODE_FLAG_ERROR          = 0x00040000
 } code_flag_t;
 
 typedef struct subst_entry_tag {
@@ -3238,32 +3238,32 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         print_error("Internal error [%d]\n", __LINE__);
         exit(-1);
     case NODE_REFERENCE:
-        ctx->flags |= CODE_FLAG_REFERENCE_USED;
+        ctx->flags |= CODE_FLAG_REFERENCE;
         break;
     case NODE_STRING:
-        ctx->flags |= CODE_FLAG_STRING_USED;
+        ctx->flags |= CODE_FLAG_STRING;
         break;
     case NODE_CHARCLASS:
-        ctx->flags |= CODE_FLAG_CHARCLASS_USED;
+        ctx->flags |= CODE_FLAG_CHARCLASS;
         if (!ctx->opts.ascii)
-            ctx->flags |= CODE_FLAG_UTF8_CHARCLASS_USED;
+            ctx->flags |= CODE_FLAG_UTF8_CHARCLASS;
         break;
     case NODE_POSITION:
-        ctx->flags |= CODE_FLAG_POSITION_USED;
+        ctx->flags |= CODE_FLAG_POSITION;
         break;
     case NODE_QUANTITY:
         set_code_flags(ctx, node->data.quantity.expr);
-        ctx->flags |= CODE_FLAG_QUANTITY_USED;
+        ctx->flags |= CODE_FLAG_QUANTITY;
         break;
     case NODE_PREDICATE:
-        ctx->flags |= CODE_FLAG_PREDICATE_USED;
+        ctx->flags |= CODE_FLAG_PREDICATE;
         set_code_flags(ctx, node->data.predicate.expr);
         break;
     case NODE_PROGPRED:
-        ctx->flags |= CODE_FLAG_PROGPRED_USED;
+        ctx->flags |= CODE_FLAG_PROGPRED;
         break;
     case NODE_SEQUENCE:
-        ctx->flags |= CODE_FLAG_SEQUENCE_USED;
+        ctx->flags |= CODE_FLAG_SEQUENCE;
         {
             size_t i;
             for (i = 0; i < node->data.sequence.nodes.n; i++) {
@@ -3272,7 +3272,7 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         }
         break;
     case NODE_ALTERNATE:
-        ctx->flags |= CODE_FLAG_ALTERNATE_USED;
+        ctx->flags |= CODE_FLAG_ALTERNATE;
         {
             size_t i;
             for (i = 0; i < node->data.alternate.nodes.n; i++) {
@@ -3281,20 +3281,20 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         }
         break;
     case NODE_CAPTURE:
-        ctx->flags |= CODE_FLAG_CAPTURE_USED;
+        ctx->flags |= CODE_FLAG_CAPTURE;
         set_code_flags(ctx, node->data.capture.expr);
         break;
     case NODE_EXPAND:
-        ctx->flags |= CODE_FLAG_EXPAND_USED;
+        ctx->flags |= CODE_FLAG_EXPAND;
         break;
     case NODE_MARKER:
-        ctx->flags |= CODE_FLAG_MARKER_USED;
+        ctx->flags |= CODE_FLAG_MARKER;
         break;
     case NODE_ACTION:
-        ctx->flags |= CODE_FLAG_ACTION_USED;
+        ctx->flags |= CODE_FLAG_ACTION;
         break;
     case NODE_ERROR:
-        ctx->flags |= CODE_FLAG_ERROR_USED;
+        ctx->flags |= CODE_FLAG_ERROR;
         set_code_flags(ctx, node->data.error.expr);
         break;
     default:
@@ -3305,9 +3305,9 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
 
 static void update_code_flags(context_t *ctx, const node_rule_t *rule) {
     if (rule->rvars.n > 0)
-        ctx->flags |= CODE_FLAG_RULE_VARIABLE_USED;
+        ctx->flags |= CODE_FLAG_RULE_VARIABLE;
     if (rule->capts.n > 0)
-        ctx->flags |= CODE_FLAG_CAPTS_USED;
+        ctx->flags |= CODE_FLAG_CAPTS;
     set_code_flags(ctx, rule->expr);
 }
 
@@ -5897,7 +5897,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & CODE_FLAG_RULE_VARIABLE_USED) {
+        if (ctx->flags & CODE_FLAG_RULE_VARIABLE) {
             stream__puts(
                 &sstream,
                 "static void pcc_value_table__clear(pcc_auxil_t auxil, pcc_value_table_t *obj) {\n"
@@ -5918,7 +5918,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_value_refer_table__initialize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj) {\n"
@@ -5938,7 +5938,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_value_refer_table__resize(pcc_auxil_t auxil, pcc_value_refer_table_t *obj, size_t len) {\n"
@@ -5996,7 +5996,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & CODE_FLAG_CAPTS_USED) {
+        if (ctx->flags & CODE_FLAG_CAPTS) {
             stream__puts(
                 &sstream,
                 "static void pcc_capture_table__resize(pcc_auxil_t auxil, pcc_capture_table_t *obj, size_t len) {\n"
@@ -6016,7 +6016,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_capture_const_table__initialize(pcc_auxil_t auxil, pcc_capture_const_table_t *obj) {\n"
@@ -6036,7 +6036,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static void pcc_capture_const_table__resize(pcc_auxil_t auxil, pcc_capture_const_table_t *obj, size_t len) {\n"
@@ -6109,7 +6109,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_stack__copy(pcc_auxil_t auxil, pcc_marker_value_stack_t *obj, const pcc_marker_value_stack_t *src) {\n"
@@ -6163,7 +6163,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_record__copy(pcc_auxil_t auxil, pcc_marker_value_record_t *obj, const pcc_marker_value_record_t *src) {\n"
@@ -6215,7 +6215,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set__copy(pcc_auxil_t auxil, pcc_marker_variable_set_t *obj, const pcc_marker_variable_set_t *src) {\n"
@@ -6248,7 +6248,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_entry__copy(pcc_auxil_t auxil, pcc_marker_variable_set_entry_t *obj, const pcc_marker_variable_set_entry_t *src) {\n"
@@ -6293,7 +6293,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_stack__push(pcc_auxil_t auxil, pcc_marker_variable_set_stack_t *obj, const pcc_marker_variable_set_entry_t *mval) {\n"
@@ -6340,7 +6340,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED_USED) {
+            if (ctx->flags & CODE_FLAG_PROGPRED) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_record__save(pcc_auxil_t auxil, pcc_marker_variable_set_record_t *obj, size_t pos) {\n"
@@ -6381,7 +6381,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+            if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_set__initialize(pcc_auxil_t auxil, pcc_marker_value_set_t *obj) {\n"
@@ -6417,7 +6417,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+            if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_value_set__copy_from(pcc_auxil_t auxil, pcc_marker_value_set_t *obj, pcc_marker_variable_set_t *src) {\n"
@@ -6498,7 +6498,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & (CODE_FLAG_ACTION_USED | CODE_FLAG_ERROR_USED)) {
+        if (ctx->flags & (CODE_FLAG_ACTION | CODE_FLAG_ERROR)) {
             stream__puts(
                 &sstream,
                 "static pcc_thunk_t *pcc_thunk__create_leaf(pcc_context_t *ctx, pcc_action_t action, size_t valuec, size_t captc) {\n"
@@ -7183,7 +7183,7 @@ static bool_t generate(context_t *ctx) {
                 "\n"
             );
         }
-        if (ctx->flags & CODE_FLAG_UTF8_CHARCLASS_USED) {
+        if (ctx->flags & CODE_FLAG_UTF8_CHARCLASS) {
             stream__puts(
                 &sstream,
                 "static size_t pcc_get_char_as_utf32(pcc_context_t *ctx, int *out) { /* with checking UTF-8 validity */\n"
