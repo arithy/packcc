@@ -226,8 +226,8 @@ typedef enum node_type_tag {
     NODE_SEQUENCE,
     NODE_ALTERNATE,
     NODE_CAPTURE,
-    NODE_EXPAND,
-    NODE_MARKER,
+    NODE_MATCH_CAPT,
+    NODE_MATCH_MVAR,
     NODE_ACTION,
     NODE_ERROR
 } node_type_t;
@@ -313,15 +313,15 @@ typedef struct node_capture_tag {
     size_t index;
 } node_capture_t;
 
-typedef struct node_expand_tag {
+typedef struct node_match_capt_tag {
     size_t index;
     file_pos_t fpos;
-} node_expand_t;
+} node_match_capt_t;
 
-typedef struct node_marker_tag {
+typedef struct node_match_mvar_tag {
     char *name;
     file_pos_t fpos;
-} node_marker_t;
+} node_match_mvar_t;
 
 typedef struct node_action_tag {
     code_block_t code;
@@ -339,21 +339,21 @@ typedef struct node_error_tag {
 } node_error_t;
 
 typedef union node_data_tag {
-    node_rule_t      rule;
-    node_reference_t reference;
-    node_string_t    string;
-    node_charclass_t charclass;
-    node_position_t  position;
-    node_quantity_t  quantity;
-    node_predicate_t predicate;
-    node_progpred_t  progpred;
-    node_sequence_t  sequence;
-    node_alternate_t alternate;
-    node_capture_t   capture;
-    node_expand_t    expand;
-    node_marker_t    marker;
-    node_action_t    action;
-    node_error_t     error;
+    node_rule_t       rule;
+    node_reference_t  reference;
+    node_string_t     string;
+    node_charclass_t  charclass;
+    node_position_t   position;
+    node_quantity_t   quantity;
+    node_predicate_t  predicate;
+    node_progpred_t   progpred;
+    node_sequence_t   sequence;
+    node_alternate_t  alternate;
+    node_capture_t    capture;
+    node_match_capt_t match_capt;
+    node_match_mvar_t match_mvar;
+    node_action_t     action;
+    node_error_t      error;
 } node_data_t;
 
 struct node_tag {
@@ -382,8 +382,8 @@ typedef enum code_flag_tag {
     CODE_FLAG_SEQUENCE       = 0x00001000,
     CODE_FLAG_ALTERNATE      = 0x00002000,
     CODE_FLAG_CAPTURE        = 0x00004000,
-    CODE_FLAG_EXPAND         = 0x00008000,
-    CODE_FLAG_MARKER         = 0x00010000,
+    CODE_FLAG_MATCH_CAPT     = 0x00008000,
+    CODE_FLAG_MATCH_MVAR     = 0x00010000,
     CODE_FLAG_ACTION         = 0x00020000,
     CODE_FLAG_ERROR          = 0x00040000
 } code_flag_t;
@@ -2660,13 +2660,13 @@ static node_t *create_node(node_type_t type) {
         node->data.capture.expr = NULL;
         node->data.capture.index = VOID_VALUE;
         break;
-    case NODE_EXPAND:
-        node->data.expand.index = VOID_VALUE;
-        file_pos__initialize(&(node->data.expand.fpos));
+    case NODE_MATCH_CAPT:
+        node->data.match_capt.index = VOID_VALUE;
+        file_pos__initialize(&(node->data.match_capt.fpos));
         break;
-    case NODE_MARKER:
-        node->data.marker.name = NULL;
-        file_pos__initialize(&(node->data.marker.fpos));
+    case NODE_MATCH_MVAR:
+        node->data.match_mvar.name = NULL;
+        file_pos__initialize(&(node->data.match_mvar.fpos));
         break;
     case NODE_ACTION:
         code_block__initialize(&(node->data.action.code));
@@ -2732,12 +2732,12 @@ static void destroy_node(node_t *node) {
     case NODE_CAPTURE:
         destroy_node(node->data.capture.expr);
         break;
-    case NODE_EXPAND:
-        file_pos__finalize(&(node->data.expand.fpos));
+    case NODE_MATCH_CAPT:
+        file_pos__finalize(&(node->data.match_capt.fpos));
         break;
-    case NODE_MARKER:
-        free(node->data.marker.name);
-        file_pos__finalize(&(node->data.marker.fpos));
+    case NODE_MATCH_MVAR:
+        free(node->data.match_mvar.name);
+        file_pos__finalize(&(node->data.match_mvar.fpos));
         break;
     case NODE_ACTION:
         code_block__finalize(&(node->data.action.code));
@@ -2848,9 +2848,9 @@ static void link_references(context_t *ctx, node_t *node) {
     case NODE_CAPTURE:
         link_references(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         break;
@@ -2908,9 +2908,9 @@ static void mark_rules_if_used(context_t *ctx, node_t *node) {
     case NODE_CAPTURE:
         mark_rules_if_used(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         break;
@@ -2966,9 +2966,9 @@ static void unreference_rules_from_unused_rule(context_t *ctx, node_t *node) {
     case NODE_CAPTURE:
         unreference_rules_from_unused_rule(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         break;
@@ -3047,9 +3047,9 @@ static void verify_rule_variables(context_t *ctx, node_t *node, node_const_array
     case NODE_CAPTURE:
         verify_rule_variables(ctx, node->data.capture.expr, rvars);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         node_const_array__copy(&(node->data.action.rvars), rvars);
@@ -3124,25 +3124,25 @@ static void verify_captures(context_t *ctx, node_t *node, node_const_array_t *ca
         verify_captures(ctx, node->data.capture.expr, capts);
         node_const_array__add(capts, node);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         {
             size_t i;
             for (i = 0; i < capts->n; i++) {
                 assert(capts->p[i]->type == NODE_CAPTURE);
-                if (node->data.expand.index == capts->p[i]->data.capture.index) break;
+                if (node->data.match_capt.index == capts->p[i]->data.capture.index) break;
             }
-            if (i >= capts->n && node->data.expand.index != VOID_VALUE) {
+            if (i >= capts->n && node->data.match_capt.index != VOID_VALUE) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Capture " FMT_LU " not available at this position\n",
-                    node->data.expand.fpos.path,
-                    (ulong_t)(node->data.expand.fpos.line + 1), (ulong_t)(node->data.expand.fpos.col + 1),
-                    (ulong_t)(node->data.expand.index + 1)
+                    node->data.match_capt.fpos.path,
+                    (ulong_t)(node->data.match_capt.fpos.line + 1), (ulong_t)(node->data.match_capt.fpos.col + 1),
+                    (ulong_t)(node->data.match_capt.index + 1)
                 );
                 ctx->errnum++;
             }
         }
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         break;
     case NODE_ACTION:
         node_const_array__copy(&(node->data.action.capts), capts);
@@ -3201,20 +3201,20 @@ static void verify_marker_variables(context_t *ctx, const node_t *node) {
     case NODE_CAPTURE:
         verify_marker_variables(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
+    case NODE_MATCH_CAPT:
         break;
-    case NODE_MARKER:
+    case NODE_MATCH_MVAR:
         {
             size_t i;
             for (i = 0; i < ctx->mvars.n; i++) {
-                if (strcmp(node->data.marker.name, ctx->mvars.p[i]) == 0) break;
+                if (strcmp(node->data.match_mvar.name, ctx->mvars.p[i]) == 0) break;
             }
-            if (i >= ctx->mvars.n && node->data.marker.name != NULL) {
+            if (i >= ctx->mvars.n && node->data.match_mvar.name != NULL) {
                 print_error(
                     "%s:" FMT_LU ":" FMT_LU ": Marker variable not defined: '@%s'\n",
-                    node->data.marker.fpos.path,
-                    (ulong_t)(node->data.marker.fpos.line + 1), (ulong_t)(node->data.marker.fpos.col + 1),
-                    node->data.marker.name
+                    node->data.match_mvar.fpos.path,
+                    (ulong_t)(node->data.match_mvar.fpos.line + 1), (ulong_t)(node->data.match_mvar.fpos.col + 1),
+                    node->data.match_mvar.name
                 );
                 ctx->errnum++;
             }
@@ -3284,11 +3284,11 @@ static void set_code_flags(context_t *ctx, const node_t *node) {
         ctx->flags |= CODE_FLAG_CAPTURE;
         set_code_flags(ctx, node->data.capture.expr);
         break;
-    case NODE_EXPAND:
-        ctx->flags |= CODE_FLAG_EXPAND;
+    case NODE_MATCH_CAPT:
+        ctx->flags |= CODE_FLAG_MATCH_CAPT;
         break;
-    case NODE_MARKER:
-        ctx->flags |= CODE_FLAG_MARKER;
+    case NODE_MATCH_MVAR:
+        ctx->flags |= CODE_FLAG_MATCH_MVAR;
         break;
     case NODE_ACTION:
         ctx->flags |= CODE_FLAG_ACTION;
@@ -3427,13 +3427,13 @@ static void dump_node(context_t *ctx, const node_t *node, const int indent) {
         dump_node(ctx, node->data.capture.expr, indent + 2);
         fprintf(stdout, "%*s}\n", indent, "");
         break;
-    case NODE_EXPAND:
-        fprintf(stdout, "%*sExpand(index:", indent, "");
-        dump_integer_value(node->data.expand.index);
+    case NODE_MATCH_CAPT:
+        fprintf(stdout, "%*sMatch Captured(index:", indent, "");
+        dump_integer_value(node->data.match_capt.index);
         fprintf(stdout, ")\n");
         break;
-    case NODE_MARKER:
-        fprintf(stdout, "%*sMaker(name:'%s')\n", indent, "", node->data.marker.name);
+    case NODE_MATCH_MVAR:
+        fprintf(stdout, "%*sMatch Maker Variable(name:'%s')\n", indent, "", node->data.match_mvar.name);
         break;
     case NODE_ACTION:
         fprintf(stdout, "%*sAction(index:", indent, "");
@@ -3575,27 +3575,27 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
             const size_t q = input->bufcur;
             char *s;
             input_state__match_spaces(input);
-            n_p = create_node(NODE_EXPAND);
+            n_p = create_node(NODE_MATCH_CAPT);
             assert(q >= p);
             s = strndup_e(input->buffer.p + p, q - p);
-            n_p->data.expand.index = string_to_size_t(s);
-            if (n_p->data.expand.index == VOID_VALUE) {
+            n_p->data.match_capt.index = string_to_size_t(s);
+            if (n_p->data.match_capt.index == VOID_VALUE) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": Invalid unsigned number '%s'\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1), s);
                 input->errnum++;
             }
-            else if (n_p->data.expand.index == 0) {
+            else if (n_p->data.match_capt.index == 0) {
                 print_error("%s:" FMT_LU ":" FMT_LU ": 0 not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 input->errnum++;
             }
             else if (s[0] == '0') {
                 print_error("%s:" FMT_LU ":" FMT_LU ": 0-prefixed number not allowed\n", input->path, (ulong_t)(l + 1), (ulong_t)(m + 1));
                 input->errnum++;
-                n_p->data.expand.index = 0;
+                n_p->data.match_capt.index = 0;
             }
             free(s);
-            if (n_p->data.expand.index > 0 && n_p->data.expand.index != VOID_VALUE) {
-                n_p->data.expand.index--;
-                file_pos__set(&(n_p->data.expand.fpos), input->path, l, m);
+            if (n_p->data.match_capt.index > 0 && n_p->data.match_capt.index != VOID_VALUE) {
+                n_p->data.match_capt.index--;
+                file_pos__set(&(n_p->data.match_capt.fpos), input->path, l, m);
             }
         }
         else {
@@ -3609,10 +3609,10 @@ static node_t *parse_primary(input_state_t *input, node_t *rule) {
         if (input_state__match_identifier(input)) {
             const size_t q = input->bufcur;
             input_state__match_spaces(input);
-            n_p = create_node(NODE_MARKER);
+            n_p = create_node(NODE_MATCH_MVAR);
             assert(q >= p);
-            n_p->data.marker.name = strndup_e(input->buffer.p + p, q - p);
-            file_pos__set(&(n_p->data.marker.fpos), input->path, l, m);
+            n_p->data.match_mvar.name = strndup_e(input->buffer.p + p, q - p);
+            file_pos__set(&(n_p->data.match_mvar.fpos), input->path, l, m);
         }
         else {
             goto EXCEPTION;
@@ -5018,7 +5018,7 @@ static code_reach_t generate_capturing_code(generate_t *gen, const node_t *expr,
     return r;
 }
 
-static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int onfail, size_t indent, bool_t bare) {
+static code_reach_t generate_matching_capt_code(generate_t *gen, size_t index, int onfail, size_t indent, bool_t bare) {
     if (!bare) {
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "{\n");
@@ -5057,7 +5057,7 @@ static code_reach_t generate_expanding_code(generate_t *gen, size_t index, int o
     return CODE_REACH_BOTH;
 }
 
-static code_reach_t generate_matching_marker_code(generate_t *gen, const char *name, int onfail, size_t indent, bool_t bare) {
+static code_reach_t generate_matching_mvar_code(generate_t *gen, const char *name, int onfail, size_t indent, bool_t bare) {
     if (!bare) {
         stream__write_characters(gen->stream, ' ', indent);
         stream__puts(gen->stream, "{\n");
@@ -5237,10 +5237,10 @@ static code_reach_t generate_code(generate_t *gen, const node_t *node, int onfai
         return generate_alternative_code(gen, &(node->data.alternate.nodes), onfail, indent, bare);
     case NODE_CAPTURE:
         return generate_capturing_code(gen, node->data.capture.expr, node->data.capture.index, onfail, indent, bare);
-    case NODE_EXPAND:
-        return generate_expanding_code(gen, node->data.expand.index, onfail, indent, bare);
-    case NODE_MARKER:
-        return generate_matching_marker_code(gen, node->data.marker.name, onfail, indent, bare);
+    case NODE_MATCH_CAPT:
+        return generate_matching_capt_code(gen, node->data.match_capt.index, onfail, indent, bare);
+    case NODE_MATCH_MVAR:
+        return generate_matching_mvar_code(gen, node->data.match_mvar.name, onfail, indent, bare);
     case NODE_ACTION:
         return generate_thunking_action_code(
             gen, node->data.action.index, &(node->data.action.rvars), &(node->data.action.capts), FALSE, onfail, indent, bare
