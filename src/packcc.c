@@ -6248,7 +6248,7 @@ static bool_t generate(context_t *ctx) {
                     "\n"
                 );
             }
-            if (ctx->flags & CODE_FLAG_PROGPRED) {
+            if (ctx->rules.n > 0) {
                 stream__puts(
                     &sstream,
                     "static void pcc_marker_variable_set_entry__copy(pcc_auxil_t auxil, pcc_marker_variable_set_entry_t *obj, const pcc_marker_variable_set_entry_t *src) {\n"
