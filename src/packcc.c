@@ -4299,7 +4299,7 @@ static size_t parse_file_(context_t *ctx) {
                         free(path);
                     }
                 }
-                if (parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
+                if (ii != VOID_VALUE && parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
                     print_error(
                         "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
                         ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
