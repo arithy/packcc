@@ -1,5 +1,5 @@
 %source {
-    void print_esc(const char* type, const char* ch) {
+    void print_esc(const char *type, const char *ch) {
         if (strncmp(type, "UNICODE", 7) == 0)
             printf("%s: '%s'\n", type, ch);
         else if (*ch >= '\x20' && *ch < '\x7f')
