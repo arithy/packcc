@@ -27,7 +27,32 @@ test_style() {
     done
 }
 
-@test "Testing $TEST_NAME - generated" {
+@test "Testing $TEST_NAME - generated [tests]" {
+    for file in "$ROOTDIR"/tests/*.d/*.peg; do
+        dir="$(dirname "$file")"
+        if [ \
+            "$dir" = "$ROOTDIR/tests/style.d" -o \
+            "$dir" = "$ROOTDIR/tests/import.d" -o \
+            "$dir" = "$ROOTDIR/tests/import_version_check.d" -o \
+            "$dir" = "$ROOTDIR/tests/packcc_version_check.d" -o \
+            "$dir" = "$ROOTDIR/tests/code_indentation.d" -o \
+            "$dir" = "$ROOTDIR/tests/code_line_continuation.d" -o \
+            "$dir" = "$ROOTDIR/tests/substitution.d" -o \
+            "$dir" = "$ROOTDIR/tests/option_substitution.d" -o \
+            "$dir" = "$ROOTDIR/tests/version_substitution.d" -o \
+            "$dir" = "$ROOTDIR/tests/invalid_identifier_rvar.d" -o \
+            "$dir" = "$ROOTDIR/tests/invalid_identifier_mvar.d" -o \
+            "$dir" = "$ROOTDIR/tests/issue_78.d" \
+        ]; then
+            continue
+        fi
+        test_generate "$file"
+        test_style "$BATS_TEST_DIRNAME/parser.h"
+        test_style "$BATS_TEST_DIRNAME/parser.c"
+    done
+}
+
+@test "Testing $TEST_NAME - generated [examples]" {
     for file in "$ROOTDIR"/examples/*.peg; do
         test_generate "$file"
         test_style "$BATS_TEST_DIRNAME/parser.h"
