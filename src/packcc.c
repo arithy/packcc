@@ -2137,11 +2137,16 @@ static bool_t stream__write_text(
             continue;
         }
         if (lhead) {
-            const size_t l = count_indent_spaces(str, i, end, &i);
-            if (i >= end || str[i] == '\0') break;
-            if (str[i] == '\n' || str[i] == '\r') continue;
-            stream__write_characters(obj, ' ', size__sub(l, dedent) + indent);
+            if (i < end) {
+                if (str[i] == '\0') break;
+                if (str[i] == '\n' || str[i] == '\r') continue;
+            }
+            {
+                const size_t l = count_indent_spaces(str, i, end, &i);
+                stream__write_characters(obj, ' ', size__sub(l, dedent) + indent);
+            }
             lhead = FALSE;
+            if (i >= end) break;
         }
         if (str[i] == '\\' && i + 1 < end && (str[i + 1] == '$' || str[i + 1] == '@')) {
             stream__putc(obj, str[i + 1]);
@@ -4299,7 +4304,7 @@ static size_t parse_file_(context_t *ctx) {
                         free(path);
                     }
                 }
-                if (parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
+                if (ii != VOID_VALUE && parse_and_check_version_(ctx->input, ctx->finfo.p[ii].version, &v) && !v) {
                     print_error(
                         "%s:" FMT_LU ":" FMT_LU ": Version not matched: %s\n",
                         ctx->input->path, (ulong_t)(l + 1), (ulong_t)(m + 1),
